@@ -36,17 +36,13 @@ Each has its check; do them before building on top.
   release asset because strace.io was unreachable from the sandbox. A hash
   mismatch at unpack is that, and the fix is the checksum of the tarball
   strace.io serves.
-* **Game guides through RetroArch (sdl2text).** With a `<rom>.txt` next to
-  a ROM, M2 alone should tear the game's display down, show the text, and
-  M2 or B should bring the game back where it was. Things to check: that
-  sdl2text gets DRM master at all (a black panel and `sdl2text` in `ps` for
-  a second means it did not, and the Vulkan display instance is still
-  holding the card); that a Vulkan core (parallel-n64, Flycast) survives
-  the context destroy and reset, since the context cache is forced off
-  for the handover; that a paddle still held when sdl2text starts does not
-  close it at once. The udev button for M2 is assumed to be 16 from the
-  hid-playstation key order; `retroarch --verbose` prints the autoconfig
-  binds if it is not.
+* **Game guides through RetroArch (sdl2text)** worked on the device on the
+  evening of 26 September: M2 opens the guide, the D-pad scrolls and zooms,
+  M2 returns to the game where it was. So sdl2text does get DRM master, the
+  udev button for M2 is 16, and the held-paddle grace holds. Still open:
+  whether a Vulkan core (parallel-n64, Flycast) comes back cleanly from the
+  context destroy and reset the handover forces, and whether it stutters
+  for a moment afterwards while it refills its pipeline and texture caches.
 * **Which N64 games run at 32 kHz.** Super Mario 64 and the two Zeldas are
   believed to; RetroArch's statistics overlay, or the `Sink rate` log line,
   says. Nothing depends on the list any more, it is only worth knowing.
