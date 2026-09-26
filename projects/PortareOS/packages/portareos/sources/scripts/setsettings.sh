@@ -1007,16 +1007,22 @@ function set_autosave() {
 function set_runahead() {
     local RUNAHEAD="$(game_setting runahead)"
     local HAS_RUNAHEAD="$(match ${PLATFORM} ${NO_RUNAHEAD[@]})"
-    # Settings > Consoles in the launcher: <system>.profile is "latency" or
-    # "visuals". Latency is RetroArch's preemptive frames, one frame: the
-    # same savestate and core requirements as run-ahead, but the frame is
-    # rerun only when the input changed, so idle play costs a savestate
-    # per frame rather than a second emulation. An explicit runahead
-    # count is classic run-ahead and wins; the two exclude each other.
+    # Settings > Consoles in the launcher. A 2D console stores
+    # <system>.preempt, 1 or 0; the PlayStation stores <system>.profile,
+    # "latency" or "visuals", since its latency mode also changes the
+    # renderer (set_psxopts). Either turns on RetroArch's preemptive
+    # frames, one frame: the same savestate and core requirements as
+    # run-ahead, but the frame is rerun only when the input changed, so
+    # idle play costs a savestate per frame rather than a second
+    # emulation. An explicit runahead count is classic run-ahead and
+    # wins; the two exclude each other.
     local PREEMPT="false"
-    if [ "$(game_setting profile)" = "latency" ] && [ "${RUNAHEAD:-0}" -le 0 ]
+    if [ "${RUNAHEAD:-0}" -le 0 ]
     then
-        PREEMPT="true"
+        if [ "$(game_setting preempt)" = "1" ] || [ "$(game_setting profile)" = "latency" ]
+        then
+            PREEMPT="true"
+        fi
     fi
     case ${HAS_RUNAHEAD} in
         1)

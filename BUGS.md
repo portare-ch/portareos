@@ -43,8 +43,8 @@ Each has its check; do them before building on top.
   whether a Vulkan core (parallel-n64, Flycast) comes back cleanly from the
   context destroy and reset the handover forces, and whether it stutters
   for a moment afterwards while it refills its pipeline and texture caches.
-* **Settings > Consoles, latency (preemptive frames, 1).** Not yet run on
-  the device. With `snes.profile=latency` in system.cfg, a SNES game's
+* **Settings > Consoles, PRMPT and latency (preemptive frames, 1).** Not
+  yet run on the device. With `snes.preempt=1` in system.cfg, a SNES game's
   RetroArch config should carry `preemptive_frames_enable = "true"` and
   `run_ahead_frames = "1"`, the shader and integer scaling stay, and the
   statistics overlay's
@@ -52,7 +52,7 @@ Each has its check; do them before building on top.
   `[Run-Ahead Preemptive]` warning in the log means the core does not
   support it and it goes on the NO_RUNAHEAD list; a frame flickering back
   on a press means its savestate is not deterministic, same list. On the
-  PlayStation, latency also writes `swanstation_GPU_Renderer = "Software"`
+  PlayStation the key is `psx.profile=latency`, and it also writes `swanstation_GPU_Renderer = "Software"`
   and `swanstation_GPU_ResolutionScale = "1"` into
   `config/SwanStation/SwanStation.opt`; visuals writes the shipped Vulkan
   and 4x back. The per-core `SwanStation.cfg` keeps run-ahead off, which
