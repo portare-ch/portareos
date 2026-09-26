@@ -1008,16 +1008,21 @@ function set_runahead() {
     local RUNAHEAD="$(game_setting runahead)"
     local HAS_RUNAHEAD="$(match ${PLATFORM} ${NO_RUNAHEAD[@]})"
     # Settings > Games in the launcher: <system>.profile is "latency" or
-    # "visuals". Latency is one frame of run-ahead, the shipped picture
-    # otherwise unchanged; an explicit runahead count still wins.
+    # "visuals". Latency is RetroArch's preemptive frames, one frame: the
+    # same savestate and core requirements as run-ahead, but the frame is
+    # rerun only when the input changed, so idle play costs a savestate
+    # per frame rather than a second emulation. An explicit runahead
+    # count is classic run-ahead and wins; the two exclude each other.
+    local PREEMPT="false"
     if [ "$(game_setting profile)" = "latency" ] && [ "${RUNAHEAD:-0}" -le 0 ]
     then
-        RUNAHEAD=1
+        PREEMPT="true"
     fi
     case ${HAS_RUNAHEAD} in
         1)
             add_setting "none" "run_ahead_enabled" "false"
             add_setting "none" "run_ahead_frames" "0"
+            add_setting "none" "preemptive_frames_enable" "false"
         ;;
         *)
             if [ "${RUNAHEAD:-0}" -gt 0 ]
@@ -1025,9 +1030,16 @@ function set_runahead() {
                 add_setting "none" "run_ahead_enabled" "true"
                 add_setting "none" "run_ahead_frames" "${RUNAHEAD}"
                 add_setting "secondinstance" "run_ahead_secondary_instance"
+                add_setting "none" "preemptive_frames_enable" "false"
+            elif [ "${PREEMPT}" = "true" ]
+            then
+                add_setting "none" "run_ahead_enabled" "false"
+                add_setting "none" "run_ahead_frames" "1"
+                add_setting "none" "preemptive_frames_enable" "true"
             else
                 add_setting "none" "run_ahead_enabled" "false"
                 add_setting "none" "run_ahead_frames" "0"
+                add_setting "none" "preemptive_frames_enable" "false"
             fi
         ;;
     esac
