@@ -49,6 +49,19 @@ Each has its check; do them before building on top.
 
 ## Unexplained
 
+### The color profiles crush the dark greys
+
+Both Gamma 2.2 and sRGB, on the device, 26 September: the darkest greys
+come out as one black where stock shows steps. The fit's own caveat
+already put codes 16 to 32 as its least certain region. The likely cause is
+the output table driving the low codes under the panel's black floor; the
+matrix on gamma-encoded values is the other suspect. Stock is the default
+and `post-update` moves a device that had chosen a profile back to it, once
+(`colorprofile-stock`). The refit and the checks are in
+`documentation/PER_DEVICE_DOCUMENTATION/SM8550/COLOR_PROFILE.md`, "Known
+issue". The launcher's hint under the setting still says "Gamma 2.2 for
+consoles"; that text lives in portarelauncher and is next.
+
 ### Suspend power draw
 
 Tracked in [#62](https://github.com/portare-ch/portareos/issues/62). The
