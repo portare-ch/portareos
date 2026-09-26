@@ -1007,20 +1007,39 @@ function set_autosave() {
 function set_runahead() {
     local RUNAHEAD="$(game_setting runahead)"
     local HAS_RUNAHEAD="$(match ${PLATFORM} ${NO_RUNAHEAD[@]})"
+    # Settings > Consoles in the launcher: <system>.profile is "latency" or
+    # "visuals". Latency is RetroArch's preemptive frames, one frame: the
+    # same savestate and core requirements as run-ahead, but the frame is
+    # rerun only when the input changed, so idle play costs a savestate
+    # per frame rather than a second emulation. An explicit runahead
+    # count is classic run-ahead and wins; the two exclude each other.
+    local PREEMPT="false"
+    if [ "$(game_setting profile)" = "latency" ] && [ "${RUNAHEAD:-0}" -le 0 ]
+    then
+        PREEMPT="true"
+    fi
     case ${HAS_RUNAHEAD} in
         1)
             add_setting "none" "run_ahead_enabled" "false"
             add_setting "none" "run_ahead_frames" "0"
+            add_setting "none" "preemptive_frames_enable" "false"
         ;;
         *)
-            if [ "${RUNAHEAD}" -gt 0 ]
+            if [ "${RUNAHEAD:-0}" -gt 0 ]
             then
                 add_setting "none" "run_ahead_enabled" "true"
                 add_setting "none" "run_ahead_frames" "${RUNAHEAD}"
                 add_setting "secondinstance" "run_ahead_secondary_instance"
+                add_setting "none" "preemptive_frames_enable" "false"
+            elif [ "${PREEMPT}" = "true" ]
+            then
+                add_setting "none" "run_ahead_enabled" "false"
+                add_setting "none" "run_ahead_frames" "1"
+                add_setting "none" "preemptive_frames_enable" "true"
             else
                 add_setting "none" "run_ahead_enabled" "false"
                 add_setting "none" "run_ahead_frames" "0"
+                add_setting "none" "preemptive_frames_enable" "false"
             fi
         ;;
     esac
@@ -1175,6 +1194,63 @@ function set_dreamcastopts() {
         fi
         local FRAME_SKIP="$(game_setting frame_skip)"
         sed -i '/flycast_auto_skip_frame = /c\flycast_auto_skip_frame = "'${FRAME_SKIP}'"' "${FLYCASTDIR}/Flycast.opt"
+    fi
+}
+
+function set_psxopts() {
+    log "Set up SwanStation..."
+    if [ "${CORE}" = "swanstation" ]
+    then
+        # Settings > Consoles for the PlayStation. Visuals is the shipped
+        # core: the Vulkan renderer at 4x, from retroarch-core-options.cfg.
+        # Latency is the software renderer at 1x: the console's own
+        # resolution, and savestates that carry no GPU state, which is what
+        # makes a pre-emptive frame cheap enough to run every frame.
+        # RetroArch reads per-core options from config/SwanStation when the
+        # file exists, so it is made from the shipped global lines once.
+        # The two keys are written when latency is on, and written back
+        # to the shipped values once when it goes off; a renderer or scale
+        # chosen in RetroArch's own menu under visuals is otherwise left
+        # alone. The marker file says latency wrote them last.
+        local SWANDIR="${RETROARCH_PATH}/config/SwanStation"
+        local SWANOPT="${SWANDIR}/SwanStation.opt"
+        local SHIPPED="/usr/config/retroarch/retroarch-core-options.cfg"
+        local MARKER="${SWANDIR}/.latency-profile"
+        local RENDERER SCALE
+        if [ "$(game_setting profile)" = "latency" ]
+        then
+            RENDERER="Software"
+            SCALE="1"
+        elif [ -e "${MARKER}" ]
+        then
+            RENDERER="$(sed -n 's/^swanstation_GPU_Renderer = "\(.*\)"/\1/p' "${SHIPPED}")"
+            SCALE="$(sed -n 's/^swanstation_GPU_ResolutionScale = "\(.*\)"/\1/p' "${SHIPPED}")"
+            RENDERER="${RENDERER:-Vulkan}"
+            SCALE="${SCALE:-4}"
+        else
+            return 0
+        fi
+        mkdir -p "${SWANDIR}"
+        if [ ! -f "${SWANOPT}" ]
+        then
+            grep '^swanstation_' "${SHIPPED}" >"${SWANOPT}"
+        fi
+        for KEY in GPU_Renderer:"${RENDERER}" GPU_ResolutionScale:"${SCALE}"
+        do
+            local NAME="swanstation_${KEY%%:*}" VALUE="${KEY#*:}"
+            if grep -q "^${NAME} = " "${SWANOPT}"
+            then
+                sed -i "/^${NAME} = /c\\${NAME} = \"${VALUE}\"" "${SWANOPT}"
+            else
+                echo "${NAME} = \"${VALUE}\"" >>"${SWANOPT}"
+            fi
+        done
+        if [ "${RENDERER}" = "Software" ]
+        then
+            touch "${MARKER}"
+        else
+            rm -f "${MARKER}"
+        fi
     fi
 }
 
@@ -1476,6 +1552,7 @@ set_n64opts &
 set_saturnopts &
 set_dreamcastopts &
 set_melondsdsopts &
+set_psxopts &
 
 ### Sed operations are expensive, so they are staged and executed as
 ### a single process when all forks complete.
