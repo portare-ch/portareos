@@ -43,10 +43,11 @@ Each has its check; do them before building on top.
   whether a Vulkan core (parallel-n64, Flycast) comes back cleanly from the
   context destroy and reset the handover forces, and whether it stutters
   for a moment afterwards while it refills its pipeline and texture caches.
-* **Settings > Games, latency (preemptive frames, 1).** Not yet run on the
-  device. With `snes.profile=latency` in system.cfg, a SNES game's
-  RetroArch config should carry `preemptive_frames_enable = "true"` and
-  `run_ahead_frames = "1"`, the shader stays, and the statistics overlay's
+* **Settings > Consoles, latency (preemptive frames, 1).** Not yet run on
+  the device. With `snes.profile=latency` in system.cfg, a SNES game's
+  RetroArch config should carry `preemptive_frames_enable = "true"`,
+  `run_ahead_frames = "1"` and `video_scale_integer = "false"`, the shader
+  stays, and the statistics overlay's
   core time should rise only a little while nothing is pressed. A
   `[Run-Ahead Preemptive]` warning in the log means the core does not
   support it and it goes on the NO_RUNAHEAD list; a frame flickering back

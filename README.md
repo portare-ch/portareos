@@ -122,10 +122,10 @@ the settings nobody had tuned for them.
 | Movies, music | mpv, gmu |
 
 Every emulator quits with the same buttons, Home + Start. M1 with the
-volume keys sets the brightness, anywhere. Settings > Games offers each
-2D system a choice of latency or visuals: latency runs the game one frame
-ahead (RetroArch's preemptive frames) and keeps the CRT filter, visuals is
-the picture as shipped. In RetroArch, M2 shows a game
+volume keys sets the brightness, anywhere. Settings > Consoles offers each
+2D console a choice of visuals or latency: visuals is integer upscaling
+and the picture as shipped, latency is one pre-emptive frame (RetroArch's
+cheaper run-ahead) with integer upscaling off. Experimental. In RetroArch, M2 shows a game
 guide: a text file next to the ROM with the ROM's name and `.txt`. The game
 waits where it was, and M2 or B brings it back.
 

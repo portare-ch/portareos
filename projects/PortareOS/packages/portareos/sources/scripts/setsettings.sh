@@ -872,7 +872,14 @@ function set_ra_refresh_rate() {
 }
 
 function set_integerscale() {
-    add_setting "integerscale" "video_scale_integer"
+    # Settings > Consoles: the latency profile gives up integer scaling,
+    # the visuals profile keeps the system's setting.
+    if [ "$(game_setting profile)" = "latency" ]
+    then
+        add_setting "none" "video_scale_integer" "false"
+    else
+        add_setting "integerscale" "video_scale_integer"
+    fi
     add_setting "integerscaleoverscale" "video_scale_integer_overscale"
 }
 
@@ -1007,7 +1014,7 @@ function set_autosave() {
 function set_runahead() {
     local RUNAHEAD="$(game_setting runahead)"
     local HAS_RUNAHEAD="$(match ${PLATFORM} ${NO_RUNAHEAD[@]})"
-    # Settings > Games in the launcher: <system>.profile is "latency" or
+    # Settings > Consoles in the launcher: <system>.profile is "latency" or
     # "visuals". Latency is RetroArch's preemptive frames, one frame: the
     # same savestate and core requirements as run-ahead, but the frame is
     # rerun only when the input changed, so idle play costs a savestate
