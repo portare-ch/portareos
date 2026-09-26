@@ -48,18 +48,8 @@ CONTROLLERS="${CONTROLLERS#*--controllers=*}"
 ###
 
 declare -a HAS_CHEEVOS=(    arcade
-                            arduboy
-                            atari2600
-                            atari7800
-                            atarilynx
-                            cdi
-                            colecovision
-                            cps1
-                            cps2
-                            cps3
                             dreamcast
                             famicom
-                            fbn
                             fds
                             gamegear
                             gb
@@ -69,31 +59,17 @@ declare -a HAS_CHEEVOS=(    arcade
                             gbav
                             gbc
                             gbch
-                            gbh
                             genesis
                             genh
                             ggh
-                            intellivision
                             mastersystem
                             megacd
                             megadrive
                             megadrive-japan
-                            msx
-                            msx2
                             n64
-                            nds
                             neogeo
-                            neogeocd
+                            neocd
                             nes
-                            nesh
-                            ngp
-                            ngpc
-                            odyssey2
-                            3do
-                            pcengine
-                            pcenginecd
-                            pcfx
-                            pokemini
                             psp
                             psx
                             ps2
@@ -105,51 +81,36 @@ declare -a HAS_CHEEVOS=(    arcade
                             snes
                             snesh
                             snesmsu1
-                            supergrafx
-                            supervision
-                            tg16
-                            tg16cd
-                            vectrex
-                            virtualboy
-                            wonderswan
-                            wonderswancolor
 )
 
-declare -a NO_REWIND=(  atomiswave
-                        dreamcast
-                        mame
-                        n64
-                        naomi
-                        neogeocd
-                        odyssey2
-                        psp
-                        pspminis
-                        saturn
-                        sega32x
-                        zxspectrum
+declare -a NO_REWIND=(    atomiswave
+                          dreamcast
+                          n64
+                          naomi
+                          neocd
+                          psp
+                          pspminis
+                          saturn
+                          sega32x
 )
 
 declare -a NO_RUNAHEAD=(    atomiswave
                             dreamcast
                             n64
                             naomi
-                            neogeocd
+                            neocd
                             psp
                             saturn
                             sega32x
 )
 
-declare -a NO_ANALOG=(  dreamcast
-                        gc
-                        n64
-                        nds
-                        ps2
-                        psp
-                        pspminis
-                        psx
-                        wii
-                        wonderswan
-                        wonderswancolor
+declare -a NO_ANALOG=(    dreamcast
+                          n64
+                          ps2
+                          psp
+                          pspminis
+                          psx
+                          wii
 )
 
 declare -a CORE_RATIOS=(    4/3
@@ -1007,20 +968,39 @@ function set_autosave() {
 function set_runahead() {
     local RUNAHEAD="$(game_setting runahead)"
     local HAS_RUNAHEAD="$(match ${PLATFORM} ${NO_RUNAHEAD[@]})"
+    # Settings > Consoles in the launcher: <system>.profile is "latency" or
+    # "visuals". Latency is RetroArch's preemptive frames, one frame: the
+    # same savestate and core requirements as run-ahead, but the frame is
+    # rerun only when the input changed, so idle play costs a savestate
+    # per frame rather than a second emulation. An explicit runahead
+    # count is classic run-ahead and wins; the two exclude each other.
+    local PREEMPT="false"
+    if [ "$(game_setting profile)" = "latency" ] && [ "${RUNAHEAD:-0}" -le 0 ]
+    then
+        PREEMPT="true"
+    fi
     case ${HAS_RUNAHEAD} in
         1)
             add_setting "none" "run_ahead_enabled" "false"
             add_setting "none" "run_ahead_frames" "0"
+            add_setting "none" "preemptive_frames_enable" "false"
         ;;
         *)
-            if [ "${RUNAHEAD}" -gt 0 ]
+            if [ "${RUNAHEAD:-0}" -gt 0 ]
             then
                 add_setting "none" "run_ahead_enabled" "true"
                 add_setting "none" "run_ahead_frames" "${RUNAHEAD}"
                 add_setting "secondinstance" "run_ahead_secondary_instance"
+                add_setting "none" "preemptive_frames_enable" "false"
+            elif [ "${PREEMPT}" = "true" ]
+            then
+                add_setting "none" "run_ahead_enabled" "false"
+                add_setting "none" "run_ahead_frames" "1"
+                add_setting "none" "preemptive_frames_enable" "true"
             else
                 add_setting "none" "run_ahead_enabled" "false"
                 add_setting "none" "run_ahead_frames" "0"
+                add_setting "none" "preemptive_frames_enable" "false"
             fi
         ;;
     esac
@@ -1040,45 +1020,6 @@ function set_analogsupport() {
             add_setting "analogue" "input_player1_analog_dpad_mode" "1"
         ;;
     esac
-}
-
-function set_tatemode() {
-    log "Setup tate mode..."
-    if [ "${CORE}" = "mame2003_plus" ]
-    then
-        local TATEMODE="$(game_setting tatemode)"
-        local MAME2003DIR="${RETROARCH_PATH}/config/MAME 2003-Plus"
-        local MAME2003REMAPDIR="/storage/remappings/MAME 2003-Plus"
-        if [ ! -d "${MAME2003DIR}" ]
-        then
-            mkdir -p "${MAME2003DIR}"
-        fi
-        if [ ! -d "${MAME2003REMAPDIR}" ]
-        then
-            mkdir -p "${MAME2003REMAPDIR}"
-        fi
-        case ${TATEMODE} in
-            1|true)
-                cp "/usr/config/retroarch/TATE-MAME 2003-Plus.rmp" "${MAME2003REMAPDIR}/MAME 2003-Plus.rmp"
-                if [ "$(grep mame2003-plus_tate_mode "${MAME2003DIR}/MAME 2003-Plus.opt" > /dev/null 2>&1)" ]
-                then
-                    sed -i 's#mame2003-plus_tate_mode.*$#mame2003-plus_tate_mode = "enabled"#' "${MAME2003DIR}/MAME 2003-Plus.opt" 2>/dev/null
-                else
-                    echo 'mame2003-plus_tate_mode = "enabled"' > "${MAME2003DIR}/MAME 2003-Plus.opt"
-                fi
-            ;;
-            *)
-                if [ -e "${MAME2003DIR}/MAME 2003-Plus.opt" ]
-                then
-                    sed -i 's#mame2003-plus_tate_mode.*$#mame2003-plus_tate_mode = "disabled"#' "${MAME2003DIR}/MAME 2003-Plus.opt" 2>/dev/null
-                fi
-                if [ -e "${MAME2003REMAPDIR}/MAME 2003-Plus.rmp" ]
-                then
-                    rm -f "${MAME2003REMAPDIR}/MAME 2003-Plus.rmp"
-                fi
-            ;;
-        esac
-    fi
 }
 
 function set_n64opts() {
@@ -1128,37 +1069,6 @@ function set_n64opts() {
     fi
 }
 
-function set_saturnopts() {
-    log "Set up Saturn..."
-    if [ "${CORE}" = "kronos" ]
-    then
-        log "Set up Kronos..."
-        local KRONOSDIR="${RETROARCH_PATH}/Kronos/config/Kronos"
-        if [ ! -d "${KRONOSDIR}" ]
-        then
-            mkdir -p "${KRONOSDIR}"
-        fi
-
-        if [ ! -f "${KRONOSDIR}/Kronos.opt" ]
-        then
-            cp "/usr/config/retroarch/Kronos.opt" "${KRONOSDIR}/Kronos.opt"
-        fi
-        local KRONOSOPT="${KRONOSDIR}/Kronos.opt"
-        local HLE_BIOS="$(game_setting force_hle_bios)"
-        sed -i '/kronos_force_hle_bios = /c\kronos_force_hle_bios = "'${HLE_BIOS}'"' "${KRONOSOPT}"
-        local ADDON_CART="$(game_setting addon_cartridge)"
-        sed -i '/kronos_addon_cartridge = /c\kronos_addon_cartridge = "'${ADDON_CART}'"' "${KRONOSOPT}"
-        local TESSELATION="$(game_setting tesselation)"
-        sed -i '/kronos_polygon_mode = /c\kronos_polygon_mode = "'${TESSELATION}'"' "${KRONOSOPT}"
-        local RESOLUTION="$(game_setting resolution)"
-        sed -i '/kronos_resolution_mode = /c\kronos_resolution_mode = "'${RESOLUTION}'"' "${KRONOSOPT}"
-        local COMPUTE_SHADER="$(game_setting compute_shader)"
-        sed -i '/kronos_use_cs = /c\kronos_use_cs = "'${COMPUTE_SHADER}'"' "${KRONOSOPT}"
-        local TRANSPARENCY="$(game_setting transparency)"
-        sed -i '/kronos_mesh_mode = /c\kronos_mesh_mode = "'${TRANSPARENCY}'"' "${KRONOSOPT}"
-    fi
-}
-
 function set_dreamcastopts() {
     log "Set up Dreamcast..."
     if [ "${CORE}" = "flycast" ]
@@ -1178,70 +1088,60 @@ function set_dreamcastopts() {
     fi
 }
 
-function set_melondsdsopts() {
-    log "Set up melonDS DS..."
-    if [ "${CORE}" = "melondsds" ]
+function set_psxopts() {
+    log "Set up SwanStation..."
+    if [ "${CORE}" = "swanstation" ]
     then
-        local MELONDSDSDIR="${RETROARCH_PATH}/config/melonDS DS"
-        if [ ! -d "${MELONDSDSDIR}" ]
+        # Settings > Consoles for the PlayStation. Visuals is the shipped
+        # core: the Vulkan renderer at 4x, from retroarch-core-options.cfg.
+        # Latency is the software renderer at 1x: the console's own
+        # resolution, and savestates that carry no GPU state, which is what
+        # makes a pre-emptive frame cheap enough to run every frame.
+        # RetroArch reads per-core options from config/SwanStation when the
+        # file exists, so it is made from the shipped global lines once.
+        # The two keys are written when latency is on, and written back
+        # to the shipped values once when it goes off; a renderer or scale
+        # chosen in RetroArch's own menu under visuals is otherwise left
+        # alone. The marker file says latency wrote them last.
+        local SWANDIR="${RETROARCH_PATH}/config/SwanStation"
+        local SWANOPT="${SWANDIR}/SwanStation.opt"
+        local SHIPPED="/usr/config/retroarch/retroarch-core-options.cfg"
+        local MARKER="${SWANDIR}/.latency-profile"
+        local RENDERER SCALE
+        if [ "$(game_setting profile)" = "latency" ]
         then
-            mkdir -p "${MELONDSDSDIR}"
-        fi
-
-        if [ ! -f "${MELONDSDSDIR}/melonDS DS.opt" ]
+            RENDERER="Software"
+            SCALE="1"
+        elif [ -e "${MARKER}" ]
         then
-            cat <<EOF >"${MELONDSDSDIR}/melonDS DS.opt"
-melonds_boot_mode = "direct"
-melonds_console_mode = "ds"
-melonds_show_cursor = "timeout"
-melonds_touch_mode = "auto"
-EOF
-        fi
-
-        if [ "${PLATFORM}" = "ndsiware" ]
-        then
-            sed -i '/melonds_console_mode = /c\melonds_console_mode = "dsi"' "${MELONDSDSDIR}/melonDS DS.opt"
+            RENDERER="$(sed -n 's/^swanstation_GPU_Renderer = "\(.*\)"/\1/p' "${SHIPPED}")"
+            SCALE="$(sed -n 's/^swanstation_GPU_ResolutionScale = "\(.*\)"/\1/p' "${SHIPPED}")"
+            RENDERER="${RENDERER:-Vulkan}"
+            SCALE="${SCALE:-4}"
         else
-            sed -i '/melonds_console_mode = /c\melonds_console_mode = "ds"' "${MELONDSDSDIR}/melonDS DS.opt"
+            return 0
         fi
-
-        if [ "${DEVICE_HAS_TOUCHSCREEN}" = "true" ]
+        mkdir -p "${SWANDIR}"
+        if [ ! -f "${SWANOPT}" ]
         then
-            sed -i '/melonds_show_cursor = /c\melonds_show_cursor = "disabled"' "${MELONDSDSDIR}/melonDS DS.opt"
-            sed -i '/melonds_touch_mode = /c\melonds_touch_mode = "touch"' "${MELONDSDSDIR}/melonDS DS.opt"
+            grep '^swanstation_' "${SHIPPED}" >"${SWANOPT}"
         fi
-    fi
-}
-
-function set_atari() {
-    log "Set up Atari (FIXME)..."
-    if [ "${CORE}" = "atari800" ]
-    then
-        ATARICONF="/storage/.config/system/configs/atari800.cfg"
-        ATARI800CONF="${RETROARCH_PATH}/config/Atari800/Atari800.opt"
-        if [ ! -f "$ATARI800CONF" ]
+        for KEY in GPU_Renderer:"${RENDERER}" GPU_ResolutionScale:"${SCALE}"
+        do
+            local NAME="swanstation_${KEY%%:*}" VALUE="${KEY#*:}"
+            if grep -q "^${NAME} = " "${SWANOPT}"
+            then
+                sed -i "/^${NAME} = /c\\${NAME} = \"${VALUE}\"" "${SWANOPT}"
+            else
+                echo "${NAME} = \"${VALUE}\"" >>"${SWANOPT}"
+            fi
+        done
+        if [ "${RENDERER}" = "Software" ]
         then
-            touch "$ATARI800CONF"
-        fi
-        sed -i "/RAM_SIZE=/d" ${ATARICONF}
-        sed -i "/STEREO_POKEY=/d" ${ATARICONF}
-        sed -i "/BUILTIN_BASIC=/d" ${ATARICONF}
-        sed -i "/atari800_system =/d" ${ATARI800CONF}
-
-        if [ "${PLATFORM}" == "atari5200" ]; then
-            add_setting "none" "atari800_system" "5200"
-            echo "atari800_system = \"5200\"" >> ${ATARI800CONF}
-            echo "RAM_SIZE=16" >> ${ATARICONF}
-            echo "STEREO_POKEY=0" >> ${ATARICONF}
-            echo "BUILTIN_BASIC=0" >> ${ATARICONF}
+            touch "${MARKER}"
         else
-            add_setting "none" "atari800_system" "800XL (64K)"
-            echo "atari800_system = \"800XL (64K)\"" >> ${ATARI800CONF}
-            echo "RAM_SIZE=64" >> ${ATARICONF}
-            echo "STEREO_POKEY=1" >> ${ATARICONF}
-            echo "BUILTIN_BASIC=1" >> ${ATARICONF}
+            rm -f "${MARKER}"
         fi
-	flush_settings
     fi
 }
 
@@ -1441,7 +1341,6 @@ configure_hotkeys
 ### Game specific functions
 ###
 
-set_atari &
 set_gambatte &
 
 wait
@@ -1471,11 +1370,9 @@ set_netplay &
 set_runahead &
 set_audiolatency &
 set_analogsupport &
-set_tatemode &
 set_n64opts &
-set_saturnopts &
 set_dreamcastopts &
-set_melondsdsopts &
+set_psxopts &
 
 ### Sed operations are expensive, so they are staged and executed as
 ### a single process when all forks complete.
