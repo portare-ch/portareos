@@ -153,6 +153,15 @@ jobs:
           max_attempts: 6
           retry_interval: 10
 
+      - name: Print the failing thread logs
+        if: failure()
+        run: |
+          for f in $(grep -oE '\.threads/logs/[0-9]+\.log' output.log | sort -u); do
+            echo "::group::${f}"
+            tail -n 300 "build.PortareOS-${{ inputs.DEVICE }}.aarch64/${f}" || true
+            echo "::endgroup::"
+          done
+
       - name: Archive output.logs (${{ inputs.DEVICE }}-aarch64-emu-standalone)
         if: failure()
         uses: actions/upload-artifact@v7

@@ -118,6 +118,15 @@ jobs:
           exit_code=$(<docker_exit_code)
           exit $exit_code
 
+      - name: Print the failing thread logs
+        if: failure()
+        run: |
+          for f in $(grep -oE '\.threads/logs/[0-9]+\.log' output.log | sort -u); do
+            echo "::group::${f}"
+            tail -n 300 "build.PortareOS-${{ inputs.DEVICE }}.aarch64/${f}" || true
+            echo "::endgroup::"
+          done
+
       - name: Archive output.logs (${{ inputs.DEVICE }}-aarch64-image)
         if: failure()
         uses: actions/upload-artifact@v7

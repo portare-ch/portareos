@@ -34,14 +34,15 @@ makeinstall_target() {
   # PortMaster knows its platforms by the OS name and PortareOS is not one
   # of them, so it would take its default platform, which never copies
   # our control.txt, mapper.txt and controller database into its folder.
-  # patches/ adds a PortareOS platform to harbourmaster. The code lives in
-  # pylibs.zip inside the release archive, so both are opened, patched
-  # and closed again.
+  # pylibs-patches/ adds a PortareOS platform to harbourmaster. The code
+  # lives in pylibs.zip inside the release archive, so both are opened,
+  # patched and closed again. Not patches/: the build system applies that
+  # directory to the unpacked archive itself, where the code is not.
   rm -rf ${PKG_BUILD}/release
   mkdir -p ${PKG_BUILD}/release/pylibs
     unzip -qo ${PKG_BUILD}/PortMaster.zip -d ${PKG_BUILD}/release
     unzip -qo ${PKG_BUILD}/release/PortMaster/pylibs.zip -d ${PKG_BUILD}/release/pylibs
-    for p in ${PKG_DIR}/patches/*.patch; do
+    for p in ${PKG_DIR}/pylibs-patches/*.patch; do
       patch -d ${PKG_BUILD}/release/pylibs -p1 < ${p}
     done
     rm -f ${PKG_BUILD}/release/PortMaster/pylibs.zip
