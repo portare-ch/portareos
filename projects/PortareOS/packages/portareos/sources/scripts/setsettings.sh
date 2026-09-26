@@ -872,14 +872,7 @@ function set_ra_refresh_rate() {
 }
 
 function set_integerscale() {
-    # Settings > Consoles: the latency profile gives up integer scaling,
-    # the visuals profile keeps the system's setting.
-    if [ "$(game_setting profile)" = "latency" ]
-    then
-        add_setting "none" "video_scale_integer" "false"
-    else
-        add_setting "integerscale" "video_scale_integer"
-    fi
+    add_setting "integerscale" "video_scale_integer"
     add_setting "integerscaleoverscale" "video_scale_integer_overscale"
 }
 
@@ -1204,6 +1197,50 @@ function set_dreamcastopts() {
     fi
 }
 
+function set_psxopts() {
+    log "Set up SwanStation..."
+    if [ "${CORE}" = "swanstation" ]
+    then
+        # Settings > Consoles for the PlayStation. Visuals is the shipped
+        # core: the Vulkan renderer at 4x, from retroarch-core-options.cfg.
+        # Latency is the software renderer at 1x: the console's own
+        # resolution, and savestates that carry no GPU state, which is what
+        # makes a pre-emptive frame cheap enough to run every frame.
+        # RetroArch reads per-core options from config/SwanStation when the
+        # file exists, so it is made from the shipped global lines once and
+        # the two keys are written on every launch.
+        local SWANDIR="${RETROARCH_PATH}/config/SwanStation"
+        local SWANOPT="${SWANDIR}/SwanStation.opt"
+        local SHIPPED="/usr/config/retroarch/retroarch-core-options.cfg"
+        mkdir -p "${SWANDIR}"
+        if [ ! -f "${SWANOPT}" ]
+        then
+            grep '^swanstation_' "${SHIPPED}" >"${SWANOPT}"
+        fi
+        local RENDERER SCALE
+        if [ "$(game_setting profile)" = "latency" ]
+        then
+            RENDERER="Software"
+            SCALE="1"
+        else
+            RENDERER="$(sed -n 's/^swanstation_GPU_Renderer = "\(.*\)"/\1/p' "${SHIPPED}")"
+            SCALE="$(sed -n 's/^swanstation_GPU_ResolutionScale = "\(.*\)"/\1/p' "${SHIPPED}")"
+            RENDERER="${RENDERER:-Vulkan}"
+            SCALE="${SCALE:-4}"
+        fi
+        for KEY in GPU_Renderer:"${RENDERER}" GPU_ResolutionScale:"${SCALE}"
+        do
+            local NAME="swanstation_${KEY%%:*}" VALUE="${KEY#*:}"
+            if grep -q "^${NAME} = " "${SWANOPT}"
+            then
+                sed -i "/^${NAME} = /c\\${NAME} = \"${VALUE}\"" "${SWANOPT}"
+            else
+                echo "${NAME} = \"${VALUE}\"" >>"${SWANOPT}"
+            fi
+        done
+    fi
+}
+
 function set_melondsdsopts() {
     log "Set up melonDS DS..."
     if [ "${CORE}" = "melondsds" ]
@@ -1502,6 +1539,7 @@ set_n64opts &
 set_saturnopts &
 set_dreamcastopts &
 set_melondsdsopts &
+set_psxopts &
 
 ### Sed operations are expensive, so they are staged and executed as
 ### a single process when all forks complete.

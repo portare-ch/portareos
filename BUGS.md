@@ -45,13 +45,18 @@ Each has its check; do them before building on top.
   for a moment afterwards while it refills its pipeline and texture caches.
 * **Settings > Consoles, latency (preemptive frames, 1).** Not yet run on
   the device. With `snes.profile=latency` in system.cfg, a SNES game's
-  RetroArch config should carry `preemptive_frames_enable = "true"`,
-  `run_ahead_frames = "1"` and `video_scale_integer = "false"`, the shader
-  stays, and the statistics overlay's
+  RetroArch config should carry `preemptive_frames_enable = "true"` and
+  `run_ahead_frames = "1"`, the shader and integer scaling stay, and the
+  statistics overlay's
   core time should rise only a little while nothing is pressed. A
   `[Run-Ahead Preemptive]` warning in the log means the core does not
   support it and it goes on the NO_RUNAHEAD list; a frame flickering back
-  on a press means its savestate is not deterministic, same list.
+  on a press means its savestate is not deterministic, same list. On the
+  PlayStation, latency also writes `swanstation_GPU_Renderer = "Software"`
+  and `swanstation_GPU_ResolutionScale = "1"` into
+  `config/SwanStation/SwanStation.opt`; visuals writes the shipped Vulkan
+  and 4x back. The per-core `SwanStation.cfg` keeps run-ahead off, which
+  is fine: pre-emptive frames are the other flag.
 * **Which N64 games run at 32 kHz.** Super Mario 64 and the two Zeldas are
   believed to; RetroArch's statistics overlay, or the `Sink rate` log line,
   says. Nothing depends on the list any more, it is only worth knowing.
