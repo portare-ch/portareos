@@ -43,6 +43,12 @@ Each has its check; do them before building on top.
   whether a Vulkan core (parallel-n64, Flycast) comes back cleanly from the
   context destroy and reset the handover forces, and whether it stutters
   for a moment afterwards while it refills its pipeline and texture caches.
+* **Settings > Games, latency (run-ahead 1).** Not yet run on the device.
+  With `snes.profile=latency` in system.cfg, a SNES game's RetroArch log
+  should show `run_ahead_enabled = "true"` and `run_ahead_frames = "1"`,
+  the statistics overlay's core time should roughly double, and the shader
+  stays. If a core glitches (a frame flickering back), its savestate is not
+  deterministic and it goes on the NO_RUNAHEAD list.
 * **Which N64 games run at 32 kHz.** Super Mario 64 and the two Zeldas are
   believed to; RetroArch's statistics overlay, or the `Sink rate` log line,
   says. Nothing depends on the list any more, it is only worth knowing.

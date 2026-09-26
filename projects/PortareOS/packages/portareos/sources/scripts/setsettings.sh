@@ -1007,13 +1007,20 @@ function set_autosave() {
 function set_runahead() {
     local RUNAHEAD="$(game_setting runahead)"
     local HAS_RUNAHEAD="$(match ${PLATFORM} ${NO_RUNAHEAD[@]})"
+    # Settings > Games in the launcher: <system>.profile is "latency" or
+    # "visuals". Latency is one frame of run-ahead, the shipped picture
+    # otherwise unchanged; an explicit runahead count still wins.
+    if [ "$(game_setting profile)" = "latency" ] && [ "${RUNAHEAD:-0}" -le 0 ]
+    then
+        RUNAHEAD=1
+    fi
     case ${HAS_RUNAHEAD} in
         1)
             add_setting "none" "run_ahead_enabled" "false"
             add_setting "none" "run_ahead_frames" "0"
         ;;
         *)
-            if [ "${RUNAHEAD}" -gt 0 ]
+            if [ "${RUNAHEAD:-0}" -gt 0 ]
             then
                 add_setting "none" "run_ahead_enabled" "true"
                 add_setting "none" "run_ahead_frames" "${RUNAHEAD}"
