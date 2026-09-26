@@ -31,10 +31,18 @@ PKG_TOOLCHAIN="make"
 # FORCE_OPENGLNONE=1 is the standalone's --opengl-mode=none: no GL
 # renderer in the core, so it never asks RetroArch for a GL context and
 # RetroArch stays on Vulkan, where the timed presents are.
-PKG_MAKE_OPTS_TARGET="-C backends/platform/libretro platform=unix LITE=1 FORCE_OPENGLNONE=1 all"
-
+#
+# The tree has a configure script at its root (ScummVM's own, unused
+# here), so the build system runs make from an out-of-tree directory
+# under ${PKG_BUILD}, where a relative -C path finds nothing. Hence the
+# absolute path, in a function: ${PKG_BUILD} is not set yet when this
+# file is read.
 pre_make_target() {
   cp ${PKG_DIR}/config/engines.list ${PKG_BUILD}/backends/platform/libretro/lite_engines.list
+}
+
+make_target() {
+  make -C ${PKG_BUILD}/backends/platform/libretro platform=unix LITE=1 FORCE_OPENGLNONE=1 all
 }
 
 makeinstall_target() {
