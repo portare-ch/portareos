@@ -1207,26 +1207,33 @@ function set_psxopts() {
         # resolution, and savestates that carry no GPU state, which is what
         # makes a pre-emptive frame cheap enough to run every frame.
         # RetroArch reads per-core options from config/SwanStation when the
-        # file exists, so it is made from the shipped global lines once and
-        # the two keys are written on every launch.
+        # file exists, so it is made from the shipped global lines once.
+        # The two keys are written when latency is on, and written back
+        # to the shipped values once when it goes off; a renderer or scale
+        # chosen in RetroArch's own menu under visuals is otherwise left
+        # alone. The marker file says latency wrote them last.
         local SWANDIR="${RETROARCH_PATH}/config/SwanStation"
         local SWANOPT="${SWANDIR}/SwanStation.opt"
         local SHIPPED="/usr/config/retroarch/retroarch-core-options.cfg"
-        mkdir -p "${SWANDIR}"
-        if [ ! -f "${SWANOPT}" ]
-        then
-            grep '^swanstation_' "${SHIPPED}" >"${SWANOPT}"
-        fi
+        local MARKER="${SWANDIR}/.latency-profile"
         local RENDERER SCALE
         if [ "$(game_setting profile)" = "latency" ]
         then
             RENDERER="Software"
             SCALE="1"
-        else
+        elif [ -e "${MARKER}" ]
+        then
             RENDERER="$(sed -n 's/^swanstation_GPU_Renderer = "\(.*\)"/\1/p' "${SHIPPED}")"
             SCALE="$(sed -n 's/^swanstation_GPU_ResolutionScale = "\(.*\)"/\1/p' "${SHIPPED}")"
             RENDERER="${RENDERER:-Vulkan}"
             SCALE="${SCALE:-4}"
+        else
+            return 0
+        fi
+        mkdir -p "${SWANDIR}"
+        if [ ! -f "${SWANOPT}" ]
+        then
+            grep '^swanstation_' "${SHIPPED}" >"${SWANOPT}"
         fi
         for KEY in GPU_Renderer:"${RENDERER}" GPU_ResolutionScale:"${SCALE}"
         do
@@ -1238,6 +1245,12 @@ function set_psxopts() {
                 echo "${NAME} = \"${VALUE}\"" >>"${SWANOPT}"
             fi
         done
+        if [ "${RENDERER}" = "Software" ]
+        then
+            touch "${MARKER}"
+        else
+            rm -f "${MARKER}"
+        fi
     fi
 }
 
