@@ -382,7 +382,8 @@ function configure_hotkeys() {
                                input_menu_toggle_btn input_save_state_btn         \
                                input_load_state_btn input_toggle_fast_forward_btn \
                                input_toggle_fast_forward_axis input_rewind_axis   \
-                               input_rewind_btn quit_press_twice confirm_quit
+                               input_rewind_btn quit_press_twice confirm_quit \
+                               input_game_guide_btn
             do
                 clear_setting "${HKEYSETTING}"
             done
@@ -400,6 +401,7 @@ input_fps_toggle_btn = "${input_y_btn}"
 input_menu_toggle_btn = "${input_x_btn}"
 input_save_state_btn = "${input_r_btn}"
 input_load_state_btn = "${input_l_btn}"
+input_game_guide_btn = "${input_game_guide_btn:-nul}"
 quit_press_twice = "false"
 confirm_quit = "false"
 EOF

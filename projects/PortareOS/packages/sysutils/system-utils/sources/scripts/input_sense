@@ -94,7 +94,6 @@ FUNCTION_HOTKEY_A_EVENT='*('${BTN_HOTKEY_A_MODIFIER}'), value *'
 FUNCTION_HOTKEY_B_EVENT='*('${BTN_HOTKEY_B_MODIFIER}'), value *'
 FUNCTION_HOTKEY_C_EVENT='*('${BTN_HOTKEY_C_MODIFIER}'), value *'
 
-FUNCTION_HOTKEY_BTN_NORTH_EVENT="*(BTN_NORTH), value 1*"
 FUNCTION_HOTKEY_BTN_WEST_EVENT="*(BTN_WEST), value 1*"
 FUNCTION_HOTKEY_BTN_SOUTH_EVENT="*(BTN_SOUTH), value 1*"
 FUNCTION_HOTKEY_BTN_EAST_EVENT="*(BTN_EAST), value 1*"
@@ -549,11 +548,5 @@ set +e
           /usr/bin/mangohud_set toggle
         fi
       ;;
-     (${FUNCTION_HOTKEY_BTN_NORTH_EVENT})
-       if [ "${HOTKEY_A_PRESSED}" = true ]; then
-         ${DEBUG} && log $0 "${FUNCTION_HOTKEY_BTN_NORTH_EVENT}: Opening Game Guide"
-         /usr/bin/game-guides-tool
-       fi
-     ;;
   esac
 done

@@ -1,0 +1,381 @@
+From: portare-ch <hello@portare.org>
+Subject: [PATCH] input: a game guide hotkey that shows <content>.txt in sdl2text
+
+A text file next to the content, with the content's name and a .txt
+extension, is a game guide. The new hotkey (input_game_guide) shows it
+through /usr/bin/sdl2text and comes back to the game where it was.
+
+The panel has one DRM master and the video driver holds it through its
+Vulkan display instance, so the guide cannot be drawn over the game by
+another process. Instead the drivers go down the way a fullscreen
+toggle takes them down, sdl2text runs to completion on kmsdrm while
+they are down, and they come back up. The core is not stepped in
+between, so its state is untouched: no savestate, no reload.
+
+video_driver_reinit_around() is video_driver_reinit() with a callback
+between driver_uninit and drivers_init, and with the context cache
+forced off, because a cached instance would keep the display.
+
+The hotkey is exempt from the hotkey enabler, like Game Focus: it is
+meant for a button no core reads (the Nova's M2), so a bare press
+opens the guide and the same press in sdl2text closes it.
+
+diff --git a/command.h b/command.h
+index c569d8b1e9..fdae86cd23 100644
+--- a/command.h
++++ b/command.h
+@@ -286,6 +286,7 @@ enum event_command
+    CMD_EVENT_PRESENCE_UPDATE,
+    CMD_EVENT_OVERLAY_NEXT,
+    CMD_EVENT_OSK_TOGGLE,
++   CMD_EVENT_GAME_GUIDE,
+    CMD_EVENT_RELOAD_CONFIG,
+ #ifdef HAVE_MICROPHONE
+    /* Stops all enabled microphones. */
+@@ -572,6 +573,7 @@ static const struct cmd_map map[] = {
+ 
+    { "OVERLAY_NEXT",           RARCH_OVERLAY_NEXT },
+    { "OSK",                    RARCH_OSK },
++   { "GAME_GUIDE",             RARCH_GAME_GUIDE },
+ 
+ #if 0
+    /* Deprecated */
+diff --git a/config.def.keybinds.h b/config.def.keybinds.h
+index 3cac9ecc08..f3cd9853b7 100644
+--- a/config.def.keybinds.h
++++ b/config.def.keybinds.h
+@@ -504,6 +504,11 @@ static const struct retro_keybind retro_keybinds_1[] = {
+       RETRO_KEYBIND_PACK(MENU_ENUM_LABEL_VALUE_INPUT_META_OSK, RETROK_UNKNOWN, true),
+       RARCH_OSK, NO_BTN, NO_BTN, 0
+    },
++   {
++      AXIS_NONE, AXIS_NONE,
++      RETRO_KEYBIND_PACK(MENU_ENUM_LABEL_VALUE_INPUT_META_GAME_GUIDE, RETROK_UNKNOWN, true),
++      RARCH_GAME_GUIDE, NO_BTN, NO_BTN, 0
++   },
+ #elif defined(DINGUX)
+    { 
+       AXIS_NONE, AXIS_NONE,
+@@ -986,6 +991,11 @@ static const struct retro_keybind retro_keybinds_1[] = {
+       RETRO_KEYBIND_PACK(MENU_ENUM_LABEL_VALUE_INPUT_META_OSK, RETROK_UNKNOWN, true),
+       RARCH_OSK, NO_BTN, NO_BTN, 0
+    },
++   {
++      AXIS_NONE, AXIS_NONE,
++      RETRO_KEYBIND_PACK(MENU_ENUM_LABEL_VALUE_INPUT_META_GAME_GUIDE, RETROK_UNKNOWN, true),
++      RARCH_GAME_GUIDE, NO_BTN, NO_BTN, 0
++   },
+ #else
+    { 
+       AXIS_NONE, AXIS_NONE,
+@@ -1476,6 +1486,11 @@ static const struct retro_keybind retro_keybinds_1[] = {
+       RETRO_KEYBIND_PACK(MENU_ENUM_LABEL_VALUE_INPUT_META_OSK, RETROK_UNKNOWN, true),
+       RARCH_OSK, NO_BTN, NO_BTN, 0
+    },
++   {
++      AXIS_NONE, AXIS_NONE,
++      RETRO_KEYBIND_PACK(MENU_ENUM_LABEL_VALUE_INPUT_META_GAME_GUIDE, RETROK_UNKNOWN, true),
++      RARCH_GAME_GUIDE, NO_BTN, NO_BTN, 0
++   },
+ #endif
+ };
+ 
+@@ -1955,6 +1970,11 @@ static const struct retro_keybind retro_keybinds_rest[] = {
+       RETRO_KEYBIND_PACK(MENU_ENUM_LABEL_VALUE_INPUT_META_OSK, RETROK_UNKNOWN, true),
+       RARCH_OSK, NO_BTN, NO_BTN, 0
+    },
++   {
++      AXIS_NONE, AXIS_NONE,
++      RETRO_KEYBIND_PACK(MENU_ENUM_LABEL_VALUE_INPUT_META_GAME_GUIDE, RETROK_UNKNOWN, true),
++      RARCH_GAME_GUIDE, NO_BTN, NO_BTN, 0
++   },
+ };
+ 
+ #endif
+diff --git a/configuration.c b/configuration.c
+index fa3ea36808..a7aace233e 100644
+--- a/configuration.c
++++ b/configuration.c
+@@ -442,6 +442,7 @@ const struct input_bind_map input_config_bind_map[RARCH_BIND_LIST_END_NULL] = {
+    DECLARE_META_BIND(2, overlay_next,          RARCH_OVERLAY_NEXT,           MENU_ENUM_LABEL_VALUE_INPUT_META_OVERLAY_NEXT),
+ 
+    DECLARE_META_BIND(2, osk_toggle,            RARCH_OSK,                    MENU_ENUM_LABEL_VALUE_INPUT_META_OSK),
++   DECLARE_META_BIND(2, game_guide,            RARCH_GAME_GUIDE,             MENU_ENUM_LABEL_VALUE_INPUT_META_GAME_GUIDE),
+ };
+ 
+ #if defined(HAVE_METAL)
+diff --git a/gfx/video_driver.c b/gfx/video_driver.c
+index be61677644..921cc101be 100644
+--- a/gfx/video_driver.c
++++ b/gfx/video_driver.c
+@@ -7210,7 +7210,8 @@ void video_driver_frame(const void *data, unsigned width,
+             video_info.refresh_rate, video_info.frame_time_target, runloop_st->core_run_time);
+ }
+ 
+-static void video_driver_reinit_context(settings_t *settings, int flags)
++static void video_driver_reinit_context(settings_t *settings, int flags,
++      void (*between)(void *data), void *between_data)
+ {
+    /* RARCH_DRIVER_CTL_UNINIT clears the callback struct so we
+     * need to make sure to keep a copy */
+@@ -7224,6 +7225,9 @@ static void video_driver_reinit_context(settings_t *settings, int flags)
+ 
+    driver_uninit(flags, DRIVER_LIFETIME_RESET);
+ 
++   if (between)
++      between(between_data);
++
+    memcpy(hwr, &hwr_copy, sizeof(*hwr));
+    video_st->hw_render_context_negotiation = iface;
+ 
+@@ -7242,12 +7246,29 @@ void video_driver_reinit(int flags)
+    else
+       video_driver_modify_disp_flags(0, VIDEO_FLAG_CACHE_CONTEXT);
+    video_driver_cache_context_ack_clear();
+-   video_driver_reinit_context(settings, flags);
++   video_driver_reinit_context(settings, flags, NULL, NULL);
+    video_driver_modify_disp_flags(0, VIDEO_FLAG_CACHE_CONTEXT);
+ 
+    video_st->window_title_prev[0]          = '\0';
+ }
+ 
++/* Like video_driver_reinit, but runs between() while the drivers are
++ * down, and never keeps the context: a cached Vulkan instance would
++ * keep the display, and between() is there to hand the display to
++ * another process. */
++void video_driver_reinit_around(int flags,
++      void (*between)(void *data), void *between_data)
++{
++   settings_t *settings                    = config_get_ptr();
++   video_driver_state_t *video_st          = &video_driver_st;
++
++   video_driver_modify_disp_flags(0, VIDEO_FLAG_CACHE_CONTEXT);
++   video_driver_cache_context_ack_clear();
++   video_driver_reinit_context(settings, flags, between, between_data);
++
++   video_st->window_title_prev[0]          = '\0';
++}
++
+ static void video_frame_delay_leftover(video_driver_state_t *video_st,
+       runloop_state_t *runloop_st,
+       float refresh_rate,
+diff --git a/gfx/video_driver.h b/gfx/video_driver.h
+index 3b9b29ec17..ecdd0d7ac9 100644
+--- a/gfx/video_driver.h
++++ b/gfx/video_driver.h
+@@ -1888,6 +1888,9 @@ void video_driver_cache_context_ack_clear(void);
+ 
+ void video_driver_reinit(int flags);
+ 
++void video_driver_reinit_around(int flags,
++      void (*between)(void *data), void *between_data);
++
+ size_t video_driver_get_window_title(char *s, size_t len);
+ 
+ bool *video_driver_get_threaded(void);
+diff --git a/input/input_defines.h b/input/input_defines.h
+index c38a4a06c7..05939b16f2 100644
+--- a/input/input_defines.h
++++ b/input/input_defines.h
+@@ -195,6 +195,7 @@ enum
+ 
+    RARCH_OVERLAY_NEXT,
+    RARCH_OSK,
++   RARCH_GAME_GUIDE,
+ 
+    RARCH_BIND_LIST_END,
+ 
+diff --git a/input/input_driver.c b/input/input_driver.c
+index 091aff4957..513e6cb364 100644
+--- a/input/input_driver.c
++++ b/input/input_driver.c
+@@ -7555,6 +7555,11 @@ static void input_keys_pressed(
+       block_hotkey[RARCH_GAME_FOCUS_TOGGLE] = false;
+    }
+ 
++   /* The game guide is bound to a button no core reads, so it
++    * works without the hotkey enabler, like Game Focus. */
++   if (!is_menu && RETRO_KEYBIND_VALID(&binds[port][RARCH_GAME_GUIDE]))
++      block_hotkey[RARCH_GAME_GUIDE] = false;
++
+    for (i = RARCH_FIRST_META_KEY; i < RARCH_BIND_LIST_END; i++)
+    {
+       bool other_pressed = input_keys_pressed_other_sources(input_st, i, p_new_state);
+diff --git a/intl/msg_hash_us.h b/intl/msg_hash_us.h
+index 5e219e3096..e7d15ee1ff 100644
+--- a/intl/msg_hash_us.h
++++ b/intl/msg_hash_us.h
+@@ -12151,6 +12151,18 @@ MSG_HASH(
+    MENU_ENUM_SUBLABEL_INPUT_META_OSK,
+    "Switches keyboard overlay on/off."
+    )
++MSG_HASH(
++   MENU_ENUM_LABEL_VALUE_INPUT_META_GAME_GUIDE,
++   "Game Guide"
++   )
++MSG_HASH(
++   MENU_ENUM_SUBLABEL_INPUT_META_GAME_GUIDE,
++   "Shows the text file next to the content while the core waits. Press again to return."
++   )
++MSG_HASH(
++   MSG_GAME_GUIDE_NOT_FOUND,
++   "No game guide next to this content."
++   )
+ MSG_HASH(
+    MENU_ENUM_LABEL_VALUE_INPUT_META_OVERLAY_NEXT,
+    "Next Overlay"
+diff --git a/menu/cbs/menu_cbs_sublabel.c b/menu/cbs/menu_cbs_sublabel.c
+index b0125492e4..9e233bcd36 100644
+--- a/menu/cbs/menu_cbs_sublabel.c
++++ b/menu/cbs/menu_cbs_sublabel.c
+@@ -310,6 +310,7 @@ DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_input_meta_frameadvance,          ME
+ 
+ DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_input_meta_mute,                  MENU_ENUM_SUBLABEL_INPUT_META_MUTE)
+ DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_input_meta_osk,                   MENU_ENUM_SUBLABEL_INPUT_META_OSK)
++DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_input_meta_game_guide,            MENU_ENUM_SUBLABEL_INPUT_META_GAME_GUIDE)
+ DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_input_meta_volume_up,             MENU_ENUM_SUBLABEL_INPUT_META_VOLUME_UP)
+ DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_input_meta_volume_down,           MENU_ENUM_SUBLABEL_INPUT_META_VOLUME_DOWN)
+ 
+@@ -1765,6 +1766,9 @@ int menu_cbs_init_bind_sublabel(menu_file_list_cbs_t *cbs,
+             case RARCH_OSK:
+                BIND_ACTION_SUBLABEL(cbs, action_bind_sublabel_input_meta_osk);
+                return 0;
++            case RARCH_GAME_GUIDE:
++               BIND_ACTION_SUBLABEL(cbs, action_bind_sublabel_input_meta_game_guide);
++               return 0;
+             default:
+                break;
+          }
+diff --git a/msg_hash.h b/msg_hash.h
+index 6df82861db..f649c07745 100644
+--- a/msg_hash.h
++++ b/msg_hash.h
+@@ -2652,6 +2652,7 @@ enum msg_hash_enums
+ 
+    MENU_ENUM_LABEL_VALUE_INPUT_META_OVERLAY_NEXT, /* Hidden */
+    MENU_ENUM_LABEL_VALUE_INPUT_META_OSK,
++   MENU_ENUM_LABEL_VALUE_INPUT_META_GAME_GUIDE,
+ 
+    MENU_ENUM_LABEL_VALUE_INPUT_DEVICE_INDEX,
+    MENU_ENUM_LABEL_VALUE_INPUT_DEVICE_TYPE,
+@@ -2756,6 +2757,8 @@ enum msg_hash_enums
+ 
+    MENU_ENUM_SUBLABEL_INPUT_META_OVERLAY_NEXT, /* Hidden */
+    MENU_ENUM_SUBLABEL_INPUT_META_OSK,
++   MENU_ENUM_SUBLABEL_INPUT_META_GAME_GUIDE,
++   MSG_GAME_GUIDE_NOT_FOUND,
+ 
+    MENU_ENUM_LABEL_INPUT_DESCRIPTION,
+    MENU_ENUM_LABEL_INPUT_DESCRIPTION_KBD,
+diff --git a/retroarch.c b/retroarch.c
+index 4c2fa29b15..2f1a903aa0 100644
+--- a/retroarch.c
++++ b/retroarch.c
+@@ -38,6 +38,14 @@
+ #include <signal.h>
+ #endif
+ 
++#if defined(__linux__) && !defined(ANDROID)
++#include <errno.h>
++#include <sys/wait.h>
++#include <unistd.h>
++#define HAVE_GAME_GUIDE 1
++#define GAME_GUIDE_READER "/usr/bin/sdl2text"
++#endif
++
+ #if defined(_WIN32) && !defined(_XBOX) && !defined(__WINRT__)
+ #include <objbase.h>
+ #include <process.h>
+@@ -3354,6 +3362,66 @@ static void command_event_finish_content_deinit(void)
+ 
+ }
+ 
++#ifdef HAVE_GAME_GUIDE
++/* Runs while the drivers are down, so the reader is the only
++ * process asking for the panel: the video driver's Vulkan display
++ * instance held DRM master until driver_uninit destroyed it, and
++ * the reader takes it through kmsdrm. The core is not stepped
++ * while this waits, so it resumes exactly where it was. */
++static void command_event_game_guide_show(void *data)
++{
++   const char *guide = (const char*)data;
++   pid_t pid         = fork();
++
++   if (pid == 0)
++   {
++      setenv("SDL_VIDEODRIVER", "kmsdrm", 1);
++      setenv("SDL_KMSDRM_REQUIRE_DRM_MASTER", "1", 1);
++      execl(GAME_GUIDE_READER, GAME_GUIDE_READER, guide, (char*)NULL);
++      _exit(127);
++   }
++   else if (pid > 0)
++   {
++      int status;
++      while (waitpid(pid, &status, 0) < 0 && errno == EINTR)
++         ;
++      if (WIFEXITED(status) && WEXITSTATUS(status) == 127)
++         RARCH_ERR("[Game guide] %s did not start.\n", GAME_GUIDE_READER);
++   }
++   else
++      RARCH_ERR("[Game guide] fork: %s\n", strerror(errno));
++}
++
++static void command_event_game_guide(void)
++{
++   char guide[PATH_MAX_LENGTH];
++   runloop_state_t *runloop_st    = runloop_state_get_ptr();
++   video_driver_state_t *video_st = video_state_get_ptr();
++   const char *basename           = path_get(RARCH_PATH_BASENAME);
++
++   if (     !(runloop_st->flags & RUNLOOP_FLAG_CORE_RUNNING)
++         || !video_st->data
++         || string_is_empty(basename))
++      return;
++
++   /* The guide sits next to the content as <name>.txt; for content
++    * in an archive that is next to the archive. */
++   strlcpy(guide, basename, sizeof(guide));
++   strlcat(guide, ".txt", sizeof(guide));
++
++   if (!path_is_valid(guide))
++   {
++      const char *msg = msg_hash_to_str(MSG_GAME_GUIDE_NOT_FOUND);
++      runloop_msg_queue_push(msg, strlen(msg), 1, 120, true, NULL,
++            MESSAGE_QUEUE_ICON_DEFAULT, MESSAGE_QUEUE_CATEGORY_INFO);
++      return;
++   }
++
++   video_driver_reinit_around(DRIVERS_CMD_ALL,
++         command_event_game_guide_show, guide);
++}
++#endif
++
+ bool command_event(enum event_command cmd, void *data)
+ {
+    struct rarch_state *p_rarch     = &rarch_st;
+@@ -5315,6 +5383,11 @@ bool command_event(enum event_command cmd, void *data)
+          runloop_st->flags      &= ~RUNLOOP_FLAG_PAUSED;
+          runloop_pause_checks();
+          break;
++      case CMD_EVENT_GAME_GUIDE:
++#ifdef HAVE_GAME_GUIDE
++         command_event_game_guide();
++#endif
++         break;
+       case CMD_EVENT_PAUSE:
+          /* Allow pausing only when there is an active core. */
+          if (!(runloop_st->flags & RUNLOOP_FLAG_CORE_RUNNING))
+diff --git a/runloop.c b/runloop.c
+index e8d4e7313a..e1533461f5 100644
+--- a/runloop.c
++++ b/runloop.c
+@@ -7446,6 +7446,9 @@ static enum runloop_state_enum runloop_check_state(
+    /* Check statistics hotkey */
+    HOTKEY_CHECK(RARCH_STATISTICS_TOGGLE, CMD_EVENT_STATISTICS_TOGGLE, true, NULL);
+ 
++   /* Check game guide hotkey */
++   HOTKEY_CHECK(RARCH_GAME_GUIDE, CMD_EVENT_GAME_GUIDE, true, NULL);
++
+    /* Check netplay host hotkey */
+    HOTKEY_CHECK(RARCH_NETPLAY_HOST_TOGGLE, CMD_EVENT_NETPLAY_HOST_TOGGLE, true, NULL);
+ 
