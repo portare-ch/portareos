@@ -138,13 +138,15 @@ waits where it was, and M2 or B brings it back.
 * Correct palettes and boot logos: a Game Boy Color game gets the GBC
   hardware and its color correction.
 * A color profile for the panel. The Nova's screen is wide-gamut and
-  blue-tinted; Settings > Color profile corrects it to sRGB and D65, at
-  gamma 2.2 (the one for emulators) or the sRGB curve, in the display
-  controller's own color blocks, so it holds for every game, film and the
-  launcher. Fitted to pippopapera's colorimeter readings of this panel.
-  Mainline drives two of the controller's three stages; our kernel drives
-  the third, the de-gamma, and the profiles that use it follow their
-  device test. See documentation/PER_DEVICE_DOCUMENTATION/SM8550/COLOR_PROFILE.md.
+  blue-tinted; Settings > Color profile can correct it to sRGB and D65, at
+  gamma 2.2 or the sRGB curve, in the display controller's own color
+  blocks, so it holds for every game, film and the launcher. Fitted to
+  pippopapera's colorimeter readings of this panel. Both profiles crush
+  the dark greys on the device today, so stock is the default until they
+  are refitted. Mainline drives two of the controller's three stages; our
+  kernel drives the third, the de-gamma, and the profiles that use it
+  follow their device test. See
+  documentation/PER_DEVICE_DOCUMENTATION/SM8550/COLOR_PROFILE.md.
 * No automatic savestate loading.
 
 ### Movies at the right shape

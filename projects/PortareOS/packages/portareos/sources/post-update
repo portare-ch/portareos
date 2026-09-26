@@ -282,6 +282,16 @@ migrate_ssh_on() {
   set_setting ssh.enabled 1
 }
 
+# Both measured profiles crush the dark greys on the device (BUGS.md), so
+# stock is the standard until they are refitted. Moves a device that chose
+# one back to stock, once; a profile picked again afterwards stays.
+migrate_colorprofile_stock() {
+  case "$(get_setting display.colorprofile)" in
+    gamma22|srgb) set_setting display.colorprofile stock ;;
+  esac
+}
+
 migrate cpugovernor-schedutil migrate_cpugovernor
 migrate es-fpslimit migrate_es_fpslimit
 migrate ssh-default-on migrate_ssh_on
+migrate colorprofile-stock migrate_colorprofile_stock
