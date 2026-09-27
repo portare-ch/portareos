@@ -1214,6 +1214,21 @@ function set_dreamcastopts() {
 
 function set_psxopts() {
     log "Set up SwanStation..."
+    # No automatic frame delay with the PlayStation's preemptive frame. The
+    # delay grows to eat the slack it measures on quiet frames; a frame
+    # where input changed loads a state, runs the core twice and saves
+    # twice (preempt_run), and that spike lands past the vblank before the
+    # delay backs off. Seen as dips on every press, gone with vsync off.
+    # Written for every core: add_setting also deletes the key from
+    # retroarch.cfg, so a value written only under latency left every
+    # later game without the delay.
+    local DELAY_AUTO="true"
+    if [ "${CORE}" = "swanstation" ] && [ "$(game_setting profile)" = "latency" ]
+    then
+        DELAY_AUTO="false"
+    fi
+    add_setting "none" "video_frame_delay_auto" "${DELAY_AUTO}"
+    add_setting "none" "video_frame_delay" "0"
     if [ "${CORE}" = "swanstation" ]
     then
         # Settings > Consoles for the PlayStation. Visuals is the shipped
@@ -1263,15 +1278,6 @@ function set_psxopts() {
         if [ "${RENDERER}" = "Software" ]
         then
             touch "${MARKER}"
-            # No automatic frame delay with the preemptive frame. The delay
-            # grows to eat the slack it measures on quiet frames; a frame
-            # where input changed loads a state, runs the core twice and
-            # saves twice (preempt_run), and that spike lands past the
-            # vblank before the delay backs off. Seen as dips on every
-            # press, gone with vsync off. The preemptive frame already
-            # saves more than the delay could.
-            add_setting "none" "video_frame_delay_auto" "false"
-            add_setting "none" "video_frame_delay" "0"
         else
             rm -f "${MARKER}"
         fi
