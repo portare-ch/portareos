@@ -100,7 +100,11 @@ if [ -n "${GAME}" ]; then
   else
     check D3 "swap interval 0, RetroArch picks" [ "$(cfg_val video_swap_interval)" = 0 ]
   fi
-  check D4 "automatic frame delay on" [ "$(cfg_val video_frame_delay_auto)" = true ]
+  if [ "${GAME}" = psx ] && [ "$(setting psx.profile)" = latency ]; then
+    skip D4 "frame delay is off under PlayStation latency (E3)"
+  else
+    check D4 "automatic frame delay on" [ "$(cfg_val video_frame_delay_auto)" = true ]
+  fi
 else
   for t in D1 D2 D3 D4; do need_game $t "launched RetroArch config"; done
 fi
