@@ -17,6 +17,11 @@ acquire then returns when the previous frame reaches the display, and
 the core has the whole frame period. The repeat loop stays for contexts
 that cannot time a present.
 
+Each target is half a refresh before the vblank it means. Mesa floors
+the time from its last vblank to whole refreshes and flips on the one
+after, so a target exactly on a vblank moved a refresh either way on a
+microsecond of rounding.
+
 Two things in the base code kept the extension's entry points from
 being usable here at all: they were loaded under the Win32 ifdef only,
 and a device the core negotiates (first interface: the frontend names
@@ -37,6 +42,8 @@ Measured on the Retroid Pocket Nova, Tekken 3, threaded video off:
 
 Nothing here is specific to one device.
 ---
+diff --git a/gfx/common/vulkan_common.c b/gfx/common/vulkan_common.c
+index e7cd7bd..d086725 100644
 --- a/gfx/common/vulkan_common.c
 +++ b/gfx/common/vulkan_common.c
 @@ -793,6 +793,20 @@ static VkDevice vulkan_context_create_device_wrapper(
@@ -168,7 +175,7 @@ Nothing here is specific to one device.
  
     /* Present mode logging */
     if (vk->swapchain == VK_NULL_HANDLE)
-@@ -3518,28 +3595,90 @@ void vulkan_context_destroy(gfx_ctx_vulkan_data_t *vk,
+@@ -3518,28 +3595,97 @@ void vulkan_context_destroy(gfx_ctx_vulkan_data_t *vk,
  #endif
  }
  
@@ -265,13 +272,20 @@ Nothing here is specific to one device.
 +   if (!vk->last_present_ns)
 +      return 0;
 +
++   /* Half a refresh before the vblank meant. Mesa floors the time from
++    * its last vblank to whole refreshes and flips on the one after, so
++    * a target exactly on a vblank moved a refresh either way on a
++    * microsecond of rounding: ParaLLEl N64 with three images saw 1 and
++    * 4 refreshes between frames. Half a refresh either side is the
++    * same vblank. */
 +   interval_ns = vk->refresh_duration_ns * (uint64_t)vk->context.swap_interval;
 +   return vk->last_present_ns
-+      + (uint64_t)(present_id - vk->last_present_id) * interval_ns;
++      + (uint64_t)(present_id - vk->last_present_id) * interval_ns
++      - vk->refresh_duration_ns / 2;
  }
  
  void vulkan_present(gfx_ctx_vulkan_data_t *vk, unsigned index)
-@@ -3569,6 +3708,8 @@ void vulkan_present(gfx_ctx_vulkan_data_t *vk, unsigned index)
+@@ -3569,6 +3715,8 @@ void vulkan_present(gfx_ctx_vulkan_data_t *vk, unsigned index)
        times.pTimes               = &ptime;
        ptime.presentID            = ++vk->present_id;
        ptime.desiredPresentTime   = 0;
@@ -280,6 +294,8 @@ Nothing here is specific to one device.
        present.pNext              = &times;
     }
  
+diff --git a/gfx/common/vulkan_common.h b/gfx/common/vulkan_common.h
+index 3b47b3d..36c574d 100644
 --- a/gfx/common/vulkan_common.h
 +++ b/gfx/common/vulkan_common.h
 @@ -175,7 +175,11 @@ enum vulkan_context_flags
@@ -327,6 +343,8 @@ Nothing here is specific to one device.
  /* The context driver hands the video driver &data->vk.context and keeps
   * the swapchain beside it; every context embeds gfx_ctx_vulkan_data_t
   * that way, so the owner is recoverable from the pointer the driver
+diff --git a/gfx/drivers/vulkan.c b/gfx/drivers/vulkan.c
+index 6217ea5..e77c2f0 100644
 --- a/gfx/drivers/vulkan.c
 +++ b/gfx/drivers/vulkan.c
 @@ -9150,6 +9150,7 @@ static bool vulkan_frame(void *data, const void *frame,
@@ -337,6 +355,8 @@ Nothing here is specific to one device.
           &&  (!(vk->context->flags & VK_CTX_FLAG_SWAP_INTERVAL_EMULATION_LOCK)))
     {
        vk->context->flags |= VK_CTX_FLAG_SWAP_INTERVAL_EMULATION_LOCK;
+diff --git a/gfx/drivers_context/khr_display_ctx.c b/gfx/drivers_context/khr_display_ctx.c
+index f51142b..ded267d 100644
 --- a/gfx/drivers_context/khr_display_ctx.c
 +++ b/gfx/drivers_context/khr_display_ctx.c
 @@ -76,6 +76,9 @@ static void *gfx_ctx_khr_display_init(void *video_driver)
