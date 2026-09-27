@@ -23,6 +23,13 @@ mkdir -p /storage/.cache
 IRQ=$(cat /sys/power/pm_wakeup_irq 2>/dev/null)
 NAME=""
 [ -n "${IRQ}" ] && NAME=$(awk -v i="${IRQ}:" '$1 == i {print $NF}' /proc/interrupts)
+# Without CONFIG_PM_SLEEP_DEBUG there is no pm_wakeup_irq; the wakeup
+# sources whose event count rose during the sleep say instead.
+if [ -z "${IRQ}" ] && [ -r /run/portareos/sleep-wakeups ]; then
+  IRQ=source
+  NAME=$(awk 'NR == FNR {n[$1] = $2; next} FNR > 1 && ($1 in n) && $3 > n[$1] {printf "%s%s", s, $1; s = ","}' \
+         /run/portareos/sleep-wakeups /sys/kernel/debug/wakeup_sources 2>/dev/null)
+fi
 USB=$(cat /sys/class/power_supply/qcom-battmgr-usb/online 2>/dev/null)
 NOW=$(date +%Y-%m-%dT%H:%M:%S)
 
@@ -56,4 +63,4 @@ NOW=$(date +%Y-%m-%dT%H:%M:%S)
 if [ "$(wc -l < ${LOG})" -gt 500 ]; then
   tail -n 250 ${LOG} > ${LOG}.tmp && mv ${LOG}.tmp ${LOG}
 fi
-rm -f ${B}
+rm -f ${B} /run/portareos/sleep-wakeups
