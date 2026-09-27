@@ -30,14 +30,20 @@ static std::filesystem::path get_home_dir() {
 }
 
 static std::filesystem::path get_config_dir() {
-    std::filesystem::path cfgDir = get_home_dir() / ".config" / "sdl2text";
+    std::filesystem::path cfgDir = get_home_dir() / ".config" / "sdl3text";
     std::error_code ec;
+    // The positions saved while this was sdl2text move with it, once.
+    std::filesystem::path old = get_home_dir() / ".config" / "sdl2text";
+    if(!std::filesystem::exists(cfgDir, ec) && std::filesystem::exists(old / "sdl2text.conf", ec)) {
+        std::filesystem::rename(old / "sdl2text.conf", old / "sdl3text.conf", ec);
+        std::filesystem::rename(old, cfgDir, ec);
+    }
     std::filesystem::create_directories(cfgDir, ec);
     return cfgDir;
 }
 
 std::filesystem::path get_config_file() {
-    return get_config_dir() / "sdl2text.conf";
+    return get_config_dir() / "sdl3text.conf";
 }
 
 // -------------------- Single instance --------------------
@@ -47,7 +53,7 @@ std::filesystem::path get_config_file() {
 // moment this process dies -- normal exit, SIGKILL, battery pull, all of it --
 // so it can never go stale. bind() is atomic, so two launches racing in the
 // same millisecond cannot both win.
-static const char* LOCK_NAME = "sdl2text-single-instance";
+static const char* LOCK_NAME = "sdl3text-single-instance";
 static int g_lockSock = -1;   // held open for the life of the process
 
 // How long to keep holding the name after the window is gone. A hotkey press
@@ -242,7 +248,7 @@ int main(int argc,char* argv[]) {
     LockResult lock = acquire_single_instance();
     if(lock == LOCK_BUSY) return 0;   // the guide is already on screen, nothing to do
     if(lock == LOCK_UNAVAILABLE)
-        std::cerr << "sdl2text: single-instance check unavailable, continuing\n";
+        std::cerr << "sdl3text: single-instance check unavailable, continuing\n";
 
     // Exit cleanly on SIGTERM/SIGINT so the scroll position still gets saved.
     struct sigaction sa;
@@ -282,7 +288,7 @@ int main(int argc,char* argv[]) {
         std::cerr<<"Vulkan renderer failed ("<<SDL_GetError()<<"), trying the default\n";
         ren=SDL_CreateRenderer(win,nullptr);
     }
-    if(ren) std::cerr<<"sdl2text: renderer "<<SDL_GetRendererName(ren)<<"\n";
+    if(ren) std::cerr<<"sdl3text: renderer "<<SDL_GetRendererName(ren)<<"\n";
     if(!ren) { std::cerr<<"SDL_CreateRenderer error: "<<SDL_GetError()<<"\n"; SDL_DestroyWindow(win); TTF_CloseFont(font); TTF_Quit(); SDL_Quit(); return 1; }
 
     int WINDOW_W=0,WINDOW_H=0; SDL_GetWindowSize(win,&WINDOW_W,&WINDOW_H);
