@@ -166,6 +166,7 @@ if [ -n "${GAME}" ]; then
     if [ "${PROF}" = latency ]; then
       check E3 "SwanStation software renderer at 1x" bash -c "grep -q '^swanstation_GPU_Renderer = \"Software\"' '${OPT}' && grep -q '^swanstation_GPU_ResolutionScale = \"1\"' '${OPT}'"
       check E3 "latency marker present" [ -e "${OPT%/*}/.latency-profile" ]
+      check E3 "automatic frame delay off under latency" [ "$(cfg_val video_frame_delay_auto)" = false ]
     else
       check E3 "no latency marker in visuals" [ ! -e "${OPT%/*}/.latency-profile" ]
       check E3 "renderer not Software in visuals" bash -c "! grep -q '^swanstation_GPU_Renderer = \"Software\"' '${OPT}'"

@@ -298,7 +298,11 @@ plus E2's three keys, and
 grep savestate_features /usr/lib/libretro/swanstation_libretro.info   # deterministic
 ```
 with no "lacks deterministic save state support" message on screen or in
-the log. Switch to `visuals` and launch again: renderer and
+the log, and `video_frame_delay_auto = "false"` in `/tmp/.retroarch.cfg`.
+Human: statistics overlay on, mash a button for a minute; no frame time
+spikes past one frame and no dropped frames counted (nightly 157 dipped
+on every press with the delay on). Switch to `visuals` and launch again:
+renderer and
 scale return to the shipped values (`Vulkan`, `4`), the marker is gone.
 Launch a third time with the user having changed the scale to 2 by hand:
 it stays 2 (visuals does not rewrite an untouched profile).
