@@ -262,7 +262,6 @@ steam_launch_bigpicture() {
 
   mkdir -p "$(dirname "$gamescope_mode_file")"
   touch "$gamescope_mode_file"
-  unset MESA_LOADER_DRIVER_OVERRIDE
   if [ "${STEAM_FLAVOR}" = "arm64" ]; then
     export STEAM_COMPAT_GRAPHICS_PROVIDER=//storage/.local/share/fex-emu/RootFS/ArchLinux/graphics_provider.json
     steam_exit_code_file=$(mktemp /tmp/steam-exit-code.XXXXXX)
