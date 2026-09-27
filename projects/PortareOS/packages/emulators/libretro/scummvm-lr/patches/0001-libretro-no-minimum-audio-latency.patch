@@ -1,0 +1,28 @@
+diff --git a/backends/platform/libretro/src/libretro-core.cpp b/backends/platform/libretro/src/libretro-core.cpp
+index 5cf037d6..23124507 100644
+--- a/backends/platform/libretro/src/libretro-core.cpp
++++ b/backends/platform/libretro/src/libretro-core.cpp
+@@ -1284,17 +1284,12 @@ void retro_run(void) {
+ 		av_status &= ~(AV_STATUS_UPDATE_AV_INFO | AV_STATUS_UPDATE_GEOMETRY);
+ 	}
+ 
+-	if (av_status & AUDIO_STATUS_UPDATE_LATENCY) {
+-		uint32 audio_latency;
+-		float frame_time_msec = 1000.0f / frame_rate;
+-
+-		audio_latency = (uint32)((8.0f * frame_time_msec) + 0.5f);
+-		audio_latency = (audio_latency + 0x1F) & ~0x1F;
+-
+-		/* This can only be called from within retro_run() */
+-		environ_cb(RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY, &audio_latency);
+-		av_status &= ~AUDIO_STATUS_UPDATE_LATENCY;
+-	}
++	/* No minimum audio latency asked of the frontend: eight frames, rounded
++	 * up to 32 ms, came to 96 ms at a 120 Hz target, over the frontend's
++	 * own 32. audio_run() mixes against elapsed wall time on every frame,
++	 * and at 32 ms an adventure intro went silent no more often than at
++	 * 96 (32.7 s of 80 against 33.8, the silences being the game's). */
++	av_status &= ~AUDIO_STATUS_UPDATE_LATENCY;
+ 
+ 	/* Setting RA's video or audio driver to null will disable video/audio bits */
+ 	int audio_video_enable = 0;
