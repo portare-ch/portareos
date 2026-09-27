@@ -1,6 +1,5 @@
 |Manufacturer|System|Release Date|Games Path|Supported Extensions|Emulator / Core|
 |----|----|----|----|----|----|
-|&#xf013; System|Moonlight Game Streaming (moonlight)|System|`moonlight`|.sh|**moonlight:** moonlight (default)<br>|
 |&#xf013; System|Movies (movies)|System|`movies`|.3g2 .3gp .asf .avi .divx .f4v .flv .m2ts .m3u .m4v .mkv .mov .mp4 .mpeg .mpg .mts .ogm .ogv .ts .vob .webm .wmv|**mpv:** mpv (default)<br>|
 |&#xf013; System|Music Player (music)|System|`playlists`|.m3u .sh|**gmu:** gmu (default)<br>|
 |&#xf013; System|Ports (ports)|System|`ports`|.sh .appimage|**portmaster:** portmaster (default)<br>|
