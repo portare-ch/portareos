@@ -92,7 +92,11 @@ if [ -n "${GAME}" ]; then
   else
     check D2 "timed presents ${MS} ms apart in the log" grep -q "Timed presents: swap interval 2, one present a frame, ${MS%?}" "${RA_LOG}"
   fi
-  check D3 "two swapchain images" [ "$(cfg_val video_max_swapchain_images)" = 2 ]
+  if [ "${GAME}" = n64 ]; then
+    check D3 "three swapchain images for ParaLLEl N64" [ "$(cfg_val video_max_swapchain_images)" = 3 ]
+  else
+    check D3 "two swapchain images" [ "$(cfg_val video_max_swapchain_images)" = 2 ]
+  fi
   check D3 "video_threaded false" [ "$(cfg_val video_threaded)" = false ]
   # 0 lets RetroArch pick 2 for 60 Hz content; black frame insertion needs 1.
   if [ "$(cfg_val video_black_frame_insertion)" -gt 0 ] 2>/dev/null; then
