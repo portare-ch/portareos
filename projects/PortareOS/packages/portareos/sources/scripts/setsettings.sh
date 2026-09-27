@@ -1263,6 +1263,15 @@ function set_psxopts() {
         if [ "${RENDERER}" = "Software" ]
         then
             touch "${MARKER}"
+            # No automatic frame delay with the preemptive frame. The delay
+            # grows to eat the slack it measures on quiet frames; a frame
+            # where input changed loads a state, runs the core twice and
+            # saves twice (preempt_run), and that spike lands past the
+            # vblank before the delay backs off. Seen as dips on every
+            # press, gone with vsync off. The preemptive frame already
+            # saves more than the delay could.
+            add_setting "none" "video_frame_delay_auto" "false"
+            add_setting "none" "video_frame_delay" "0"
         else
             rm -f "${MARKER}"
         fi
