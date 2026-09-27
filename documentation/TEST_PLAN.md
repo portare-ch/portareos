@@ -289,9 +289,12 @@ scale return to the shipped values (`Vulkan`, `4`), the marker is gone.
 Launch a third time with the user having changed the scale to 2 by hand:
 it stays 2 (visuals does not rewrite an untouched profile).
 
-Human: latency mode shows a 320×240 picture at integer scale, a button
-press lands one frame sooner than visuals in a 240 fps recording of Tekken
-3's practice mode.
+Human: latency mode shows a 320×240 picture at integer scale with sharp
+console pixels and one beam per console line (240 across the picture, not
+60 thick bands, not a bilinear blur); `/tmp/.retroarch.cfg` names
+`portare/crt-240-1x.slangp` while `psx.shaderset` in system.cfg still
+says `crt-240.slangp`. A button press lands one frame sooner than visuals
+in a 240 fps recording of Tekken 3's practice mode.
 
 ### E4 Game guide on M2 (human)
 
