@@ -22,10 +22,9 @@ steam_debug_print
 
 steam_arm64_link_runtime_libs
 steam_arm64_binfmt_and_proton_prep
-steam_read_sway_geometry
+steam_read_panel_geometry
 steam_setup_environment
 steam_scope_reexec_if_needed "$@"
 steam_dual_screen_begin
 steam_launch_bigpicture "$@"
 steam_dual_screen_end
-systemctl restart systemd-binfmt
