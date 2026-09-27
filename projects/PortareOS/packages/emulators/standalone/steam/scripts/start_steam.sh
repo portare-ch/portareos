@@ -80,11 +80,11 @@ steam_debug_print() {
 # Asks DRM directly rather than asking a compositor. modetest is a query and
 # needs no DRM master, so this works with the panel already handed over.
 #
-# The preferred mode specifically: since the panel gained a second mode for
-# SwanStation, both of them round to an integer vrefresh of 120, and
-# gamescope's -r must hit the mode's rounded rate exactly or it falls back.
-# Matching on "preferred" picks the one the panel actually wants rather than
-# whichever rounds the same way.
+# The preferred mode's size and rounded rate, 1280x960 and 120. Several modes
+# round to 120; gamescope (its patch 0007) takes the one whose exact rate is
+# closest to what -r asks for, which is the panel's 120.000 Hz mode, there
+# for Steam: timer-paced PC games make 60.000 frames a second, and at the
+# preferred 119.88 gamescope would drop one of them about every 17 seconds.
 steam_read_panel_geometry() {
   eval "$(/usr/bin/modetest -M msm -c 2>/dev/null | awk '
     /^[[:space:]]*#[0-9]+[[:space:]]/ && /preferred/ {

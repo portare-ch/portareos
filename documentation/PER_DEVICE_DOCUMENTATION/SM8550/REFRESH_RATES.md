@@ -4,7 +4,7 @@ The panel has no variable refresh rate. It runs at **119.880120 Hz**, twice NTSC
 
 Where each system's native rate comes from, crystal by crystal, and where an emulator's number differs from the console's, is derived in [CONSOLE_CLOCKS.md](../../CONSOLE_CLOCKS.md). Which systems have their mode, and which are still open, is in [PortareOS_Modelines.md](../../PortareOS_Modelines.md).
 
-Every mode uses the same 1302 × 1001 total timings and changes only the pixel clock. That keeps the panel in its 120 Hz class. The modes are defined in the panel driver, `projects/PortareOS/devices/SM8550/patches/linux/0105-drm-panel-Add-Retroid-Pocket-Nova-panel.patch`.
+The console modes use the same 1302 × 1001 total timings and change only the pixel clock. Steam's 120.000 Hz mode keeps the default's pixel clock and has one line fewer, 1302 × 1000, which was set from userspace and measured before it was added: 120.003 Hz over a minute of vblanks, against 119.884 for the default on the same count. Nothing else picks it: RetroArch asks for each system's exact rate, and mpv, ARMSX2, xemu and the launcher take the preferred mode. All of them keep the panel in its 120 Hz class. The modes are defined in the panel driver, `projects/PortareOS/devices/SM8550/patches/linux/0105-drm-panel-Add-Retroid-Pocket-Nova-panel.patch`.
 
 | Panel mode | Pixel clock | Used by |
 |---|---|---|
@@ -15,6 +15,7 @@ Every mode uses the same 1302 × 1001 total timings and changes only the pixel c
 | 119.845592 Hz | 156195 kHz | `genesis_plus_gx` |
 | 118.360134 Hz | 154259 kHz | `fbneo`, for `neogeo` only |
 | 119.199541 Hz | 155353 kHz | `neocd` |
+| 120.000000 Hz | 156240 kHz, vtotal 1000 | gamescope, for Steam |
 
 ## Pacing: how a frame lands on a frame
 
