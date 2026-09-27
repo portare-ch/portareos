@@ -1,0 +1,8 @@
+shaders = 1
+
+shader0 = crt-lines.slang
+scale_type0 = viewport
+filter_linear0 = false
+
+parameters = "UPSCALE"
+UPSCALE = "1.000000"

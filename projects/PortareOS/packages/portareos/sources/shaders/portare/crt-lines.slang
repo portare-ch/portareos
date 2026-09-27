@@ -10,6 +10,13 @@
 // 224-line game gets 224 beams and a 240-line game 240; with UPSCALE at 0
 // the LINES parameter is used instead.
 //
+// At UPSCALE 1 the source is the console's own 320x240 (the PlayStation
+// latency profile, software renderer). Sampling it where the panel pixel
+// falls would then be a bilinear blow-up, four panel pixels wide: blur, not
+// a beam. So at 1 every read snaps to the centre of a console pixel, and
+// the horizontal spread reaches the neighbour only from the outer half of
+// each pixel. crt-240-1x.slangp is this shader with UPSCALE at 1.
+//
 // In linear light:
 //   beam   a gaussian across each console line, wider for brighter colour,
 //          which is how a real beam spot behaves
@@ -78,20 +85,31 @@ void main()
 	/* Where in its console line this pixel is: -0.5 top, 0 centre, 0.5 bottom. */
 	float ly = vTexCoord.y * lines;
 	float d = fract(ly) - 0.5;
-	/* This pixel's own colour, read where it is rather than at the line's
-	 * centre: the upscale's vertical detail stays; the beam only shapes it. */
-	vec2 uv = vTexCoord;
-	/* The neighbouring lines' colour, at their centres. */
-	vec2 centre = vec2(vTexCoord.x, (floor(ly) + 0.5) * line_h);
-
-	/* Horizontal spread of half a console pixel either side. The source
-	 * says how many console pixels it has when UPSCALE is known; otherwise
-	 * 4:3 over the lines makes it LINES * 4/3 across the frame. */
+	/* The source says how many console pixels it has when UPSCALE is
+	 * known; otherwise 4:3 over the lines makes it LINES * 4/3 across. */
 	float cols = params.UPSCALE > 0.5 ? params.SourceSize.x / params.UPSCALE
 	                                  : lines * 4.0 / 3.0;
+	bool native = params.UPSCALE > 0.5 && params.UPSCALE < 1.5;
+
+	/* This pixel's own colour. Above 1x it is read where it is rather than
+	 * at the line's centre: the upscale's vertical detail stays and the
+	 * beam only shapes it. At 1x it is the console pixel this falls in. */
+	vec2 uv = native ? (floor(vTexCoord * vec2(cols, lines)) + 0.5) / vec2(cols, lines)
+	                 : vTexCoord;
+	/* The neighbouring lines' colour, at their centres. */
+	vec2 centre = vec2(uv.x, (floor(ly) + 0.5) * line_h);
+
+	/* Horizontal spread of half a console pixel either side. At 1x the
+	 * half-pixel step snaps to the neighbour from the outer half of a
+	 * pixel and to the pixel itself from the inner half, so the centre
+	 * stays sharp and only the edges soften. */
 	vec2 hx = vec2(0.5 / cols, 0.0);
+	vec2 l = native ? (floor((vTexCoord - hx) * vec2(cols, lines)) + 0.5) / vec2(cols, lines)
+	                : uv - hx;
+	vec2 r = native ? (floor((vTexCoord + hx) * vec2(cols, lines)) + 0.5) / vec2(cols, lines)
+	                : uv + hx;
 	vec3 c = lin(uv) * (1.0 - params.SOFT)
-	       + (lin(uv - hx) + lin(uv + hx)) * (0.5 * params.SOFT);
+	       + (lin(l) + lin(r)) * (0.5 * params.SOFT);
 
 	/* The beam: a gaussian across the line, its width following brightness. */
 	vec3 w = mix(vec3(params.BEAM_MIN), vec3(params.BEAM_MAX), sqrt(c));

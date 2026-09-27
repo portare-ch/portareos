@@ -882,6 +882,15 @@ function set_rgascale() {
 
 function set_shader() {
     local SHADER="$(game_setting shaderset)"
+    # The 240-line CRT preset expects SwanStation's 4x picture. The latency
+    # profile renders at 1x, where it would draw 60 beams over a bilinear
+    # blow-up; the 1x preset is the same shader told so. The user's
+    # psx.shaderset is left as it is.
+    if [ "${PLATFORM}" = "psx" ] && [ "$(game_setting profile)" = "latency" ] \
+       && [ "${SHADER}" = "portare/crt-240.slangp" ]
+    then
+        SHADER="portare/crt-240-1x.slangp"
+    fi
     case ${SHADER} in
         0|false|none)
             add_setting "none" "video_shader_enable" "false"
