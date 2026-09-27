@@ -12,6 +12,30 @@
 	compatible = "retroidpocket,rpnova", "qcom,qcs8550", "qcom,sm8550";
 };
 
+/*
+ * The Nova's own DSP and speaker amplifier firmware (package
+ * nova-firmware, from its Android build) rather than the Odin 2's the
+ * RP6 tree names. The ADSP runs the audio graph and the charger
+ * interface; the amplifiers' tuning is the Nova speakers' own.
+ */
+&remoteproc_adsp {
+	firmware-name = "qcom/sm8550/retroidpocket/rpnova/adsp.mbn",
+			"qcom/sm8550/retroidpocket/rpnova/adsp_dtb.mbn";
+};
+
+&remoteproc_cdsp {
+	firmware-name = "qcom/sm8550/retroidpocket/rpnova/cdsp.mbn",
+			"qcom/sm8550/retroidpocket/rpnova/cdsp_dtb.mbn";
+};
+
+&spk_amp_l {
+	firmware-name = "qcom/sm8550/retroidpocket/rpnova/aw883xx_acf.bin";
+};
+
+&spk_amp_r {
+	firmware-name = "qcom/sm8550/retroidpocket/rpnova/aw883xx_acf.bin";
+};
+
 &mdss_dsi0 {
 	panel@0 {
 		compatible = "il97680a,rpnova";
