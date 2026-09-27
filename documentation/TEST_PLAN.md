@@ -14,13 +14,14 @@ a person confirms the effect.
 ## Running the automatic tests
 
 ```
-tools/device-tests root@nova nightly            # idle checks; nightly or release
-tools/device-tests root@nova nightly game snes  # with a game of that system running
+tools/device-tests root@nova                    # idle checks
+tools/device-tests root@nova game snes          # with a game of that system running
 ```
 
 The first form checks the idle state: config files, sysfs, services. The
 second form reads the state of the running emulator from
-`/tmp/.retroarch.cfg`, the RetroArch log and `hw_params`, so start a game of
+`/tmp/.retroarch.cfg` (the main `retroarch.cfg` for keys the launch does
+not write), the RetroArch log and `hw_params`, so start a game of
 the named system first and leave it running. Run it once per system in the
 panel-mode table (gb, snes, nes, genesis, psx, n64, neogeo, neocd).
 
@@ -32,7 +33,7 @@ build named at the top of that file.
 
 | Thing | Where it is on the device |
 |---|---|
-| Config RetroArch actually launched with | `/tmp/.retroarch.cfg` (written by setsettings.sh for each launch) |
+| Config RetroArch actually launched with | `/tmp/.retroarch.cfg` (what setsettings.sh changes for this launch) over `/storage/.config/retroarch/retroarch.cfg` |
 | RetroArch log | `/storage/.config/retroarch/logs/` (newest file; `log_to_file` and verbosity on) |
 | Emulator launch log | `/var/log/exec.log` |
 | Boot log | `/var/log/boot.log` |
@@ -90,6 +91,9 @@ with the interval in ms equal to 2000 divided by the D1 rate (16.683 at
 counter twice ten seconds apart; the difference divided by ten is the
 panel rate, not the game rate.
 
+A core that runs at the panel rate (ScummVM, 119.88 fps) presents every
+refresh at swap interval 1, so it has no such line and the test is skipped.
+
 Human: film the screen with a 240 fps phone camera for five seconds during
 a smooth horizontal scroll (Sonic, Super Mario World). Every game frame
 shows for exactly two camera frames at 120 Hz class rates; no frame shows
@@ -97,12 +101,12 @@ for one or three. Fail on any visible judder in the scroll.
 
 ### D3 Two-image swapchain, no threaded video (auto)
 
-Game running, in `/tmp/.retroarch.cfg`:
+Game running, in the launched config:
 
 ```
 video_max_swapchain_images = "2"
 video_threaded = "false"
-video_swap_interval = "1"
+video_swap_interval = "0"      # RetroArch picks 2 for 60 Hz content; 1 with black frame insertion
 ```
 
 ### D4 Automatic frame delay (auto+human)
@@ -141,7 +145,9 @@ are lost.
 
 ### D7 Stock as the default profile (auto)
 
-Idle, after an update from a build that had `gamma22` or `srgb` set:
+Idle, after an update from a build that had `gamma22` or `srgb` set (the
+script skips the value check when system.cfg changed after the marker,
+since the user may have picked a profile since):
 
 ```
 grep ^display.colorprofile= /storage/.config/system/configs/system.cfg   # stock
@@ -196,12 +202,17 @@ Game running, per system:
 grep rate: /proc/asound/card0/pcm*p/sub0/hw_params
 ```
 
+The link runs at the rate RetroArch opened, the `at N Hz` of the
+`Driver "pipewire" reports` line in the log. That rate is the per-core
+`audio_out_rate` where A3 sets one, else A2's pick:
+
 | System | Expected link rate |
 |---|---|
-| psx, saturn, dreamcast, psp, neocd, genesis, mastersystem, gamegear, segacd, sega32x | 44100 |
-| snes | 32000 |
-| n64 | whatever A2 picked for the game |
-| all others | 48000 |
+| psx, saturn, dreamcast, psp, neocd, genesis, mastersystem, gamegear, segacd, sega32x | 44100 (per-core) |
+| snes | 32000 (per-core) |
+| gb, gbc (32768 Hz) | 44100 (picked) |
+| gba (65536 Hz) | 48000 (picked) |
+| n64, scummvm and the rest | picked from the core's rate |
 
 Human, for 32 kHz: play a SNES game with a known tune (Super Mario World
 title) next to a recording; pitch and tempo match. A wrong link rate
@@ -209,7 +220,10 @@ gives a pitch shift of about a semitone.
 
 ### A2 RetroArch picks the output rate from the core (auto)
 
-Start an N64 game at each of the three common rates (22.05 kHz: Super
+For any core without a per-core rate, the log's pick follows retroarch
+patch 0015: the smallest of 32000, 44100, 48000 that the core's rate
+divides into within 0.5 %, else the smallest above it, else 48000. The
+script recomputes it from the core rate in the log. Start an N64 game at each of the three common rates (22.05 kHz: Super
 Mario 64; 32 kHz: Ocarina of Time; 44.1 kHz: Perfect Dark). The RetroArch
 log has one line per game
 
@@ -261,8 +275,8 @@ preemptive_frames_enable = "true"
 run_ahead_enabled = "false"
 run_ahead_frames = "1"
 ```
-in `/tmp/.retroarch.cfg`, and the log has a `[Run-Ahead Preemptive]` line
-without the words `not supported` or `disabled`. With `preempt=0` the
+in `/tmp/.retroarch.cfg`, and the log has no `[Run-Ahead Preemptive]`
+line: RetroArch logs one only when the preemptive frame fails. With `preempt=0` the
 first key is `false`. Human: hold the D-pad and tap jump repeatedly for a
 minute; no frame flickers backwards and the sound does not stutter. Then
 set an explicit `<system>.runahead=2` and confirm classic run-ahead
@@ -348,6 +362,7 @@ Auto, idle:
 
 ```
 pgrep -x portarelauncher
+pidof portarelauncher                   # busybox pgrep -x misses it
 cat /sys/kernel/debug/dri/0/clients     # the launcher holds master
 ```
 Human: browse consoles, games, Tools, Settings; each list scrolls,
@@ -474,10 +489,9 @@ cat /sys/devices/system/cpu/cpufreq/policy*/scaling_governor  # schedutil
 
 ### P6 Debug tools only outside official releases (auto)
 
-On a nightly build: `which gdb strace` finds both and `strace -V` prints
-7.2. On a release build (workflow input OFFICIAL=yes) both are absent.
-The script takes `nightly` or `release` as an argument, since the image
-does not record which it is.
+`OS_BUILD` in `/etc/os-release` says whether the build is official.
+Nightlies and releases are both official and carry neither `gdb` nor
+`strace`; an unofficial local build has both, and `strace -V` prints 7.2.
 
 ### P7 Gamepad MCU and stick LED rails off in suspend (auto+human)
 
