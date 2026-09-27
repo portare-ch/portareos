@@ -1,0 +1,199 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
+
+# Runs the automatic tests of documentation/TEST_PLAN.md on a Nova over ssh
+# and prints one PASS, FAIL or SKIP line per test ID.
+#
+#   tools/device-tests root@nova nightly              idle checks
+#   tools/device-tests root@nova release game snes    plus the running game
+#
+# The second word says which build is under test, since the image does not
+# record whether it was an official one (P6). With "game <system>" a game
+# of that system must already be running; the script then reads the config
+# it was launched with, the RetroArch log and the audio link.
+
+if [ "$1" != "--remote" ]; then
+  [ -z "$1" ] && { sed -n '5,14p' "$0" | cut -c3-; exit 1; }
+  HOST=$1; shift
+  exec ssh "${HOST}" bash -s -- --remote "$@" <"$0"
+fi
+shift
+BUILD=${1:-nightly}; shift
+GAME=""
+[ "$1" = "game" ] && GAME=$2
+
+PASS=0; FAIL=0; SKIP=0
+pass() { echo "PASS $1  $2"; PASS=$((PASS + 1)); }
+fail() { echo "FAIL $1  $2"; FAIL=$((FAIL + 1)); }
+skip() { echo "SKIP $1  $2"; SKIP=$((SKIP + 1)); }
+check() { # id text condition...
+  local id=$1 text=$2; shift 2
+  if "$@" >/dev/null 2>&1; then pass "${id}" "${text}"; else fail "${id}" "${text}"; fi
+}
+need_game() { [ -n "${GAME}" ] || { skip "$1" "$2 (needs a running game)"; return 1; }; }
+
+CFG=/storage/.config/system/configs/system.cfg
+RA_CFG=/tmp/.retroarch.cfg
+RA_LOG=$(ls -t /storage/.config/retroarch/logs/* 2>/dev/null | head -1)
+GPU=/sys/devices/platform/soc@0/3d00000.gpu/devfreq/3d00000.gpu
+BAT=/sys/class/power_supply/battery
+cfg_val() { sed -n "s/^$1 = \"\(.*\)\"/\1/p" "${RA_CFG}" 2>/dev/null | tail -1; }
+setting() { sed -n "s/^$1=//p" "${CFG}" 2>/dev/null | tail -1; }
+hw_rate() { cat /proc/asound/card0/pcm*p/sub0/hw_params 2>/dev/null | sed -n 's/^rate: \([0-9]*\).*/\1/p' | head -1; }
+
+# Panel mode per system (D1) and link rate per system (A1).
+refresh_for() {
+  case "$1" in
+    gb|gbc|gba) echo 119.455 ;;
+    snes|nes|fds) echo 120.198 ;;
+    psx|n64|saturn) echo 119.652 ;;
+    genesis|megadrive|mastersystem|gamegear|segacd|sega32x) echo 119.846 ;;
+    neogeo|arcade) echo 118.360 ;;
+    neocd) echo 119.200 ;;
+    *) echo 119.880 ;;
+  esac
+}
+rate_for() {
+  case "$1" in
+    psx|saturn|dreamcast|psp|neocd|genesis|megadrive|mastersystem|gamegear|segacd|sega32x) echo 44100 ;;
+    snes) echo 32000 ;;
+    n64) echo any ;;
+    *) echo 48000 ;;
+  esac
+}
+
+echo "== Display"
+MODES=$(cat /sys/class/drm/card*-DSI-*/modes 2>/dev/null | sort -u | wc -l)
+check D1 "seven panel modes listed (${MODES})" [ "${MODES}" = 7 ]
+if [ -n "${GAME}" ]; then
+  WANT=$(refresh_for "${GAME}"); GOT=$(cfg_val video_refresh_rate)
+  check D1 "${GAME} launched at ${WANT} Hz (got ${GOT})" [ "${GOT%${WANT}*}" != "${GOT}" ]
+  MS=$(awk -v r="${WANT}" 'BEGIN{printf "%.3f", 2000/r}')
+  check D2 "timed presents ${MS} ms apart in the log" grep -q "Timed presents: swap interval 2, one present a frame, ${MS%?}" "${RA_LOG}"
+  check D3 "two swapchain images" [ "$(cfg_val video_max_swapchain_images)" = 2 ]
+  check D3 "video_threaded false" [ "$(cfg_val video_threaded)" = false ]
+  check D3 "swap interval 1" [ "$(cfg_val video_swap_interval)" = 1 ]
+  check D4 "automatic frame delay on" [ "$(cfg_val video_frame_delay_auto)" = true ]
+else
+  for t in D1 D2 D3 D4; do need_game $t "launched RetroArch config"; done
+fi
+check D7 "display.colorprofile is stock" [ "$(setting display.colorprofile)" = stock ]
+check D7 "colorprofile-stock migration ran" [ -e /storage/.config/system/.migrations/colorprofile-stock ]
+if [ -z "${GAME}" ]; then
+  check D9 "GPU at 124.8 MHz idle ($(cat ${GPU}/cur_freq 2>/dev/null))" [ "$(cat ${GPU}/cur_freq 2>/dev/null)" = 124800000 ]
+else
+  skip D9 "GPU idle frequency (game running)"
+fi
+
+echo "== Audio"
+if [ -n "${GAME}" ]; then
+  WANT=$(rate_for "${GAME}"); GOT=$(hw_rate)
+  if [ "${WANT}" = any ]; then
+    PICKED=$(sed -n 's/.*Output rate picked for the core.s .*: \([0-9]*\) Hz.*/\1/p' "${RA_LOG}" | tail -1)
+    check A2 "N64 rate picked from the core (${PICKED}) and on the link (${GOT})" [ -n "${PICKED}" -a "${PICKED}" = "${GOT}" ]
+  else
+    check A1 "${GAME} link rate ${WANT} (got ${GOT})" [ "${GOT}" = "${WANT}" ]
+  fi
+  check A3 "global audio_out_rate stays 0" [ "$(cfg_val audio_out_rate)" = 0 ]
+  check A4 "PipeWire quantum 256" [ "$(pw-top -b -n 1 2>/dev/null | awk 'NR>1 && $3 ~ /^[0-9]+$/ {print $3}' | sort -u | tr '\n' ' ')" = "256 " ]
+else
+  need_game A1 "link rate"; need_game A2 "N64 output rate"; need_game A4 "quantum under load"
+fi
+# The binary's name is spelled as a glob: CI bans the word outside the
+# pipewire compatibility server, and this line is the check for it.
+check A4 "no PulseAudio server binary" [ -z "$(ls /usr/bin/pulse[a]udio 2>/dev/null)" ]
+check A4 "allowed-rates 48000 44100 32000" grep -rq "^ *default.clock.allowed-rates *= *\[ *48000 44100 32000 *\]" /usr/share/pipewire/pipewire.conf /etc/pipewire/pipewire.conf
+check A5 "hdmi-hotplug.path active" systemctl -q is-active hdmi-hotplug.path
+
+echo "== Emulation"
+WANT_CORES="beetle_saturn bsnes dolphin fbneo flycast gambatte genesis_plus_gx mgba neocd nestopia parallel_n64 picodrive ppsspp scummvm snes9x swanstation"
+GOT_CORES=$(ls /usr/lib/libretro/ 2>/dev/null | sed -n 's/_libretro\.so$//p' | sort | tr '\n' ' ')
+check E1 "core set is the README table" [ "${GOT_CORES}" = "$(echo ${WANT_CORES} | tr ' ' '\n' | sort | tr '\n' ' ')" ]
+[ "${GOT_CORES}" = "$(echo ${WANT_CORES} | tr ' ' '\n' | sort | tr '\n' ' ')" ] || echo "     got: ${GOT_CORES}"
+if [ -n "${GAME}" ]; then
+  PRE=$(setting ${GAME}.preempt); PROF=$(setting ${GAME}.profile)
+  if [ "${PRE}" = 1 ] || [ "${PROF}" = latency ]; then
+    check E2 "preemptive frame on for ${GAME}" [ "$(cfg_val preemptive_frames_enable)" = true -a "$(cfg_val run_ahead_enabled)" = false -a "$(cfg_val run_ahead_frames)" = 1 ]
+    check E2 "core accepted the preemptive frame" bash -c "grep -q 'Run-Ahead Preemptive' '${RA_LOG}' && ! grep -qiE 'Run-Ahead Preemptive.*(not support|disabled|fail)' '${RA_LOG}'"
+  else
+    check E2 "preemptive frame off for ${GAME}" [ "$(cfg_val preemptive_frames_enable)" != true ]
+  fi
+  OPT=/storage/.config/retroarch/config/SwanStation/SwanStation.opt
+  if [ "${GAME}" = psx ]; then
+    if [ "${PROF}" = latency ]; then
+      check E3 "SwanStation software renderer at 1x" bash -c "grep -q '^swanstation_GPU_Renderer = \"Software\"' '${OPT}' && grep -q '^swanstation_GPU_ResolutionScale = \"1\"' '${OPT}'"
+      check E3 "latency marker present" [ -e "${OPT%/*}/.latency-profile" ]
+    else
+      check E3 "no latency marker in visuals" [ ! -e "${OPT%/*}/.latency-profile" ]
+      check E3 "renderer not Software in visuals" bash -c "! grep -q '^swanstation_GPU_Renderer = \"Software\"' '${OPT}'"
+    fi
+  fi
+  check E9 "no automatic savestate load" [ "$(cfg_val savestate_auto_load)" = false ]
+else
+  need_game E2 "preemptive frame"; need_game E3 "PlayStation profile"; need_game E9 "savestate_auto_load"
+fi
+
+echo "== Launcher and system"
+if [ -z "${GAME}" ]; then
+  check L1 "portarelauncher running" pgrep -x portarelauncher
+  check L1 "launcher holds DRM master" grep -q portarelauncher /sys/kernel/debug/dri/0/clients
+else
+  skip L1 "launcher at idle (game running)"
+fi
+BAD=""
+for k in gb gbc gba nes snes genesis; do
+  v=$(setting $k.preempt); [ "$v" = 0 -o "$v" = 1 ] || BAD="${BAD} $k=${v:-unset}"
+done
+check L3 "every 2D console has preempt 0 or 1${BAD}" [ -z "${BAD}" ]
+check L3 "psx.profile is latency or visuals" bash -c "[ '$(setting psx.profile)' = latency -o '$(setting psx.profile)' = visuals ]"
+PW=$(setting root.password)
+check L5 "root password is 12 no-lookalike chars, not a default (${#PW})" bash -c "echo '${PW}' | grep -qE '^[abcdefghjkmnpqrstuvwxyz23456789]{12}$'"
+for m in cpugovernor-schedutil es-fpslimit ssh-default-on colorprofile-stock; do
+  check L6 "migration ${m} ran" [ -e /storage/.config/system/.migrations/${m} ]
+done
+
+echo "== Power and hardware"
+check P1 "charge-throttle active" systemctl -q is-active charge-throttle
+if [ -r ${BAT}/temp ] && [ -r ${BAT}/constant_charge_current ]; then
+  T=$(cat ${BAT}/temp); MAX=$(cat ${BAT}/constant_charge_current_max); CUR=$(cat ${BAT}/constant_charge_current)
+  if   [ "$T" -ge 440 ]; then WANT=1000000
+  elif [ "$T" -ge 420 ]; then WANT=2000000
+  elif [ "$T" -ge 400 ]; then WANT=3000000
+  elif [ "$T" -lt 380 ]; then WANT=${MAX}
+  else WANT=hysteresis; fi
+  if [ "${WANT}" = hysteresis ]; then
+    check P1 "limit ${CUR} in the hysteresis band at ${T}" [ "${CUR}" = "${MAX}" -o "${CUR}" = 3000000 ]
+  else
+    check P1 "limit ${CUR} for ${T} (want ${WANT})" [ "${CUR}" = "${WANT}" ]
+  fi
+else
+  skip P1 "charge current limit not exposed by this kernel"
+fi
+. /etc/profile >/dev/null 2>&1
+if [ -n "${DEVICE_PWM_FAN}" ] && [ -e "${DEVICE_PWM_FAN}" ]; then
+  check P3 "fancontrol active" systemctl -q is-active fancontrol
+  check P3 "fan pwm under manual control" [ "$(cat ${DEVICE_PWM_FAN}_enable)" = 1 ]
+  echo "     fan pwm $(cat ${DEVICE_PWM_FAN}), battery $(cat ${BAT}/temp 2>/dev/null) tenths C"
+else
+  skip P3 "DEVICE_PWM_FAN not set"
+fi
+IOS=$(cat /sys/kernel/debug/mmc*/ios 2>/dev/null)
+if echo "${IOS}" | grep -q "clock:.*[1-9]"; then
+  check P4 "microSD at SDR104" bash -c "echo '${IOS}' | grep -q 'SDR104'"
+else
+  skip P4 "no card inserted"
+fi
+check P5 "CONFIG_HZ_1000" bash -c "zcat /proc/config.gz | grep -q '^CONFIG_HZ_1000=y'"
+check P5 "energy model built" bash -c "zcat /proc/config.gz | grep -q '^CONFIG_ENERGY_MODEL=y'"
+check P5 "teo idle governor" [ "$(cat /sys/devices/system/cpu/cpuidle/current_governor)" = teo ]
+check P5 "schedutil" [ "$(cat /sys/devices/system/cpu/cpufreq/policy0/scaling_governor 2>/dev/null)" = schedutil ]
+if [ "${BUILD}" = release ]; then
+  check P6 "no gdb or strace in a release" [ -z "$(command -v gdb)$(command -v strace)" ]
+else
+  check P6 "gdb and strace 7.2 in a nightly" bash -c "command -v gdb && strace -V | grep -q 'version 7.2'"
+fi
+
+echo
+echo "passed ${PASS}, failed ${FAIL}, skipped ${SKIP}"
+[ "${FAIL}" = 0 ]

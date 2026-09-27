@@ -31,7 +31,7 @@ only been built. BUGS.md carries the check for each unverified row.
 |---|---|---|---|---|
 | Link rate follows the stream | 48, 44.1 or 32 kHz on the I2S link, no resampling where the console's rate can be carried. | kernel patches 1052 to 1055, DSP topology, PipeWire `allowed-rates` | verified (44.1); 32 by ear | auto: `hw_params` rate per system; human: pitch check |
 | RetroArch picks the output rate from the core | `audio_out_rate = 0`: the rate is chosen from the core's at every audio init, so N64 games at 22.05, 32 or 44.1 kHz each get a matching link. | RetroArch patch 0015 | unverified | auto: `[Audio] Output rate picked` log line and `hw_params` on an N64 game |
-| Per-core output rates | PSX 44.1 kHz through SwanStation's own config, SNES 32 kHz, the rest 48. | per-core `.cfg`, `retroarch.cfg` | verified | auto: `hw_params` per system |
+| Per-core output rates | 44.1 kHz for PlayStation, Saturn, Dreamcast, PSP, Neo Geo CD and the Sega cores through their own configs, SNES 32 kHz, the rest 48. | per-core `.cfg`, `retroarch.cfg` | verified | auto: `hw_params` per system |
 | PipeWire only, 256-frame quantum | PulseAudio banned, CI fails if it returns; 5.3 ms minimum quantum. | `pipewire.conf`, CI check | verified | auto: `pw-top` quantum; no `pulseaudio` binary |
 | HDMI audio sink switch | `hdmi_sense` moves the sink when HDMI is plugged. | `hdmi-hotplug.path`, `hdmi_sense` | unverified sink match (BUGS) | human: plug HDMI, sound follows |
 
