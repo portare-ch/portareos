@@ -321,8 +321,20 @@ migrate_n64_parallel_rdp() {
   set_setting n64.parallel_n64_video_core parallel
 }
 
+# Integer scaling became the default system by system as the Nova's display
+# configs were written, and a device installed before kept each old 0:
+# Dreamcast, Genesis, NES, Saturn, Neo Geo and more ran scaled to fit. Each
+# system the image ships at 1 is moved to 1, once.
+migrate_integerscale_on() {
+  local key
+  for key in $(sed -n 's/^\([^#=]*\.integerscale\)=1$/\1/p' /usr/config/system/configs/system.cfg); do
+    [ "$(get_setting ${key})" = "0" ] && set_setting ${key} 1
+  done
+}
+
 migrate cpugovernor-schedutil migrate_cpugovernor
 migrate es-fpslimit migrate_es_fpslimit
 migrate ssh-default-on migrate_ssh_on
 migrate colorprofile-stock migrate_colorprofile_stock
 migrate n64-parallel-rdp migrate_n64_parallel_rdp
+migrate integerscale-on migrate_integerscale_on
