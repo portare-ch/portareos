@@ -278,7 +278,13 @@ grep -E 'GPU_Renderer|GPU_ResolutionScale' \
 # "Software" and "1"
 ls /storage/.config/retroarch/config/SwanStation/.latency-profile   # exists
 ```
-plus E2's three keys. Switch to `visuals` and launch again: renderer and
+plus E2's three keys, and
+
+```
+grep savestate_features /usr/lib/libretro/swanstation_libretro.info   # deterministic
+```
+with no "lacks deterministic save state support" message on screen or in
+the log. Switch to `visuals` and launch again: renderer and
 scale return to the shipped values (`Vulkan`, `4`), the marker is gone.
 Launch a third time with the user having changed the scale to 2 by hand:
 it stays 2 (visuals does not rewrite an untouched profile).
