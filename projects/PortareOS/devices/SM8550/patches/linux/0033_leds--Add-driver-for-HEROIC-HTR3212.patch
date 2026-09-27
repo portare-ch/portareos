@@ -1,23 +1,23 @@
-From dc0296918d672985a2bfd24c32d4ebfa52b61dbe Mon Sep 17 00:00:00 2001
+From ff587692cfca3e74adcd794f19b5abc83ef72496 Mon Sep 17 00:00:00 2001
 From: Teguh Sobirin <teguh@sobir.in>
-Date: Mon, 27 Oct 2025 17:05:23 +0800
-Subject: [PATCH] leds: Add driver for HEROIC HTR3212
+Date: Wed, 8 Apr 2026 16:32:31 +0800
+Subject: [PATCH 32/58] leds: Add driver for HEROIC HTR3212
 
 Signed-off-by: Teguh Sobirin <teguh@sobir.in>
 ---
- drivers/leds/Kconfig        |  10 ++
+ drivers/leds/Kconfig        |  10 +
  drivers/leds/Makefile       |   1 +
- drivers/leds/leds-htr3212.c | 319 ++++++++++++++++++++++++++++++++++++
- 3 files changed, 330 insertions(+)
+ drivers/leds/leds-htr3212.c | 362 ++++++++++++++++++++++++++++++++++++
+ 3 files changed, 373 insertions(+)
  create mode 100644 drivers/leds/leds-htr3212.c
 
 diff --git a/drivers/leds/Kconfig b/drivers/leds/Kconfig
-index 6e3dce7e35a4..ac9ce34b765c 100644
+index 597d7a79c988..37ba7b8c08d0 100644
 --- a/drivers/leds/Kconfig
 +++ b/drivers/leds/Kconfig
-@@ -218,6 +218,16 @@ config LEDS_EXPRESSWIRE
- 	bool
- 	depends on GPIOLIB
+@@ -227,6 +227,16 @@ config LEDS_EL15203000
+ 	  To compile this driver as a module, choose M here: the module
+ 	  will be called leds-el15203000.
  
 +config LEDS_HTR3212
 +	tristate "HEROIC HTR3212 LED driver"
@@ -33,10 +33,10 @@ index 6e3dce7e35a4..ac9ce34b765c 100644
  	tristate "LED support for CZ.NIC's Turris Omnia"
  	depends on LEDS_CLASS_MULTICOLOR
 diff --git a/drivers/leds/Makefile b/drivers/leds/Makefile
-index 9a0333ec1a86..36815a7526e9 100644
+index 8fdb45d5b439..674bee2173c2 100644
 --- a/drivers/leds/Makefile
 +++ b/drivers/leds/Makefile
-@@ -33,6 +33,7 @@ obj-$(CONFIG_LEDS_DA9052)		+= leds-da9052.o
+@@ -34,6 +34,7 @@ obj-$(CONFIG_LEDS_DA9052)		+= leds-da9052.o
  obj-$(CONFIG_LEDS_GPIO)			+= leds-gpio.o
  obj-$(CONFIG_LEDS_GPIO_REGISTER)	+= leds-gpio-register.o
  obj-$(CONFIG_LEDS_HP6XX)		+= leds-hp6xx.o
@@ -46,10 +46,10 @@ index 9a0333ec1a86..36815a7526e9 100644
  obj-$(CONFIG_LEDS_IPAQ_MICRO)		+= leds-ipaq-micro.o
 diff --git a/drivers/leds/leds-htr3212.c b/drivers/leds/leds-htr3212.c
 new file mode 100644
-index 000000000000..8eb6c3c7866f
+index 000000000000..1673fe2d9934
 --- /dev/null
 +++ b/drivers/leds/leds-htr3212.c
-@@ -0,0 +1,319 @@
+@@ -0,0 +1,362 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * Driver for HEROIC HTR3212 12-channel 8-bit PWM LED controller
@@ -325,6 +325,48 @@ index 000000000000..8eb6c3c7866f
 +	return 0;
 +}
 +
++static int htr3212_suspend(struct device *dev)
++{
++	struct htr3212_priv *priv = dev_get_drvdata(dev);
++	int ret;
++
++	ret = htr3212_write(priv, HTR3212_SHUTDOWN, 0x00);
++	if (ret)
++		dev_err(dev, "Failed to shut down device on suspend (%pe)\n",
++			ERR_PTR(ret));
++
++	gpiod_set_value_cansleep(priv->sdb, 0);
++	regulator_disable(priv->vdd);
++
++	return 0;
++}
++
++static int htr3212_resume(struct device *dev)
++{
++	struct htr3212_priv *priv = dev_get_drvdata(dev);
++	int ret;
++
++	ret = regulator_enable(priv->vdd);
++	if (ret < 0) {
++		dev_err(dev, "Failed to enable regulator on resume (%pe)\n",
++			ERR_PTR(ret));
++		return ret;
++	}
++
++	gpiod_set_value_cansleep(priv->sdb, 1);
++	usleep_range(10000, 11000);
++
++	ret = htr3212_init_regs(priv);
++	if (ret)
++		dev_err(dev, "Failed to reinitialize registers on resume (%pe)\n",
++			ERR_PTR(ret));
++
++	return ret;
++}
++
++static DEFINE_SIMPLE_DEV_PM_OPS(htr3212_pm_ops, htr3212_suspend,
++				htr3212_resume);
++
 +static void htr3212_remove(struct i2c_client *client)
 +{
 +	struct htr3212_priv *priv = i2c_get_clientdata(client);
@@ -358,6 +400,7 @@ index 000000000000..8eb6c3c7866f
 +	.driver = {
 +		.name	= "htr3212",
 +		.of_match_table = of_htr3212_match,
++		.pm	= pm_sleep_ptr(&htr3212_pm_ops),
 +	},
 +	.probe		= htr3212_probe,
 +	.remove		= htr3212_remove,
@@ -370,5 +413,5 @@ index 000000000000..8eb6c3c7866f
 +MODULE_DESCRIPTION("HEROIC HTR3212 LED Driver");
 +MODULE_LICENSE("GPL v2");
 -- 
-2.34.1
+2.43.0
 

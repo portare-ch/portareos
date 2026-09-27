@@ -78,6 +78,7 @@ if [ -n "${GAME}" ]; then
 else
   for t in D1 D2 D3 D4; do need_game $t "launched RetroArch config"; done
 fi
+check D10 "panel opts in to 8bpc dither" [ -e /proc/device-tree/soc@0/display-subsystem@ae00000/dsi@ae94000/panel@0/armada,dpu-8bpc-dither ]
 check D7 "display.colorprofile is stock" [ "$(setting display.colorprofile)" = stock ]
 check D7 "colorprofile-stock migration ran" [ -e /storage/.config/system/.migrations/colorprofile-stock ]
 if [ -z "${GAME}" ]; then
@@ -153,6 +154,14 @@ for m in cpugovernor-schedutil es-fpslimit ssh-default-on colorprofile-stock; do
   check L6 "migration ${m} ran" [ -e /storage/.config/system/.migrations/${m} ]
 done
 
+if [ -x /storage/.config/autostart/GPcal.sh ]; then
+  BAD=$(grep -o 'echo [-0-9]* > [^ ]*' /storage/.config/autostart/GPcal.sh | grep -v update_params | \
+        while read -r _ v _ f; do [ "$(cat $f 2>/dev/null)" = "$v" ] || echo -n " ${f##*/}"; done)
+  check L9 "live stick parameters are the saved ones${BAD}" [ -z "${BAD}" ]
+else
+  skip L9 "no saved calibration"
+fi
+
 echo "== Power and hardware"
 check P1 "charge-throttle active" systemctl -q is-active charge-throttle
 if [ -r ${BAT}/temp ] && [ -r ${BAT}/constant_charge_current ]; then
@@ -169,6 +178,16 @@ if [ -r ${BAT}/temp ] && [ -r ${BAT}/constant_charge_current ]; then
   fi
 else
   skip P1 "charge current limit not exposed by this kernel"
+fi
+RAIL=""
+for r in /sys/class/regulator/regulator.*; do
+  [ "$(cat $r/name 2>/dev/null)" = vdd_mcu_3v3 ] && RAIL=$r
+done
+if [ -n "${RAIL}" ]; then
+  check P7 "vdd_mcu_3v3 enabled with $(cat ${RAIL}/num_users) users, none always-on" bash -c "[ \"\$(cat ${RAIL}/state)\" = enabled ] && [ \"\$(cat ${RAIL}/num_users)\" -ge 1 ]"
+  check P7 "no MCU supply errors in dmesg" bash -c "! dmesg | grep -qi 'MCU supply\|Failed to enable regulator on resume'"
+else
+  fail P7 "no vdd_mcu_3v3 regulator in sysfs"
 fi
 . /etc/profile >/dev/null 2>&1
 if [ -n "${DEVICE_PWM_FAN}" ] && [ -e "${DEVICE_PWM_FAN}" ]; then

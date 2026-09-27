@@ -16,6 +16,12 @@
 	panel@0 {
 		compatible = "il97680a,rpnova";
 		/delete-property/ rotation;
+		/*
+		 * The DPU turns output dithering off at 8bpc, so the 10-bit
+		 * result of a colour profile is truncated onto the panel and
+		 * dark gradients step. Kernel patch 0049 reads this.
+		 */
+		armada,dpu-8bpc-dither;
 	};
 };
 

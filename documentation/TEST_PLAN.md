@@ -173,6 +173,19 @@ cat .../min_freq                                                            # 12
 ```
 Fan is off (`pwm1` reads 0) with the device below 40 °C.
 
+### D10 8bpc output dither (auto+human)
+
+Auto, idle: the panel node in the live device tree carries the opt-in.
+
+```
+ls /proc/device-tree/soc@0/display-subsystem@ae00000/dsi@ae94000/panel@0/armada,dpu-8bpc-dither
+```
+Human: the D6 grey ramp with sRGB or Gamma 2.2 selected. Pass when the
+dark steps that were merged before nightly 156 are distinct, and a smooth
+dark gradient (a night sky in any film) shows no bands. Compare the same
+image with the stock profile: it must look the same as before, since
+dithering an untouched 8-bit source changes nothing visible.
+
 ## Audio
 
 ### A1 Link rate follows the stream (auto+human)
@@ -384,6 +397,21 @@ seconds; unplug, they return. Set it off in Settings: no glow on plug.
 Start mpv and PortMaster (neither has its own hotkey); Home + Start
 returns to the launcher within three seconds both times.
 
+### L9 Stick and trigger calibration (auto+human)
+
+Human: Tools > Calibrate Gamepad starts and shows both sticks moving (it
+finds the pad by its evdev name, "AYN Odin2 Gamepad"). Calibrate, Save,
+quit, reboot: the sticks read centred in the launcher and in a game, and
+a full deflection reaches the edge in RetroArch's input test. Auto after
+the save:
+
+```
+ls -l /storage/.config/autostart/GPcal.sh          # executable
+grep -o 'echo [-0-9]* > [^ ]*' /storage/.config/autostart/GPcal.sh | \
+  while read -r _ v _ f; do [ "$(cat $f)" = "$v" ] || echo "MISMATCH $f"; done
+```
+No line printed means the live parameters are the saved ones.
+
 ## Power and hardware
 
 ### P1 Charge current throttle (auto)
@@ -441,6 +469,23 @@ On a nightly build: `which gdb strace` finds both and `strace -V` prints
 7.2. On a release build (workflow input OFFICIAL=yes) both are absent.
 The script takes `nightly` or `release` as an argument, since the image
 does not record which it is.
+
+### P7 Gamepad MCU and stick LED rails off in suspend (auto+human)
+
+Auto, idle: the rail exists and is held only by its consumers, none of
+them always-on.
+
+```
+for r in /sys/class/regulator/regulator.*; do
+  [ "$(cat $r/name)" = vdd_mcu_3v3 ] && cat $r/state $r/num_users
+done                                                # enabled, 3
+dmesg | grep -i 'MCU supply'                        # nothing
+```
+After a suspend and resume: `dmesg` has no "Failed to enable MCU supply"
+or "Failed to enable regulator on resume" line, the sticks and every
+button work in the launcher, and the stick LEDs show their colour again.
+Human: with P2, an overnight suspend on battery; the drain before and
+after nightly 156 is the number that says whether this helped #62.
 
 ## Media
 

@@ -22,6 +22,7 @@ only been built. BUGS.md carries the check for each unverified row.
 | Color profile (Gamma 2.2, sRGB) | A matrix and output curve in the display controller correct the panel to sRGB and D65. | `config/color/*.profile`, launcher `color.c`, `kms.c` | partial: applies; crushes dark greys | human: 16-step grey ramp, saturated patches |
 | Stock as the default profile | Both profiles crush greys, so nothing is applied unless chosen; a one-shot migration moves devices back. | `system.cfg`, `post-update` `colorprofile-stock` | unverified | auto: `display.colorprofile` after update; marker file |
 | De-gamma stage through the LUTDMA | Kernel patches 1070/1071 drive the third color block so pippopapera's three-table profiles can be used as they were measured. | kernel patches, `make-igc-profile.py` | unverified, never run | human, with SSH open: the kernel alone, then a bind-mounted profile |
+| 8bpc output dither | The DPU leaves output dithering off at 8bpc, so a colour profile's 10-bit result is truncated onto the panel; the Nova panel opts in to the static ordered dither matrix. | kernel patch 0049, `rpnova.dts` | unverified | human: 16-step grey ramp with a profile on; auto: property in the live device tree |
 | Lowest GPU operating point | 124.8 MHz idle so a menu or film keeps the fan off. | device quirks | verified | auto: `devfreq` cur_freq at the launcher |
 | Black frame insertion | Planned, not shipped. | | not shipped | |
 
@@ -62,6 +63,7 @@ only been built. BUGS.md carries the check for each unverified row.
 | One-shot migrations | `post-update` runs each once: cpugovernor, FpsLimit, ssh on, colorprofile stock. | `post-update` | verified for the first three | auto: marker directory after update |
 | Charging LED | Yellow thumbsticks while charging, switchable. | launcher, LED daemon | verified | human |
 | Home + Start handled by the launcher for emulators that do not quit | The launcher closes what does not close itself. | launcher `quit.c` | verified | human |
+| Stick and trigger calibration | Tools > Calibrate Gamepad (GPcal) measures centre, range and deadzone into rsinput's module parameters; Save writes an autostart script so it survives a reboot. | `gamepadcalibration`, `/storage/.config/autostart/GPcal.sh` | unverified; found the pad under the wrong name until nightly 156 | human: calibrate, reboot, sticks still centred; auto: parameters match the saved script |
 
 ## Power and hardware
 
@@ -70,6 +72,7 @@ only been built. BUGS.md carries the check for each unverified row.
 | Charge current throttle | Full current below 40 °C, then 3, 2, 1 A at 40, 42, 44 °C with 2 °C hysteresis. | kernel patch 0510, `charge-throttle` service | unverified | auto: `journalctl -u charge-throttle` and `current_now` while charging warm |
 | Suspend and resume | UFS, PCIe, Wi-Fi, gamepad MCU and LEDs survive suspend. | kernel patch stack, `009-sleepmode` | verified; overnight drain open (#62) | human: suspend, resume, everything back; auto: `current_now` in suspend |
 | Fan control | `fancontrol` curve. | quirks `fancontrol` | verified | auto: fan state against temperature |
+| Gamepad MCU and stick LED rails off in suspend | rsinput and the HTR3212 LED driver release `vdd_mcu_3v3` across suspend, so the rail switches off instead of feeding a quiesced MCU. | kernel patches 1014 and 0033, `qcs8550-ayn-common.dtsi` | unverified | auto: regulator users at idle, sticks and LEDs back after resume; human: overnight drain against #62 |
 | microSD at SDR104 | UHS-I high speed. | kernel config | verified | auto: `/sys` bus speed |
 | 1000 Hz tick, teo, schedutil with the energy model | Latency-oriented scheduler and idle choices. | kernel config, `008-perfmode` | verified as configured, not measured | auto: `scaling_governor`, `current_governor` |
 | Debug tools only outside official releases | gdb, strace 7.2. | `virtual/debug`, `strace` | unverified (strace 7.2 build) | auto: binaries present in a nightly, absent in a release |
