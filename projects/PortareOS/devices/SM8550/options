@@ -64,7 +64,7 @@
   # Additional Firmware to use ( )
   # Space separated list is supported,
   # e.g. FIRMWARE=""
-    FIRMWARE="extra-firmware"
+    FIRMWARE="extra-firmware nova-firmware"
 
   # Additional packages to install
     ADDITIONAL_PACKAGES="gamepadcalibration portareos-abl inputplumber"

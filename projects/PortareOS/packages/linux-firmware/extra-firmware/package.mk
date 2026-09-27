@@ -23,13 +23,11 @@ makeinstall_target() {
 
   if [ "${DEVICE}" = "SM8550" ]; then
     # ROCKNIX's SM8550 folder carries every SM8550 handheld's signed DSP
-    # firmware. The Nova's device tree (rpnova including rp6) loads
-    # ayn/odin2/adsp.mbn and ayn/cdsp.mbn - which is what dmesg shows on
-    # the device - so the other devices' 117 MB can never be loaded here.
-    # Listed rather than "everything but odin2", so a folder upstream adds
-    # later is kept until someone decides otherwise.
+    # firmware. The Nova loads its own, from nova-firmware, so none of
+    # the AYN or AYANEO devices' is ever loaded here. The topology,
+    # AYN-Odin2-tplg.bin, is Linux-side and stays.
     FW=${INSTALL}/$(get_full_firmware_dir)/qcom/sm8550
-    rm -rf ${FW}/ayaneo ${FW}/ayn/thor ${FW}/ayn/odin2portal ${FW}/ayn/odin2mini
+    rm -rf ${FW}/ayaneo ${FW}/ayn
 
     python3 ${PKG_DIR}/sources/tplg-playback-rates.py \
       ${INSTALL}/$(get_full_firmware_dir)/qcom/sm8550/AYN-Odin2-tplg.bin
