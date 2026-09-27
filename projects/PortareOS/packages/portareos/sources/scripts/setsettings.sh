@@ -1212,6 +1212,22 @@ function set_dreamcastopts() {
     fi
 }
 
+function set_swapchain_images() {
+    # Two images, the shortest queue a present can wait in, except for
+    # ParaLLEl N64: a game that runs at 30 fps costs it about 4 ms on one
+    # VI frame and 19 on the next, and with two images the long frame
+    # cannot start before the short one is on screen, so it missed its
+    # vblank every time: Super Mario 64 at 48 fps. A third image lets it
+    # start early, at up to a frame more latency. Written for every core,
+    # since add_setting also deletes the key from retroarch.cfg.
+    local IMAGES="2"
+    if [ "${CORE}" = "parallel_n64" ]
+    then
+        IMAGES="3"
+    fi
+    add_setting "none" "video_max_swapchain_images" "${IMAGES}"
+}
+
 function set_psxopts() {
     log "Set up SwanStation..."
     # No automatic frame delay with the PlayStation's preemptive frame. The
@@ -1583,6 +1599,7 @@ set_saturnopts &
 set_dreamcastopts &
 set_melondsdsopts &
 set_psxopts &
+set_swapchain_images &
 
 ### Sed operations are expensive, so they are staged and executed as
 ### a single process when all forks complete.
