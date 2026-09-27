@@ -1214,17 +1214,18 @@ function set_dreamcastopts() {
 
 function set_swapchain_images() {
     # Two images, the shortest queue a present can wait in, except for
-    # ParaLLEl N64: a game that runs at 30 fps costs it about 4 ms on one
-    # VI frame and 19 on the next, and with two images the long frame
-    # cannot start before the short one is on screen, so it missed its
-    # vblank every time: Super Mario 64 at 48 fps. A third image lets it
-    # start early, at up to a frame more latency. Written for every core,
-    # since add_setting also deletes the key from retroarch.cfg.
+    # ParaLLEl N64 and Dolphin. A 30 fps N64 game costs ParaLLEl about
+    # 4 ms on one VI frame and 19 on the next, and with two images the
+    # long frame cannot start before the short one is on screen, so it
+    # missed its vblank every time: Super Mario 64 at 48 fps. Dolphin's
+    # frames are as uneven: Soulcalibur II ran at 42 to 56 fps. A third
+    # image lets the long frame start early, at up to a frame more
+    # latency; both then hold 59.9. Written for every core, since
+    # add_setting also deletes the key from retroarch.cfg.
     local IMAGES="2"
-    if [ "${CORE}" = "parallel_n64" ]
-    then
-        IMAGES="3"
-    fi
+    case "${CORE}" in
+        parallel_n64|dolphin) IMAGES="3" ;;
+    esac
     add_setting "none" "video_max_swapchain_images" "${IMAGES}"
 }
 
