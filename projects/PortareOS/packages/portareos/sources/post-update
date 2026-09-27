@@ -33,7 +33,10 @@ do
   ln -s /usr/config/emulationstation/${es_cfg} /storage/.config/emulationstation/${es_cfg}  >/dev/null 2>&1
 done
 
-rsync -a --delete ${EXCLUDE} /usr/config/system/ /storage/.config/system/
+### .migrations holds the markers of the one-shot migrations below, which
+### the image does not have, so --delete took them and every migration ran
+### again on every update: SSH back on, the colour profile back to stock.
+rsync -a --delete ${EXCLUDE} --exclude=.migrations /usr/config/system/ /storage/.config/system/
 
 ### simple-http-server is gone from the image: it was EmulationStation's file
 ### browser, serving /storage on port 80 to anyone on the network with the
@@ -48,6 +51,25 @@ if [ -d /storage/.config/scummvm/themes/themes ]; then
   rm -rf /storage/.config/scummvm/themes
 fi
 sed -i '/^simplehttp\./d' /storage/.config/system/configs/system.cfg 2>/dev/null ||:
+
+### Keys new in the shipped system.cfg. configs/ is excluded from the sync
+### above, so the file is the one copied at install, and a default added
+### since never reached it: gpuperf, the GPU floor for emulators, and
+### cores=big were missing on a device installed before them. Only absent
+### keys are appended; a value already there, chosen or not, stays.
+SYSCFG=/storage/.config/system/configs/system.cfg
+if [ -f "${SYSCFG}" ]; then
+  awk 'function key(l) { return substr(l, 1, index(l, "=") - 1) }
+       NR == FNR { if (!/^#/ && index($0, "=")) have[key($0)]; next }
+       !/^#/ && index($0, "=") && !(key($0) in have)' \
+      "${SYSCFG}" /usr/config/system/configs/system.cfg >/tmp/system.cfg.new
+  if [ -s /tmp/system.cfg.new ]; then
+    [ -n "$(tail -c1 "${SYSCFG}")" ] && echo >>"${SYSCFG}"
+    cat /tmp/system.cfg.new >>"${SYSCFG}"
+    sed 's/^/New setting: /' /tmp/system.cfg.new >>${LOG}
+  fi
+  rm -f /tmp/system.cfg.new
+fi
 rsync -a --ignore-existing /usr/config/game /storage/.config/
 rsync -a /usr/config/modules /storage/.config/
 
@@ -291,7 +313,16 @@ migrate_colorprofile_stock() {
   esac
 }
 
+# glide64 was the shipped N64 renderer until ParaLLEl-RDP replaced it. It
+# needs OpenGL, which here is zink, and RetroArch crashed within seconds of
+# every N64 launch on a device still carrying it. Only glide64 is moved.
+migrate_n64_parallel_rdp() {
+  [ "$(get_setting n64.parallel_n64_video_core)" = "glide64" ] || return 0
+  set_setting n64.parallel_n64_video_core parallel
+}
+
 migrate cpugovernor-schedutil migrate_cpugovernor
 migrate es-fpslimit migrate_es_fpslimit
 migrate ssh-default-on migrate_ssh_on
 migrate colorprofile-stock migrate_colorprofile_stock
+migrate n64-parallel-rdp migrate_n64_parallel_rdp
