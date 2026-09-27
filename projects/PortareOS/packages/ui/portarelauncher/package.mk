@@ -2,8 +2,8 @@
 # Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
 
 PKG_NAME="portarelauncher"
-PKG_VERSION="0.2.7"
-PKG_SHA256="a0379edd8df802ec688126a70b5c318b5a1c480faf65ce6c50b59d709f9385c2"
+PKG_VERSION="0.2.8"
+PKG_SHA256="76fb971a9b4da8be25c38cc0cca1bf5cbf247d0d939dc3c8fa27babb5d14d813"
 PKG_LICENSE="GPL-2.0"
 PKG_SITE="https://github.com/portare-ch/portarelauncher"
 # A release, not a commit: the tarball is made once by the launcher's release
