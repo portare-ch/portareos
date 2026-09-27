@@ -14,7 +14,7 @@ only been built. BUGS.md carries the check for each unverified row.
 
 | Feature | What it does | Where | Status | Test |
 |---|---|---|---|---|
-| One panel mode per console family | The panel driver carries seven 120 Hz-class modes, each exactly twice a console's frame rate (119.880, 119.652, 119.455, 120.198, 119.846, 118.360, 119.200 Hz). RetroArch asks for the matching one at launch. | kernel panel patches; `setsettings.sh` refresh table; RetroArch patch 0013 | verified | auto: `/sys/class/drm/*/modes` and RetroArch log per system |
+| One panel mode per console family | The panel driver carries eight 120 Hz-class modes: seven each exactly twice a console's frame rate (119.880, 119.652, 119.455, 120.198, 119.846, 118.360, 119.200 Hz), and 120.000 Hz for Steam, for PC games that pace themselves at 60 or 120. RetroArch asks for the matching one at launch; gamescope takes 120.000. | kernel panel patches; `setsettings.sh` refresh table; RetroArch patch 0013 | verified | auto: `/sys/class/drm/*/modes` and RetroArch log per system |
 | Timed presents on Vulkan display | Each frame presented once, timed to the vblank two refreshes after the last; core paced by the panel. | RetroArch patch 0014 | verified | human: 240 fps camera; auto: RetroArch statistics for dropped frames |
 | Two-image swapchain, no threaded video | Shortest frame queue RetroArch allows. | `retroarch.cfg` | verified | auto: config values in the launched RetroArch |
 | Automatic frame delay | RetroArch measures core time and delays input polling up to the slack. | `retroarch.cfg` | verified | auto: statistics overlay reports a non-zero delay |

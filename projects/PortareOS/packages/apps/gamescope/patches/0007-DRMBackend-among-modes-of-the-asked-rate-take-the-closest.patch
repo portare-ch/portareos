@@ -1,0 +1,66 @@
+From 3c4ff3c11a0dacbff2728c010c14f853c3c85c05 Mon Sep 17 00:00:00 2001
+From: portare-ch <hello@portare.org>
+Date: Sun, 27 Sep 2026 15:17:20 +0000
+Subject: [PATCH] DRMBackend: among modes of the asked rate, take the closest
+
+drmModeModeInfo::vrefresh is rounded, so a panel with modes a fraction of
+a hertz apart has several at the same whole number, and find_mode() took
+whichever the driver listed first. Among those that match, take the one
+whose exact rate is closest to the whole number asked for. With none
+nearer than the first, the first is still the one; asking for no rate
+is unchanged.
+
+The Retroid Pocket Nova lists 119.880, 120.198 and others that all round
+to 120, and a 120.000 mode for gamescope sorts after 120.198: -r 120 now
+gets 120.000 when the panel has it and 119.880 when it does not.
+---
+ src/Backends/DRMBackend.cpp | 22 ++++++++++++++++++++--
+ 1 file changed, 20 insertions(+), 2 deletions(-)
+
+diff --git a/src/Backends/DRMBackend.cpp b/src/Backends/DRMBackend.cpp
+index 8b39d5f4..417072b7 100644
+--- a/src/Backends/DRMBackend.cpp
++++ b/src/Backends/DRMBackend.cpp
+@@ -975,8 +975,17 @@ static mode_blocklist_entry g_badModes[] =
+ 	{ 4096, 2160, 0 },
+ };
+ 
++// A refresh rate asked for in whole hertz can match several modes, since
++// drmModeModeInfo::vrefresh is rounded: a panel with modes a fraction of a
++// hertz apart has several at "120". Among those, take the one whose exact
++// rate is closest to the whole number asked for, rather than whichever the
++// driver listed first; with no mode nearer than the first, that is still
++// the first. Asking for no rate still returns the first mode that fits.
+ static const drmModeModeInfo *find_mode( const drmModeConnector *connector, int hdisplay, int vdisplay, uint32_t vrefresh )
+ {
++	const drmModeModeInfo *best = nullptr;
++	int64_t best_delta = 0;
++
+ 	for (int i = 0; i < connector->count_modes; i++) {
+ 		const drmModeModeInfo *mode = &connector->modes[i];
+ 
+@@ -997,10 +1006,19 @@ static const drmModeModeInfo *find_mode( const drmModeConnector *connector, int
+ 		if (vrefresh != 0 && vrefresh != mode->vrefresh)
+ 			continue;
+ 
+-		return mode;
++		if (vrefresh == 0)
++			return mode;
++
++		int64_t delta = (int64_t)gamescope::GetModeRefresh( mode ) - (int64_t)vrefresh * 1000;
++		if (delta < 0)
++			delta = -delta;
++		if (!best || delta < best_delta) {
++			best = mode;
++			best_delta = delta;
++		}
+ 	}
+ 
+-	return NULL;
++	return best;
+ }
+ 
+ static std::unordered_map<std::string, int> parse_connector_priorities(const char *str)
+-- 
+2.47.3
+

@@ -79,7 +79,7 @@ rate_for() {
 echo "== Display"
 # Every mode is 1280x960, so count lines, not distinct names.
 MODES=$(cat /sys/class/drm/card*-DSI-*/modes 2>/dev/null | wc -l)
-check D1 "seven panel modes listed (${MODES})" [ "${MODES}" = 7 ]
+check D1 "eight panel modes listed (${MODES})" [ "${MODES}" = 8 ]
 if [ -n "${GAME}" ]; then
   WANT=$(refresh_for "${GAME}"); GOT=$(cfg_val video_refresh_rate)
   check D1 "${GAME} launched at ${WANT} Hz (got ${GOT})" [ "$(awk -v g="${GOT}" 'BEGIN{printf "%.3f", g}')" = "${WANT}" ]

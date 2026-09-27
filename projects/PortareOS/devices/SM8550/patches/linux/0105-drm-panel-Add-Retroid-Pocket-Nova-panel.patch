@@ -35,7 +35,7 @@ new file mode 100644
 index 000000000000..1c8ed849edbf
 --- /dev/null
 +++ b/drivers/gpu/drm/panel/panel-ilitek-il97680a.c
-@@ -0,0 +1,631 @@
+@@ -0,0 +1,661 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * Ilitek IL97680A panels driver
@@ -380,6 +380,36 @@ index 000000000000..1c8ed849edbf
 +		.vsync_start = 960 + 12,
 +		.vsync_end = 960 + 12 + 2,
 +		.vtotal = 960 + 12 + 2 + 27,
++	},
++	{
++		/*
++		 * 120.00000Hz exactly, for Steam. gamescope asks for 120 and
++		 * takes the mode whose exact rate is closest to it (its patch
++		 * 0007); every emulator asks for its own rate or takes the
++		 * preferred mode, and this one is neither. PC games that pace
++		 * themselves by a timer - an in-game 60fps cap, DXVK's or
++		 * VKD3D's frame limiter - make 60.000 frames a second, and at
++		 * 119.88Hz gamescope drops one of them about every 17 seconds.
++		 *
++		 * The preferred mode's pixel clock over one line fewer: 26 lines
++		 * of vertical back porch instead of 27, still two more than the
++		 * panel's own timing had before the 1001 above.
++		 *
++		 *   156240000 / (1302 * 1000) = 120.00000
++		 *
++		 * Set from userspace before it was added here: 120.003Hz over a
++		 * minute of vblanks, against 119.884 for the preferred mode on
++		 * the same count, and no DSI errors.
++		 */
++		.clock = 156240,
++		.hdisplay = 1280,
++		.hsync_start = 1280 + 12,
++		.hsync_end = 1280 + 12 + 2,
++		.htotal = 1280 + 12 + 2 + 8,
++		.vdisplay = 960,
++		.vsync_start = 960 + 12,
++		.vsync_end = 960 + 12 + 2,
++		.vtotal = 960 + 12 + 2 + 26,
 +	},
 +};
 +

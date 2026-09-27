@@ -53,14 +53,14 @@ build named at the top of that file.
 
 ### D1 One panel mode per console family (auto)
 
-Idle: the DSI connector lists all seven modes.
+Idle: the DSI connector lists all eight modes.
 
 ```
-grep -c . /sys/class/drm/card*-DSI-1/modes          # 7
+grep -c . /sys/class/drm/card*-DSI-1/modes          # 8
 modetest -M msm -c | grep -oE '[0-9]+\.[0-9]+' | sort -u
 ```
 Expected refresh rates, to three decimals: 119.880, 119.652, 119.455,
-120.198, 119.846, 118.360, 119.200.
+120.198, 119.846, 118.360, 119.200, and 120.000 for Steam.
 
 Game running: `video_refresh_rate` in `/tmp/.retroarch.cfg` is the table
 value for the system, and the RetroArch log has a `[Vulkan]` line naming
@@ -75,6 +75,10 @@ the same mode.
 | neogeo (fbneo) | 118.360 |
 | neocd | 119.200 |
 | everything else | 119.880 |
+
+Steam: gamescope's log says `selecting mode 1280x960@120Hz`, and a vblank
+count over a minute on `/dev/dri/card0` (no master needed) gives 120.00,
+not 119.88.
 
 Fail if the config names a different rate or the log shows the default
 mode for a system with its own row.

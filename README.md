@@ -43,9 +43,11 @@ it took, is in
 | 119.846 Hz | Master System, Game Gear, Mega Drive, Mega CD | 59.9227 |
 | 118.360 Hz | Neo Geo | 59.18 |
 | 119.200 Hz | Neo Geo CD | 59.5999 |
+| 120.000 Hz | Steam: PC games capped at 60 or 120 by a timer | 60 |
 
-The rates come from the consoles' own clocks, and the modes only vary the
-pixel clock, so the panel stays in its 120 Hz class throughout. They are
+The rates come from the consoles' own clocks, and the console modes only
+vary the pixel clock; Steam's is the default's clock over one line fewer.
+The panel stays in its 120 Hz class throughout. They are
 the NTSC rates: PortareOS is built for NTSC games and no PAL mode is
 planned. Dynamic
 switching mid-game was evaluated and dropped: SwanStation does not change
