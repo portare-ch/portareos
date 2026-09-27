@@ -5,13 +5,13 @@
 # Runs the automatic tests of documentation/TEST_PLAN.md on a Nova over ssh
 # and prints one PASS, FAIL or SKIP line per test ID.
 #
-#   tools/device-tests root@nova nightly              idle checks
-#   tools/device-tests root@nova release game snes    plus the running game
+#   tools/device-tests root@nova                idle checks
+#   tools/device-tests root@nova game snes      plus the running game
 #
-# The second word says which build is under test, since the image does not
-# record whether it was an official one (P6). With "game <system>" a game
-# of that system must already be running; the script then reads the config
-# it was launched with, the RetroArch log and the audio link.
+# With "game <system>" a game of that system must already be running; the
+# script then reads the config it was launched with, the RetroArch log and
+# the audio link. Whether the build is official comes from OS_BUILD in
+# /etc/os-release (P6).
 
 if [ "$1" != "--remote" ]; then
   [ -z "$1" ] && { sed -n '5,14p' "$0" | cut -c3-; exit 1; }
@@ -19,9 +19,11 @@ if [ "$1" != "--remote" ]; then
   exec ssh "${HOST}" bash -s -- --remote "$@" <"$0"
 fi
 shift
-BUILD=${1:-nightly}; shift
+# The old second word, nightly or release, is accepted and ignored.
+case "$1" in nightly|release) shift ;; esac
 GAME=""
 [ "$1" = "game" ] && GAME=$2
+BUILD=$(sed -n 's/^OS_BUILD="\(.*\)"/\1/p' /etc/os-release)
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS $1  $2"; PASS=$((PASS + 1)); }
@@ -34,11 +36,20 @@ check() { # id text condition...
 need_game() { [ -n "${GAME}" ] || { skip "$1" "$2 (needs a running game)"; return 1; }; }
 
 CFG=/storage/.config/system/configs/system.cfg
+# The launch writes only what it changes to /tmp/.retroarch.cfg and
+# RetroArch appends it to the main file, so a key missing there is read
+# from the main file.
 RA_CFG=/tmp/.retroarch.cfg
+RA_MAIN=/storage/.config/retroarch/retroarch.cfg
 RA_LOG=$(ls -t /storage/.config/retroarch/logs/* 2>/dev/null | head -1)
 GPU=/sys/devices/platform/soc@0/3d00000.gpu/devfreq/3d00000.gpu
 BAT=/sys/class/power_supply/battery
-cfg_val() { sed -n "s/^$1 = \"\(.*\)\"/\1/p" "${RA_CFG}" 2>/dev/null | tail -1; }
+cfg_val() {
+  local v
+  v=$(sed -n "s/^$1 = \"\(.*\)\"/\1/p" "${RA_CFG}" 2>/dev/null | tail -1)
+  [ -n "${v}" ] || v=$(sed -n "s/^$1 = \"\(.*\)\"/\1/p" "${RA_MAIN}" 2>/dev/null | tail -1)
+  echo "${v}"
+}
 setting() { sed -n "s/^$1=//p" "${CFG}" 2>/dev/null | tail -1; }
 hw_rate() { cat /proc/asound/card0/pcm*p/sub0/hw_params 2>/dev/null | sed -n 's/^rate: \([0-9]*\).*/\1/p' | head -1; }
 
@@ -54,32 +65,54 @@ refresh_for() {
     *) echo 119.880 ;;
   esac
 }
+# RetroArch picks the link rate from the core's (retroarch patch 0015):
+# the smallest native rate the core's rate divides into within 0.5 %,
+# else the smallest above it, else the highest.
 rate_for() {
-  case "$1" in
-    psx|saturn|dreamcast|psp|neocd|genesis|megadrive|mastersystem|gamegear|segacd|sega32x) echo 44100 ;;
-    snes) echo 32000 ;;
-    n64) echo any ;;
-    *) echo 48000 ;;
-  esac
+  awk -v c="$1" 'BEGIN {
+    n = split("32000 44100 48000", r, " ")
+    for (i = 1; i <= n; i++) { k = int(r[i] / c + 0.5); if (k >= 1 && (r[i] / (k * c) - 1) ^ 2 <= 0.000025) { print r[i]; exit } }
+    for (i = 1; i <= n; i++) if (r[i] > c) { print r[i]; exit }
+    print r[n] }'
 }
 
 echo "== Display"
-MODES=$(cat /sys/class/drm/card*-DSI-*/modes 2>/dev/null | sort -u | wc -l)
+# Every mode is 1280x960, so count lines, not distinct names.
+MODES=$(cat /sys/class/drm/card*-DSI-*/modes 2>/dev/null | wc -l)
 check D1 "seven panel modes listed (${MODES})" [ "${MODES}" = 7 ]
 if [ -n "${GAME}" ]; then
   WANT=$(refresh_for "${GAME}"); GOT=$(cfg_val video_refresh_rate)
-  check D1 "${GAME} launched at ${WANT} Hz (got ${GOT})" [ "${GOT%${WANT}*}" != "${GOT}" ]
+  check D1 "${GAME} launched at ${WANT} Hz (got ${GOT})" [ "$(awk -v g="${GOT}" 'BEGIN{printf "%.3f", g}')" = "${WANT}" ]
   MS=$(awk -v r="${WANT}" 'BEGIN{printf "%.3f", 2000/r}')
-  check D2 "timed presents ${MS} ms apart in the log" grep -q "Timed presents: swap interval 2, one present a frame, ${MS%?}" "${RA_LOG}"
+  # A core at the panel rate (ScummVM's 119.88) presents every refresh,
+  # swap interval 1, and timed presents stay off.
+  FPS=$(sed -n 's/.*\[Core\] Geometry: .* FPS: \([0-9.]*\),.*/\1/p' "${RA_LOG}" | tail -1)
+  if [ -n "${FPS}" ] && awk -v r="${WANT}" -v f="${FPS}" 'BEGIN{exit !(r / f < 1.5)}'; then
+    skip D2 "core runs at ${FPS} fps, one present a refresh"
+  else
+    check D2 "timed presents ${MS} ms apart in the log" grep -q "Timed presents: swap interval 2, one present a frame, ${MS%?}" "${RA_LOG}"
+  fi
   check D3 "two swapchain images" [ "$(cfg_val video_max_swapchain_images)" = 2 ]
   check D3 "video_threaded false" [ "$(cfg_val video_threaded)" = false ]
-  check D3 "swap interval 1" [ "$(cfg_val video_swap_interval)" = 1 ]
+  # 0 lets RetroArch pick 2 for 60 Hz content; black frame insertion needs 1.
+  if [ "$(cfg_val video_black_frame_insertion)" -gt 0 ] 2>/dev/null; then
+    check D3 "swap interval 1 with black frame insertion" [ "$(cfg_val video_swap_interval)" = 1 ]
+  else
+    check D3 "swap interval 0, RetroArch picks" [ "$(cfg_val video_swap_interval)" = 0 ]
+  fi
   check D4 "automatic frame delay on" [ "$(cfg_val video_frame_delay_auto)" = true ]
 else
   for t in D1 D2 D3 D4; do need_game $t "launched RetroArch config"; done
 fi
 check D10 "panel opts in to 8bpc dither" [ -e /proc/device-tree/soc@0/display-subsystem@ae00000/dsi@ae94000/panel@0/armada,dpu-8bpc-dither ]
-check D7 "display.colorprofile is stock" [ "$(setting display.colorprofile)" = stock ]
+PROFILE=$(setting display.colorprofile)
+if [ "${PROFILE}" = stock ]; then
+  pass D7 "display.colorprofile is stock"
+elif [ "${CFG}" -nt /storage/.config/system/.migrations/colorprofile-stock ]; then
+  skip D7 "display.colorprofile is ${PROFILE}, set after the migration"
+else
+  fail D7 "display.colorprofile is ${PROFILE}"
+fi
 check D7 "colorprofile-stock migration ran" [ -e /storage/.config/system/.migrations/colorprofile-stock ]
 if [ -z "${GAME}" ]; then
   check D9 "GPU at 124.8 MHz idle ($(cat ${GPU}/cur_freq 2>/dev/null))" [ "$(cat ${GPU}/cur_freq 2>/dev/null)" = 124800000 ]
@@ -89,17 +122,24 @@ fi
 
 echo "== Audio"
 if [ -n "${GAME}" ]; then
-  WANT=$(rate_for "${GAME}"); GOT=$(hw_rate)
-  if [ "${WANT}" = any ]; then
-    PICKED=$(sed -n 's/.*Output rate picked for the core.s .*: \([0-9]*\) Hz.*/\1/p' "${RA_LOG}" | tail -1)
-    check A2 "N64 rate picked from the core (${PICKED}) and on the link (${GOT})" [ -n "${PICKED}" -a "${PICKED}" = "${GOT}" ]
+  CORE_RATE=$(sed -n "s/.*Output rate picked for the core.s \([0-9.]*\) Hz: \([0-9]*\) Hz.*/\1/p" "${RA_LOG}" | tail -1)
+  PICKED=$(sed -n "s/.*Output rate picked for the core.s \([0-9.]*\) Hz: \([0-9]*\) Hz.*/\2/p" "${RA_LOG}" | tail -1)
+  OPENED=$(sed -n 's/.*Driver "pipewire" reports .* at \([0-9]*\) Hz.*/\1/p' "${RA_LOG}" | tail -1)
+  GOT=$(hw_rate)
+  if [ -n "${CORE_RATE}" ]; then
+    WANT=$(rate_for "${CORE_RATE}")
+    check A2 "core's ${CORE_RATE} Hz picks ${WANT} (log ${PICKED})" [ "${PICKED}" = "${WANT}" ]
   else
-    check A1 "${GAME} link rate ${WANT} (got ${GOT})" [ "${GOT}" = "${WANT}" ]
+    # A per-core audio_out_rate (A3) skips the pick.
+    skip A2 "no pick: the core's config names ${OPENED:-no} rate"
   fi
+  check A1 "link at the ${OPENED} RetroArch opened (got ${GOT})" [ -n "${OPENED}" -a "${GOT}" = "${OPENED}" ]
   check A3 "global audio_out_rate stays 0" [ "$(cfg_val audio_out_rate)" = 0 ]
-  check A4 "PipeWire quantum 256" [ "$(pw-top -b -n 1 2>/dev/null | awk 'NR>1 && $3 ~ /^[0-9]+$/ {print $3}' | sort -u | tr '\n' ' ')" = "256 " ]
+  # The graph runs at the driver's quantum; a client row (" + name")
+  # shows what that client asked for. The first sample can be empty.
+  check A4 "PipeWire quantum 256" [ "$(pw-top -b -n 2 2>/dev/null | awk '$1 == "R" && !/ \+ / {print $3}' | sort -u | tr '\n' ' ')" = "256 " ]
 else
-  need_game A1 "link rate"; need_game A2 "N64 output rate"; need_game A4 "quantum under load"
+  need_game A1 "link rate"; need_game A2 "output rate pick"; need_game A4 "quantum under load"
 fi
 # The binary's name is spelled as a glob: CI bans the word outside the
 # pipewire compatibility server, and this line is the check for it.
@@ -108,7 +148,7 @@ check A4 "allowed-rates 48000 44100 32000" grep -rq "^ *default.clock.allowed-ra
 check A5 "hdmi-hotplug.path active" systemctl -q is-active hdmi-hotplug.path
 
 echo "== Emulation"
-WANT_CORES="beetle_saturn bsnes dolphin fbneo flycast gambatte genesis_plus_gx mgba neocd nestopia parallel_n64 picodrive ppsspp scummvm snes9x swanstation"
+WANT_CORES="mednafen_saturn bsnes dolphin fbneo flycast gambatte genesis_plus_gx mgba neocd nestopia parallel_n64 picodrive ppsspp scummvm snes9x swanstation"
 GOT_CORES=$(ls /usr/lib/libretro/ 2>/dev/null | sed -n 's/_libretro\.so$//p' | sort | tr '\n' ' ')
 check E1 "core set is the README table" [ "${GOT_CORES}" = "$(echo ${WANT_CORES} | tr ' ' '\n' | sort | tr '\n' ' ')" ]
 [ "${GOT_CORES}" = "$(echo ${WANT_CORES} | tr ' ' '\n' | sort | tr '\n' ' ')" ] || echo "     got: ${GOT_CORES}"
@@ -116,7 +156,8 @@ if [ -n "${GAME}" ]; then
   PRE=$(setting ${GAME}.preempt); PROF=$(setting ${GAME}.profile)
   if [ "${PRE}" = 1 ] || [ "${PROF}" = latency ]; then
     check E2 "preemptive frame on for ${GAME}" [ "$(cfg_val preemptive_frames_enable)" = true -a "$(cfg_val run_ahead_enabled)" = false -a "$(cfg_val run_ahead_frames)" = 1 ]
-    check E2 "core accepted the preemptive frame" bash -c "grep -q 'Run-Ahead Preemptive' '${RA_LOG}' && ! grep -qiE 'Run-Ahead Preemptive.*(not support|disabled|fail)' '${RA_LOG}'"
+    # Preemptive frames log only when they fail.
+    check E2 "core accepted the preemptive frame" bash -c "! grep -q 'Run-Ahead Preemptive' '${RA_LOG}'"
   else
     check E2 "preemptive frame off for ${GAME}" [ "$(cfg_val preemptive_frames_enable)" != true ]
   fi
@@ -137,7 +178,8 @@ fi
 
 echo "== Launcher and system"
 if [ -z "${GAME}" ]; then
-  check L1 "portarelauncher running" pgrep -x portarelauncher
+  # busybox pgrep -x does not match this name; pidof does.
+  check L1 "portarelauncher running" pidof portarelauncher
   check L1 "launcher holds DRM master" grep -q portarelauncher /sys/kernel/debug/dri/0/clients
 else
   skip L1 "launcher at idle (game running)"
@@ -207,10 +249,10 @@ check P5 "CONFIG_HZ_1000" bash -c "zcat /proc/config.gz | grep -q '^CONFIG_HZ_10
 check P5 "energy model built" bash -c "zcat /proc/config.gz | grep -q '^CONFIG_ENERGY_MODEL=y'"
 check P5 "teo idle governor" [ "$(cat /sys/devices/system/cpu/cpuidle/current_governor)" = teo ]
 check P5 "schedutil" [ "$(cat /sys/devices/system/cpu/cpufreq/policy0/scaling_governor 2>/dev/null)" = schedutil ]
-if [ "${BUILD}" = release ]; then
-  check P6 "no gdb or strace in a release" [ -z "$(command -v gdb)$(command -v strace)" ]
+if [ "${BUILD}" = official ]; then
+  check P6 "no gdb or strace in an official build" [ -z "$(command -v gdb)$(command -v strace)" ]
 else
-  check P6 "gdb and strace 7.2 in a nightly" bash -c "command -v gdb && strace -V | grep -q 'version 7.2'"
+  check P6 "gdb and strace 7.2 in an unofficial build" bash -c "command -v gdb && strace -V | grep -q 'version 7.2'"
 fi
 
 echo
