@@ -26,7 +26,6 @@ DEFAULT=(
     /storage/.config/system/configs/system.cfg
     /storage/.config/ppsspp/*
     /storage/.config/retroarch/*
-    /storage/.config/moonlight/*
     /storage/.config/game/*
     /storage/.emulationstation/es_*.cfg
     /storage/.emulationstation/scripts/*

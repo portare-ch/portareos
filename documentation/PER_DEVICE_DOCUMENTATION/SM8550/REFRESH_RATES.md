@@ -71,7 +71,7 @@ The PlayStation's line is 3412.5 GPU clocks, the broadcast line. SwanStation rou
 | psp, pspminis (PPSSPP) | 59.94 | 119.880 (exactly 2×) |
 | scummvm, steam, ports | no fixed rate (PC games) | 119.880 |
 | movies (mpv) | the video's frame rate (23.976, 25, 29.97 …) | 119.880; mpv syncs video to audio |
-| music, moonlight, tools, imageviewer | – | 119.880 |
+| music, tools, imageviewer | – | 119.880 |
 
 ## Audio
 

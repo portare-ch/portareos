@@ -15,7 +15,7 @@ PKG_TOOLCHAIN="manual"
 # shipped the old es_systems.cfg.
 PKG_NEED_UNPACK="${ROOT}/config/emulators"
 
-PKG_EMUS="moonlight"
+PKG_EMUS=""
 
 # retropie-shaders and the GLSL shader packs are gone: they are for the gl
 # driver, and this image runs RetroArch on Vulkan, which takes slang only.
@@ -496,10 +496,6 @@ makeinstall_target() {
   ### Music Player
   add_emu_core music gmu gmu true
   add_es_system music
-
-  ### Moonlight
-  add_emu_core moonlight moonlight moonlight true
-  add_es_system moonlight
 
   ### Tools
   add_es_system tools

@@ -13,7 +13,7 @@ The rule this applies is the README's: if it is not needed for a smooth game, it
 | pipewire, wireplumber, alsa-lib, alsa-ucm-conf, alsa-topology-conf | Audio; the 32 / 44.1 / 48 kHz link runs through it. |
 | networkmanager, iwd, wireless-regdb, openssh, rsync, bluez | Wi-Fi, SSH, controllers. |
 | retroarch, core-info, slang-shaders (trimmed, see below), the 15 cores (193 MB) | The systems. |
-| armsx2-sa, xemu-sa (19 MB), scummvm-lr, ppsspp-lr, moonlight, mpv, ffmpeg, libplacebo, luajit | The standalone systems and the two large cores; mpv's Lua runs our seek script. |
+| armsx2-sa, xemu-sa (19 MB), scummvm-lr, ppsspp-lr, mpv, ffmpeg, libplacebo, luajit | The standalone systems and the two large cores; mpv's Lua runs our seek script. |
 | portarelauncher, portareos, system-utils, quirks, autostart, powerstate, sleep, inputplumber (10 MB) | Our own stack; inputplumber is the gamepad. |
 | steam, gamescope, xwayland, seatd, fex-emu, pressure-vessel, the X11 libraries | The one compositor exception, about 35 MB on the image; the runtime lives on `/storage`. |
 | retroarch-assets (33 MB) | RetroArch's own menu needs its assets. Trimmable to one menu driver's. |
