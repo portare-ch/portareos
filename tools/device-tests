@@ -105,7 +105,20 @@ fi
 # pipewire compatibility server, and this line is the check for it.
 check A4 "no PulseAudio server binary" [ -z "$(ls /usr/bin/pulse[a]udio 2>/dev/null)" ]
 check A4 "allowed-rates 48000 44100 32000" grep -rq "^ *default.clock.allowed-rates *= *\[ *48000 44100 32000 *\]" /usr/share/pipewire/pipewire.conf /etc/pipewire/pipewire.conf
-check A5 "hdmi-hotplug.path active" systemctl -q is-active hdmi-hotplug.path
+# A change event on the display card, as a plug sends, must run hdmi_sense;
+# with nothing plugged it leaves the routing as it is.
+# Inactive oneshot units are unloaded and their timestamps read 0, so the
+# run is read from the journal: "Finished" is logged only on success.
+A5_SINCE=$(date +%s)
+udevadm trigger --action=change /sys/class/drm/card0
+A5_OK() { journalctl -u hdmi-sense --since "@${A5_SINCE}" --no-pager -o cat 2>/dev/null | grep -q '^Finished'; }
+for i in $(seq 20); do A5_OK && break; sleep 0.25; done
+check A5 "display-card change event runs hdmi-sense" A5_OK
+if grep -q '^connected' /sys/class/drm/card0/card0-DP-1/status 2>/dev/null; then
+  check A5 "headphone watcher runs with a display attached" systemctl -q is-active hdmi-headphones
+else
+  check A5 "no headphone watcher without a display" bash -c "! systemctl -q is-active hdmi-headphones"
+fi
 
 echo "== Emulation"
 WANT_CORES="beetle_saturn bsnes dolphin fbneo flycast gambatte genesis_plus_gx mgba neocd nestopia parallel_n64 picodrive ppsspp scummvm snes9x swanstation"
