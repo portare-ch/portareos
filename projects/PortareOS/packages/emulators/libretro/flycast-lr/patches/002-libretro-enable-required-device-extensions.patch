@@ -1,0 +1,43 @@
+From: portare-ch <hello@portare.org>
+Subject: [PATCH] libretro/vulkan: enable the device extensions the frontend requires
+
+With the first context negotiation interface the frontend passes the
+device extensions the core must enable, and cannot enable any itself on
+a device the core creates. VkCreateDevice took the list and never read
+it. RetroArch names VK_GOOGLE_display_timing there so it can time its
+presents at a swap interval of 2; without it on the device, Flycast's
+frames went through the repeated-present path instead.
+
+Each extension the list names is enabled when the GPU has it and it is
+not enabled already.
+---
+--- a/core/rend/vulkan/vk_context_lr.cpp
++++ b/core/rend/vulkan/vk_context_lr.cpp
+@@ -24,6 +24,7 @@
+ #include "oslib/oslib.h"
+ #include "rend/transform_matrix.h"
+ #include "texture.h"
++#include <cstring>
+ #include <set>
+ 
+ #if VULKAN_HPP_DISPATCH_LOADER_DYNAMIC == 1
+@@ -184,6 +185,19 @@ bool VkCreateDevice(retro_vulkan_context* context, VkInstance instance, VkPhysic
+ 		VulkanContext::bufferDeviceAddressSupported = tryAddDeviceExtension(vk::KHRBufferDeviceAddressExtensionName);
+ 	}
+ 
++	// The libretro contract: the core enables what the frontend lists.
++	// RetroArch names the optional extensions it uses there as well, such
++	// as VK_GOOGLE_display_timing for timed presents, and cannot enable
++	// them on a device the core creates.
++	for (unsigned i = 0; i < num_required_device_extensions; i++)
++	{
++		bool enabled = false;
++		for (const char *name : enabledExtensions)
++			enabled = enabled || !strcmp(name, required_device_extensions[i]);
++		if (!enabled)
++			tryAddDeviceExtension(required_device_extensions[i]);
++	}
++
+ 	// Get device features
+ 
+ 	vk::StructureChain<

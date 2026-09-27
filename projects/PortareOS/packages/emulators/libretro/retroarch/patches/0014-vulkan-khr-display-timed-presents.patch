@@ -23,7 +23,11 @@ and a device the core negotiates (first interface: the frontend names
 the required extensions and the core enables them; wrapper: the
 frontend adds its optional ones itself) never had the timing extension
 recorded as enabled. Both paths now carry the optional extensions, and
-the entry points load on every platform.
+the entry points load on every platform. A core may still ignore the
+list it is given: Flycast did, so its device lacked the extension and
+its entry points resolved to NULL. The frontend then counts the
+extension as absent, and presents without timing structs, rather than
+trusting the list it passed.
 
 Measured on the Retroid Pocket Nova, Tekken 3, threaded video off:
 59.64 fps against 59.83 with 10 dropped frames in 2565, no gaps in a
@@ -33,56 +37,9 @@ Measured on the Retroid Pocket Nova, Tekken 3, threaded video off:
 
 Nothing here is specific to one device.
 ---
---- a/gfx/common/vulkan_common.h
-+++ b/gfx/common/vulkan_common.h
-@@ -175,7 +175,11 @@
-    /* Whether HDR colorspaces are supported by the instance */
-    VK_CTX_FLAG_HDR_SUPPORT                  = (1 << 5),
-    /* scRGB mode: RGBA16F swapchain with extended linear sRGB colour space */
--   VK_CTX_FLAG_HDR_SCRGB                    = (1 << 6)
-+   VK_CTX_FLAG_HDR_SCRGB                    = (1 << 6),
-+   /* A swap interval above 1 is kept by presenting each frame once,
-+    * timed to land interval refresh periods after the last one did,
-+    * rather than by presenting it interval times. */
-+   VK_CTX_FLAG_SWAP_INTERVAL_TIMED          = (1 << 7)
- };
- 
- enum vulkan_emulated_mailbox_flags
-@@ -329,8 +333,22 @@
-     * carries a present ID and the driver reports when it actually
-     * reached the display, on the platform's monotonic clock. */
-    PFN_vkVoidFunction display_timing_query;
-+   PFN_vkVoidFunction display_timing_refresh;
-    uint32_t present_id;
-    bool display_timing_supported;
-+   /* Set by a context whose presentation engine takes a desired
-+    * present time as the vblank to flip on (VK_KHR_display through
-+    * Mesa's KMS backend): a swap interval above 1 is then a timed
-+    * present of each frame instead of interval presents of it, and
-+    * the core gets the whole frame period. */
-+   bool timed_presents;
-+   /* The last present the driver has timed: when it reached the
-+    * display, and its ID. Every timed present after it is placed
-+    * from these. */
-+   uint64_t last_present_ns;
-+   uint32_t last_present_id;
-+   /* The swapchain's refresh period, 0 until asked. */
-+   uint64_t refresh_duration_ns;
- #ifdef VULKAN_HDR_SWAPCHAIN
-    /* Loaded from VK_EXT_hdr_metadata when that optional device extension is
-     * present; NULL otherwise. Used to signal SMPTE-2086 mastering-display
-@@ -431,6 +449,8 @@
- 
- retro_time_t vulkan_last_present_time(gfx_ctx_vulkan_data_t *vk);
- 
-+
-+void vulkan_update_timed_presents(gfx_ctx_vulkan_data_t *vk);
- /* The context driver hands the video driver &data->vk.context and keeps
-  * the swapchain beside it; every context embeds gfx_ctx_vulkan_data_t
-  * that way, so the owner is recoverable from the pointer the driver
 --- a/gfx/common/vulkan_common.c
 +++ b/gfx/common/vulkan_common.c
-@@ -793,6 +793,20 @@
+@@ -793,6 +793,20 @@ static VkDevice vulkan_context_create_device_wrapper(
        return VK_NULL_HANDLE;
     }
  
@@ -103,7 +60,7 @@ Nothing here is specific to one device.
     /* When we get around to using fancier features we can chain in PDF2 stuff. */
     if ((res = vkCreateDevice(gpu, &info, NULL, &device)) != VK_SUCCESS)
     {
-@@ -897,12 +911,44 @@
+@@ -897,12 +911,44 @@ static bool vulkan_context_init_device(gfx_ctx_vulkan_data_t *vk)
        }
        else
        {
@@ -150,7 +107,7 @@ Nothing here is specific to one device.
                 NULL,
                 0,
                 &features);
-@@ -1134,12 +1180,24 @@
+@@ -1134,12 +1180,37 @@ static bool vulkan_context_init_device(gfx_ctx_vulkan_data_t *vk)
        vk->fse_release = vkGetDeviceProcAddr(vk->context.device,
                 "vkReleaseFullScreenExclusiveModeEXT");
     }
@@ -173,12 +130,25 @@ Nothing here is specific to one device.
 -#endif
 +      vk->display_timing_refresh = vkGetDeviceProcAddr(vk->context.device,
 +               "vkGetRefreshCycleDurationGOOGLE");
-+      RARCH_LOG("[Vulkan] VK_GOOGLE_display_timing: presents are timed by the driver.\n");
++      /* A core that creates the device through the first negotiation
++       * interface is asked to enable the extension, and one that ignores
++       * the list leaves it off: the entry points resolve to NULL, and
++       * chaining VkPresentTimesInfoGOOGLE into its presents would be
++       * invalid. Such a device repeats presents as before. */
++      if (!vk->display_timing_query || !vk->display_timing_refresh)
++      {
++         vk->display_timing_supported = false;
++         vk->display_timing_query     = NULL;
++         vk->display_timing_refresh   = NULL;
++         RARCH_WARN("[Vulkan] VK_GOOGLE_display_timing: not enabled on the device, presents are not timed.\n");
++      }
++      else
++         RARCH_LOG("[Vulkan] VK_GOOGLE_display_timing: presents are timed by the driver.\n");
 +   }
  
  #ifdef VULKAN_HDR_SWAPCHAIN
     /* Now that the device exists, resolve vkSetHdrMetadataEXT if the
-@@ -2509,6 +2567,7 @@
+@@ -2521,6 +2592,7 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
         * still takes effect: the driver reads it for frame duplication,
         * and the mailbox emulation below is keyed off it. */
        vk->context.swap_interval = swap_interval;
@@ -186,7 +156,7 @@ Nothing here is specific to one device.
  #ifdef VULKAN_DEBUG
        RARCH_DBG("[Vulkan] Do not need to re-create swapchain.\n");
  #endif
-@@ -2563,6 +2622,11 @@
+@@ -2575,6 +2647,11 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
     vulkan_emulated_mailbox_deinit(&vk->mailbox);
  
     vk->context.swap_interval = swap_interval;
@@ -198,7 +168,7 @@ Nothing here is specific to one device.
  
     /* Present mode logging */
     if (vk->swapchain == VK_NULL_HANDLE)
-@@ -3506,30 +3570,92 @@
+@@ -3518,28 +3595,90 @@ void vulkan_context_destroy(gfx_ctx_vulkan_data_t *vk,
  #endif
  }
  
@@ -238,8 +208,8 @@ Nothing here is specific to one device.
 +         vk->last_present_id = timings[i].presentID;
 +      }
 +   }
- }
- 
++}
++
 +/* When the most recent present the driver has timed reached the display,
 + * in microseconds on the platform's monotonic clock - the clock
 + * cpu_features_get_time_usec() reads on the platforms that have this
@@ -298,12 +268,10 @@ Nothing here is specific to one device.
 +   interval_ns = vk->refresh_duration_ns * (uint64_t)vk->context.swap_interval;
 +   return vk->last_present_ns
 +      + (uint64_t)(present_id - vk->last_present_id) * interval_ns;
-+}
-+
+ }
+ 
  void vulkan_present(gfx_ctx_vulkan_data_t *vk, unsigned index)
- {
-    VkQueue present_queue;
-@@ -3557,6 +3683,8 @@
+@@ -3569,6 +3708,8 @@ void vulkan_present(gfx_ctx_vulkan_data_t *vk, unsigned index)
        times.pTimes               = &ptime;
        ptime.presentID            = ++vk->present_id;
        ptime.desiredPresentTime   = 0;
@@ -312,9 +280,56 @@ Nothing here is specific to one device.
        present.pNext              = &times;
     }
  
+--- a/gfx/common/vulkan_common.h
++++ b/gfx/common/vulkan_common.h
+@@ -175,7 +175,11 @@ enum vulkan_context_flags
+    /* Whether HDR colorspaces are supported by the instance */
+    VK_CTX_FLAG_HDR_SUPPORT                  = (1 << 5),
+    /* scRGB mode: RGBA16F swapchain with extended linear sRGB colour space */
+-   VK_CTX_FLAG_HDR_SCRGB                    = (1 << 6)
++   VK_CTX_FLAG_HDR_SCRGB                    = (1 << 6),
++   /* A swap interval above 1 is kept by presenting each frame once,
++    * timed to land interval refresh periods after the last one did,
++    * rather than by presenting it interval times. */
++   VK_CTX_FLAG_SWAP_INTERVAL_TIMED          = (1 << 7)
+ };
+ 
+ enum vulkan_emulated_mailbox_flags
+@@ -329,8 +333,22 @@ typedef struct gfx_ctx_vulkan_data
+     * carries a present ID and the driver reports when it actually
+     * reached the display, on the platform's monotonic clock. */
+    PFN_vkVoidFunction display_timing_query;
++   PFN_vkVoidFunction display_timing_refresh;
+    uint32_t present_id;
+    bool display_timing_supported;
++   /* Set by a context whose presentation engine takes a desired
++    * present time as the vblank to flip on (VK_KHR_display through
++    * Mesa's KMS backend): a swap interval above 1 is then a timed
++    * present of each frame instead of interval presents of it, and
++    * the core gets the whole frame period. */
++   bool timed_presents;
++   /* The last present the driver has timed: when it reached the
++    * display, and its ID. Every timed present after it is placed
++    * from these. */
++   uint64_t last_present_ns;
++   uint32_t last_present_id;
++   /* The swapchain's refresh period, 0 until asked. */
++   uint64_t refresh_duration_ns;
+ #ifdef VULKAN_HDR_SWAPCHAIN
+    /* Loaded from VK_EXT_hdr_metadata when that optional device extension is
+     * present; NULL otherwise. Used to signal SMPTE-2086 mastering-display
+@@ -431,6 +449,8 @@ void vulkan_present(gfx_ctx_vulkan_data_t *vk, unsigned index);
+ 
+ retro_time_t vulkan_last_present_time(gfx_ctx_vulkan_data_t *vk);
+ 
++
++void vulkan_update_timed_presents(gfx_ctx_vulkan_data_t *vk);
+ /* The context driver hands the video driver &data->vk.context and keeps
+  * the swapchain beside it; every context embeds gfx_ctx_vulkan_data_t
+  * that way, so the owner is recoverable from the pointer the driver
 --- a/gfx/drivers/vulkan.c
 +++ b/gfx/drivers/vulkan.c
-@@ -9150,6 +9150,7 @@
+@@ -9150,6 +9150,7 @@ static bool vulkan_frame(void *data, const void *frame,
     if (      (vk->context->swap_interval > 1)
           &&  !(video_info->shader_subframes > 1)
           &&  !black_frame_insertion
@@ -324,7 +339,7 @@ Nothing here is specific to one device.
        vk->context->flags |= VK_CTX_FLAG_SWAP_INTERVAL_EMULATION_LOCK;
 --- a/gfx/drivers_context/khr_display_ctx.c
 +++ b/gfx/drivers_context/khr_display_ctx.c
-@@ -76,6 +76,9 @@
+@@ -76,6 +76,9 @@ static void *gfx_ctx_khr_display_init(void *video_driver)
     if (!khr)
         return NULL;
  
