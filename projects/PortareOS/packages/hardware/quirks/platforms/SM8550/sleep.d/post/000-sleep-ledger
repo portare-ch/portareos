@@ -1,0 +1,59 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
+
+### One line per suspend in /storage/.cache/sleep-ledger.log: how long it
+### slept, what woke it, how long each RPMh sleep stage was held, and the
+### charge it used. The kernel keeps only the last wake reason, and a
+### drain report without the stages cannot say whether the SoC collapsed.
+###
+###   apss  the CPU subsystem      cxsd  the CX rail
+###   aosd  always-on subsystem    ddr   DDR in self-refresh
+###
+### Stage time is counted at the 19.2 MHz RPMh tick. The charge counter
+### moves in coarse steps, so the drain means something over a long
+### sleep only; on USB power it means nothing, and the line says so.
+
+B=/run/portareos/sleep-before
+[ -r ${B} ] || exit 0
+S=/sys/kernel/debug/qcom_stats
+LOG=/storage/.cache/sleep-ledger.log
+mkdir -p /storage/.cache
+
+IRQ=$(cat /sys/power/pm_wakeup_irq 2>/dev/null)
+NAME=""
+[ -n "${IRQ}" ] && NAME=$(awk -v i="${IRQ}:" '$1 == i {print $NF}' /proc/interrupts)
+USB=$(cat /sys/class/power_supply/qcom-battmgr-usb/online 2>/dev/null)
+NOW=$(date +%Y-%m-%dT%H:%M:%S)
+
+{
+  cat ${B}
+  echo "time_now $(date +%s)"
+  echo "charge_now $(cat /sys/class/power_supply/battery/charge_counter 2>/dev/null)"
+  for stage in apss cxsd aosd ddr; do
+    awk -v s=${stage} '/^Count/ {c = $2} /^Accumulated/ {d = $3} END {print s "_now", c + 0, d + 0}' ${S}/${stage} 2>/dev/null
+  done
+} | awk -v now="${NOW}" -v irq="${IRQ:-none}" -v name="${NAME:-unknown}" -v usb="${USB:-0}" '
+  $1 == "time" { t0 = $2 } $1 == "time_now" { t1 = $2 }
+  $1 == "charge" { c0 = $2 } $1 == "charge_now" { c1 = $2 }
+  $1 ~ /_now$/ && $1 != "time_now" && $1 != "charge_now" {
+    s = substr($1, 1, length($1) - 4); dn[s] = $2 - n[s]; dd[s] = ($3 - d[s]) / 19200000
+  }
+  $1 ~ /^(apss|cxsd|aosd|ddr)$/ { n[$1] = $2; d[$1] = $3 }
+  END {
+    slept = t1 - t0
+    line = sprintf("%s slept %ds wake %s (%s)", now, slept, irq, name)
+    split("apss cxsd aosd ddr", st, " ")
+    for (i = 1; i <= 4; i++)
+      line = line sprintf(" %s %d/%.0fs", st[i], dn[st[i]], dd[st[i]])
+    if (usb == 1)
+      line = line " drain n/a (on USB)"
+    else if (c0 != "" && c1 != "" && slept > 0)
+      line = line sprintf(" used %.1f mAh, %.0f mA", (c0 - c1) / 1000, (c0 - c1) / 1000 * 3600 / slept)
+    print line
+  }' >> ${LOG}
+
+if [ "$(wc -l < ${LOG})" -gt 500 ]; then
+  tail -n 250 ${LOG} > ${LOG}.tmp && mv ${LOG}.tmp ${LOG}
+fi
+rm -f ${B}

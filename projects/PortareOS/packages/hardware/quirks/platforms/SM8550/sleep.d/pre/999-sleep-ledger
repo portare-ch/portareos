@@ -1,0 +1,17 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
+
+### The state post/000-sleep-ledger compares against, taken as late as
+### the hooks allow: time, charge, and each RPMh sleep stage's count and
+### accumulated time.
+
+S=/sys/kernel/debug/qcom_stats
+mkdir -p /run/portareos
+{
+  echo "time $(date +%s)"
+  echo "charge $(cat /sys/class/power_supply/battery/charge_counter 2>/dev/null)"
+  for stage in apss cxsd aosd ddr; do
+    awk -v s=${stage} '/^Count/ {c = $2} /^Accumulated/ {d = $3} END {print s, c + 0, d + 0}' ${S}/${stage} 2>/dev/null
+  done
+} > /run/portareos/sleep-before
