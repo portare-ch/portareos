@@ -44,7 +44,4 @@ post_unpack() {
 makeinstall_target() {
   mkdir -p ${INSTALL}/usr/lib/libretro
     cp -a flycast_libretro.so ${INSTALL}/usr/lib/libretro/flycast_libretro.so
-
-  mkdir -p ${INSTALL}/usr/config/retroarch
-    cp -a ${PKG_DIR}/config/* ${INSTALL}/usr/config/retroarch
 }

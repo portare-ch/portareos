@@ -18,6 +18,9 @@ SNAPSHOTS="${ROMS_DIR}/savestates"
 BEZEL_DIR="/storage/roms/bezels"
 
 TMP_CONFIG="/tmp/.retroarch.cfg"
+# Every core's options, in one file: retroarch.cfg sets global_core_options,
+# so a per-core .opt is never read. Keys set here are changed in that file.
+CORE_OPTIONS="${RETROARCH_PATH}/retroarch-core-options.cfg"
 LOG_DIR="/var/log"
 LOG_FILE="exec.log"
 LOCK_FILE="/tmp/.retroarch.lock"
@@ -273,6 +276,22 @@ function clear_setting() {
       fi
 }
 
+# Set one core option in CORE_OPTIONS, in place. An empty value leaves the
+# shipped one. The set_* functions run in parallel, so writes take a lock.
+function set_core_option() {
+    [ -n "${2}" ] || return 0
+    (
+        flock 9
+        if grep -q "^${1} = " "${CORE_OPTIONS}" 2>/dev/null
+        then
+            sed -i "/^${1} = /c\\${1} = \"${2}\"" "${CORE_OPTIONS}"
+        else
+            [ -n "$(tail -c1 "${CORE_OPTIONS}" 2>/dev/null)" ] && echo >>"${CORE_OPTIONS}"
+            echo "${1} = \"${2}\"" >>"${CORE_OPTIONS}"
+        fi
+    ) 9>"${CORE_OPTIONS}.lock"
+}
+
 function flush_settings() {
     echo -n '" '${RETROARCH_CONFIG}' >/dev/null 2>&1' >>${TMP_CONFIG}.sed
     chmod 0755 ${TMP_CONFIG}.sed
@@ -498,18 +517,8 @@ function set_netplay() {
                 case ${CORE} in
                     gambatte)
                         log "Configuring gameboy link server."
-                        if [ ! -d "${RETROARCH_PATH}/config/Gambatte" ]
-                        then
-                            mkdir -p "${RETROARCH_PATH}/config/Gambatte"
-                        fi
-                        local GAMBATTE_CONF="${RETROARCH_PATH}/config/Gambatte/Gambatte.opt"
-                        ### Rework this to use add_setting and be configurable in ES.
-                        sed -i '/gambatte_gb_link_mode/d; \
-                                /gambatte_gb_link_network_port/d' ${GAMBATTE_CONF}
-                        cat <<EOF >>${GAMBATTE_CONF}
-gambatte_gb_link_mode = "Network Server"
-gambatte_gb_link_network_port = "$(( ${NETPLAY_PORT} + 1 ))"
-EOF
+                        set_core_option gambatte_gb_link_mode "Network Server"
+                        set_core_option gambatte_gb_link_network_port "$(( ${NETPLAY_PORT} + 1 ))"
                     ;;
                     tgbdual)
                         log "Configuring tgbdual for network play"
@@ -555,21 +564,10 @@ EOF
                     case ${CORE} in
                         gambatte)
                             log "Configuring gameboy link client."
-                            if [ ! -d "${RETROARCH_PATH}/config/Gambatte" ]
-                            then
-                                mkdir -p "${RETROARCH_PATH}/config/Gambatte"
-                            fi
                             add_setting "none" "netplay_mode" "false"
                             add_setting "none" "netplay_client_swap_input" "false"
-                            local GAMBATTE_CONF="${RETROARCH_PATH}/config/Gambatte/Gambatte.opt"
-                            sed -i '/gambatte_gb_link_mode/d; \
-                                    /gambatte_gb_link_network_port/d' ${GAMBATTE_CONF}
-                            cat <<EOF >>${GAMBATTE_CONF}
-gambatte_gb_link_mode = "Network Client"
-gambatte_gb_link_network_port = "$(( ${NETPLAY_PORT} + 1 ))"
-EOF
-
-                            sed -i '/gambatte_gb_link_network_server_ip_/d'  ${GAMBATTE_CONF}
+                            set_core_option gambatte_gb_link_mode "Network Client"
+                            set_core_option gambatte_gb_link_network_port "$(( ${NETPLAY_PORT} + 1 ))"
 
                             local IPARRAY=(${NETPLAY_HOST_IP//./ })
                             for ELEM in ${IPARRAY[*]}
@@ -580,9 +578,7 @@ EOF
                             local COUNT=1
                             for (( i=0; i<${#ADDR}; i++ ));
                             do
-                                cat <<EOF >>${GAMBATTE_CONF}
-gambatte_gb_link_network_server_ip_${COUNT} = "${ADDR:$i:1}"
-EOF
+                                set_core_option "gambatte_gb_link_network_server_ip_${COUNT}" "${ADDR:$i:1}"
                                 COUNT=$(( ${COUNT} + 1 ))
                             done
                         ;;
@@ -1119,46 +1115,17 @@ function set_n64opts() {
     log "Set up N64..."
     if [ "${CORE}" = "parallel_n64" ]
     then
-        local PARALLELN64DIR="${RETROARCH_PATH}/config/ParaLLEl N64"
-        if [ ! -d "${PARALLELN64DIR}" ]
-        then
-            mkdir -p "${PARALLELN64DIR}"
-        fi
-
-        if [ ! -f "${PARALLELN64DIR}/ParaLLEl N64.opt" ]
-        then
-            cp "/usr/config/retroarch/ParaLLEl N64.opt" "${PARALLELN64DIR}/ParaLLEl N64.opt"
-        fi
-        local VIDEO_CORE="$(game_setting parallel_n64_video_core)"
-        sed -i '/parallel-n64-gfxplugin = /c\parallel-n64-gfxplugin = "'${VIDEO_CORE}'"' "${PARALLELN64DIR}/ParaLLEl N64.opt"
-        local SCREENSIZE="$(game_setting parallel_n64_internal_resolution)"
-        sed -i '/parallel-n64-screensize = /c\parallel-n64-screensize = "'${SCREENSIZE}'"' "${PARALLELN64DIR}/ParaLLEl N64.opt"
-        local GAMESPEED="$(game_setting parallel_n64_gamespeed)"
-        sed -i '/parallel-n64-framerate = /c\parallel-n64-framerate = "'${GAMESPEED}'"' "${PARALLELN64DIR}/ParaLLEl N64.opt"
-        local ACCURACY="$(game_setting parallel_n64_gfx_accuracy)"
-        sed -i '/parallel-n64-gfxplugin-accuracy = /c\parallel-n64-gfxplugin-accuracy = "'${ACCURACY}'"' "${PARALLELN64DIR}/ParaLLEl N64.opt"
+        set_core_option parallel-n64-gfxplugin "$(game_setting parallel_n64_video_core)"
+        set_core_option parallel-n64-screensize "$(game_setting parallel_n64_internal_resolution)"
+        set_core_option parallel-n64-framerate "$(game_setting parallel_n64_gamespeed)"
+        set_core_option parallel-n64-gfxplugin-accuracy "$(game_setting parallel_n64_gfx_accuracy)"
         # 2x: a 640x480 game renders at the panel's 1280x960, and a
         # 320x240 one at 640x480, scaled 2x to the panel. 4x would suit
         # the low-res games and cost the hi-res ones 2560x1920. 2x also
         # when the setting is missing, as on an install from before it.
         local UPSCALING="$(game_setting parallel_n64_upscaling)"
-        UPSCALING="${UPSCALING:-2x}"
-        if grep -q '^parallel-n64-upscaling = ' "${PARALLELN64DIR}/ParaLLEl N64.opt"
-        then
-            sed -i '/parallel-n64-upscaling = /c\parallel-n64-upscaling = "'${UPSCALING}'"' "${PARALLELN64DIR}/ParaLLEl N64.opt"
-        else
-            echo "parallel-n64-upscaling = \"${UPSCALING}\"" >> "${PARALLELN64DIR}/ParaLLEl N64.opt"
-        fi
-        # A key the shipped options file gained after an install copied
-        # it: added once with the shipped value, so an existing install gets
-        # the new default. A value set since in RetroArch is left alone.
-        for KEY in parallel-n64-parallel-rdp-vi-bilinear; do
-            if ! grep -q "^${KEY} = " "${PARALLELN64DIR}/ParaLLEl N64.opt"; then
-                grep "^${KEY} = " "/usr/config/retroarch/ParaLLEl N64.opt" >> "${PARALLELN64DIR}/ParaLLEl N64.opt"
-            fi
-        done
-        local CONTROLLERPAK="$(game_setting parallel_n64_controller_pak)"
-        sed -i '/parallel-n64-pak1 = /c\parallel-n64-pak1 = "'${CONTROLLERPAK}'"' "${PARALLELN64DIR}/ParaLLEl N64.opt"
+        set_core_option parallel-n64-upscaling "${UPSCALING:-2x}"
+        set_core_option parallel-n64-pak1 "$(game_setting parallel_n64_controller_pak)"
     fi
 }
 
@@ -1197,18 +1164,11 @@ function set_dreamcastopts() {
     log "Set up Dreamcast..."
     if [ "${CORE}" = "flycast" ]
     then
-        local FLYCASTDIR="${RETROARCH_PATH}/config/Flycast"
-        if [ ! -d "${FLYCASTDIR}" ]
-        then
-            mkdir -p "${FLYCASTDIR}"
-        fi
-
-        if [ ! -f "${FLYCASTDIR}/Flycast.opt" ]
-        then
-            cp "/usr/config/retroarch/Flycast.opt" "${FLYCASTDIR}/Flycast.opt"
-        fi
         local FRAME_SKIP="$(game_setting frame_skip)"
-        sed -i '/flycast_auto_skip_frame = /c\flycast_auto_skip_frame = "'${FRAME_SKIP}'"' "${FLYCASTDIR}/Flycast.opt"
+        if [ -n "${FRAME_SKIP}" ]
+        then
+            set_core_option flycast_auto_skip_frame "${FRAME_SKIP}"
+        fi
     fi
 }
 
@@ -1252,14 +1212,11 @@ function set_psxopts() {
         # Latency is the software renderer at 1x: the console's own
         # resolution, and savestates that carry no GPU state, which is what
         # makes a pre-emptive frame cheap enough to run every frame.
-        # RetroArch reads per-core options from config/SwanStation when the
-        # file exists, so it is made from the shipped global lines once.
         # The two keys are written when latency is on, and written back
         # to the shipped values once when it goes off; a renderer or scale
         # chosen in RetroArch's own menu under visuals is otherwise left
         # alone. The marker file says latency wrote them last.
         local SWANDIR="${RETROARCH_PATH}/config/SwanStation"
-        local SWANOPT="${SWANDIR}/SwanStation.opt"
         local SHIPPED="/usr/config/retroarch/retroarch-core-options.cfg"
         local MARKER="${SWANDIR}/.latency-profile"
         local RENDERER SCALE
@@ -1277,20 +1234,8 @@ function set_psxopts() {
             return 0
         fi
         mkdir -p "${SWANDIR}"
-        if [ ! -f "${SWANOPT}" ]
-        then
-            grep '^swanstation_' "${SHIPPED}" >"${SWANOPT}"
-        fi
-        for KEY in GPU_Renderer:"${RENDERER}" GPU_ResolutionScale:"${SCALE}"
-        do
-            local NAME="swanstation_${KEY%%:*}" VALUE="${KEY#*:}"
-            if grep -q "^${NAME} = " "${SWANOPT}"
-            then
-                sed -i "/^${NAME} = /c\\${NAME} = \"${VALUE}\"" "${SWANOPT}"
-            else
-                echo "${NAME} = \"${VALUE}\"" >>"${SWANOPT}"
-            fi
-        done
+        set_core_option swanstation_GPU_Renderer "${RENDERER}"
+        set_core_option swanstation_GPU_ResolutionScale "${SCALE}"
         if [ "${RENDERER}" = "Software" ]
         then
             touch "${MARKER}"
@@ -1371,14 +1316,6 @@ function set_gambatte() {
     log "Set up Gambatte..."
     if [ "${CORE}" = "gambatte" ]
     then
-        GAMBATTECONF="${RETROARCH_PATH}/config/Gambatte/Gambatte.opt"
-        if [ ! -f "GAMBATTECONF" ]
-        then
-            echo 'gambatte_gbc_color_correction = "disabled"' > ${GAMBATTECONF}
-        else
-            sed -i "/gambatte_gb_colorization =/d" ${GAMBATTECONF}
-            sed -i "/gambatte_gb_internal_palette =/d" ${GAMBATTECONF}
-        fi
         local COLORIZATION=$(game_setting renderer.colorization)
         local TWB1_COLORIZATION=$(game_setting renderer.twb1_colorization)
         local TWB2_COLORIZATION=$(game_setting renderer.twb2_colorization)
@@ -1389,21 +1326,21 @@ function set_gambatte() {
         then
             case ${COLORIZATION} in
                 0|false|none)
-                    echo 'gambatte_gb_colorization = "disabled"' >> ${GAMBATTECONF}
+                    set_core_option gambatte_gb_colorization "disabled"
                 ;;
                 "Best Guess")
-                    echo 'gambatte_gb_colorization = "auto"' >> ${GAMBATTECONF}
+                    set_core_option gambatte_gb_colorization "auto"
                 ;;
                 GBC|SGB)
-                    echo 'gambatte_gb_colorization = "'${COLORIZATION}'"' >> ${GAMBATTECONF}
+                    set_core_option gambatte_gb_colorization "${COLORIZATION}"
                 ;;
                 *)
-                    echo 'gambatte_gb_colorization = "internal"' >> ${GAMBATTECONF}
-                    echo 'gambatte_gb_internal_palette = "'${COLORIZATION}'"' >> ${GAMBATTECONF}
-                    echo 'gambatte_gb_palette_twb64_1 = "'${TWB1_COLORIZATION}'"' >> ${GAMBATTECONF}
-                    echo 'gambatte_gb_palette_twb64_2 = "'${TWB2_COLORIZATION}'"' >> ${GAMBATTECONF}
-                    echo 'gambatte_gb_palette_twb64_3 = "'${TWB3_COLORIZATION}'"' >> ${GAMBATTECONF}
-		            echo 'gambatte_gb_palette_pixelshift_1 = "'${PIXELSHIFT1_COLORIZATION}'"' >> ${GAMBATTECONF}
+                    set_core_option gambatte_gb_colorization "internal"
+                    set_core_option gambatte_gb_internal_palette "${COLORIZATION}"
+                    set_core_option gambatte_gb_palette_twb64_1 "${TWB1_COLORIZATION}"
+                    set_core_option gambatte_gb_palette_twb64_2 "${TWB2_COLORIZATION}"
+                    set_core_option gambatte_gb_palette_twb64_3 "${TWB3_COLORIZATION}"
+                    set_core_option gambatte_gb_palette_pixelshift_1 "${PIXELSHIFT1_COLORIZATION}"
                 ;;
             esac
         fi
