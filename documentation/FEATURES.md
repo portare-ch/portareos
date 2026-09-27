@@ -23,6 +23,7 @@ only been built. BUGS.md carries the check for each unverified row.
 | Stock as the default profile | Both profiles crush greys, so nothing is applied unless chosen; a one-shot migration moves devices back. | `system.cfg`, `post-update` `colorprofile-stock` | unverified | auto: `display.colorprofile` after update; marker file |
 | De-gamma stage through the LUTDMA | Kernel patches 1070/1071 drive the third color block so pippopapera's three-table profiles can be used as they were measured. | kernel patches, `make-igc-profile.py` | unverified, never run | human, with SSH open: the kernel alone, then a bind-mounted profile |
 | 8bpc output dither | The DPU leaves output dithering off at 8bpc, so a colour profile's 10-bit result is truncated onto the panel; the Nova panel opts in to the static ordered dither matrix. | kernel patch 0049, `rpnova.dts` | unverified | human: 16-step grey ramp with a profile on; auto: property in the live device tree |
+| OpenGL through zink | Every OpenGL and GLES program runs on zink over Turnip, not freedreno's GL driver; Vulkan is the path that gets the work. | quirk `095-force_zink` | verified | auto: D11 |
 | Lowest GPU operating point | 124.8 MHz idle so a menu or film keeps the fan off. | device quirks | verified | auto: `devfreq` cur_freq at the launcher |
 | Black frame insertion | Planned, not shipped. | | not shipped | |
 

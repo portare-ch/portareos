@@ -1,1 +1,12 @@
-../SM8750/095-force_zink
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2024 ROCKNIX (https://github.com/ROCKNIX)
+# Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
+
+### OpenGL goes through zink onto Turnip rather than freedreno's own GL
+### driver: the Vulkan path is the one that gets the work. This was a
+### link to the SM8750 quirk, dangling since that platform was removed,
+### so only devices that ran the old copy still had it.
+cat <<EOF >/storage/.config/profile.d/095-force_zink
+MESA_LOADER_DRIVER_OVERRIDE="zink"
+EOF

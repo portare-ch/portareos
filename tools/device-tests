@@ -109,6 +109,8 @@ else
   for t in D1 D2 D3 D4; do need_game $t "launched RetroArch config"; done
 fi
 check D10 "panel opts in to 8bpc dither" [ -e /proc/device-tree/soc@0/display-subsystem@ae00000/dsi@ae94000/panel@0/armada,dpu-8bpc-dither ]
+# OpenGL goes through zink (quirk 095-force_zink); a login shell has it.
+check D11 "OpenGL through zink" bash -c '. /etc/profile >/dev/null 2>&1; [ "${MESA_LOADER_DRIVER_OVERRIDE}" = zink ]'
 PROFILE=$(setting display.colorprofile)
 if [ "${PROFILE}" = stock ]; then
   pass D7 "display.colorprofile is stock"

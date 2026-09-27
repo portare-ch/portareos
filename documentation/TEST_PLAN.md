@@ -196,6 +196,16 @@ dark gradient (a night sky in any film) shows no bands. Compare the same
 image with the stock profile: it must look the same as before, since
 dithering an untouched 8-bit source changes nothing visible.
 
+### D11 OpenGL through zink (auto)
+
+Auto, idle: a login shell carries the override the SM8550 quirk writes.
+
+```
+. /etc/profile; echo "${MESA_LOADER_DRIVER_OVERRIDE}"
+```
+Pass when it prints zink. A GL program then logs a renderer of the form
+`zink Vulkan 1.4(Turnip Adreno (TM) 740 (MESA_TURNIP))`.
+
 ## Audio
 
 ### A1 Link rate follows the stream (auto+human)
