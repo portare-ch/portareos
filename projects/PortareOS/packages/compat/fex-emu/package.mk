@@ -101,6 +101,11 @@ make_target() {
     -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY
     # FEXConfig is a Qt desktop dialog; FEX is configured from files here.
     -DBUILD_FEXCONFIG=False
+    # FEX takes a system fmt when find_package sees one and its bundled copy
+    # otherwise. A shared libfmt left in an incremental build's sysroot, from
+    # the standalone Dolphin that is gone, made FEXRootFSFetcher need a
+    # libfmt.so.12 the image does not ship. Always the bundled one.
+    -DCMAKE_DISABLE_FIND_PACKAGE_fmt=TRUE
     "${FEX_CMAKE_OPTS[@]}"
     -DGENERATOR_EXE="${TOOLCHAIN}/usr/bin/thunkgen"
     -DCMAKE_INSTALL_LIBDIR=lib

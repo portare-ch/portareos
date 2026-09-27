@@ -209,13 +209,34 @@ steam_arm64_link_runtime_libs() {
   for src in "${runtime}"/pulseaudio/libpulsecommon-*.so; do
     [ -e "${src}" ] && ln -sfn "${src}" "${libdir}/$(basename "${src}")"
   done
+
+  # And whatever else the client's own binaries name that neither the image
+  # nor the links so far provide, asked of ldd until nothing new resolves:
+  # the image drops what nothing of its own uses, and Valve's client moves.
+  # On 20260925 that was GTK2 with ATK, AT-SPI and gdk-pixbuf, CUPS and the
+  # Kerberos libraries behind it. A few old FFmpeg sonames stay unresolved;
+  # the client runs without them.
+  local bins missing linked pass
+  bins=$(find /storage/.local/share/Steam/steamrtarm64 \
+              /storage/.local/share/Steam/linuxarm64 -maxdepth 1 -type f \
+              \( -name '*.so' -o -name steam -o -name steamwebhelper \) 2>/dev/null)
+  [ -n "${bins}" ] || return 0
+  for pass in 1 2 3 4 5 6 7 8; do
+    missing=$(for src in ${bins}; do LD_LIBRARY_PATH="${libdir}" ldd "${src}" 2>/dev/null; done |
+              awk '/=> not found/ { print $1 }' | sort -u)
+    linked=""
+    for soname in ${missing}; do
+      src=$(ls "${runtime}/${soname}"* 2>/dev/null | sort | tail -1)
+      [ -n "${src}" ] && ln -sfn "${src}" "${libdir}/${soname}" && linked=1
+    done
+    [ -n "${linked}" ] || break
+  done
 }
 
+# The box86 and box64 handlers this used to switch off are not on the image;
+# FEX's own FEX-x86 and FEX-x86_64 stay registered.
 steam_arm64_binfmt_and_proton_prep() {
-  echo 0 >/proc/sys/fs/binfmt_misc/x86
-  echo 0 > /proc/sys/fs/binfmt_misc/box32
-  echo 0 > /proc/sys/fs/binfmt_misc/box64
-  rm "/storage/.local/share/Steam/compatibilitytools.d/compatibilitytool.vdf"
+  rm -f "/storage/.local/share/Steam/compatibilitytools.d/compatibilitytool.vdf"
 }
 
 steam_launch_bigpicture() {
