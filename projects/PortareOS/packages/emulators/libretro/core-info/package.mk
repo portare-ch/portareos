@@ -22,4 +22,15 @@ makeinstall_target() {
   for core in ${PKG_CORE_INFO}; do
     cp -a ${PKG_BUILD}/${core}_libretro.info ${INSTALL}/usr/lib/libretro/
   done
+
+  # RetroArch allows run-ahead and preemptive frames only for a core whose
+  # info file says "deterministic"; SwanStation's was lowered to "basic" in
+  # libretro-core-info de2472e (July 2024) without a stated reason. The core
+  # serialises the whole machine, takes the cheap memory-state path when the
+  # frontend says a load is for run-ahead, and its own run-ahead option
+  # tells users to prefer the frontend's. The latency profile needs this.
+  sed -i 's/^savestate_features = "basic"$/savestate_features = "deterministic"/' \
+    ${INSTALL}/usr/lib/libretro/swanstation_libretro.info
+  grep -q '^savestate_features = "deterministic"$' \
+    ${INSTALL}/usr/lib/libretro/swanstation_libretro.info
 }
