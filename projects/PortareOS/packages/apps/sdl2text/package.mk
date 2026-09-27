@@ -7,8 +7,8 @@ PKG_VERSION="v1.0"
 PKG_LICENSE="GPLv2"
 PKG_SITE="https://rocknix.org"
 PKG_URL=""
-PKG_DEPENDS_TARGET="toolchain SDL2 SDL2_ttf dejavu"
-PKG_LONGDESC="SDL2 text reader with gamepad controls; RetroArch shows game guides with it"
+PKG_DEPENDS_TARGET="toolchain SDL3 SDL3_ttf dejavu"
+PKG_LONGDESC="SDL3 text reader with gamepad controls; RetroArch shows game guides with it"
 PKG_TOOLCHAIN="make"
 
 makeinstall_target() {

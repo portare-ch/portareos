@@ -2,7 +2,7 @@
 # Copyright (C) 2026-present ROCKNIX (https://github.com/ROCKNIX)
 
 BINARY = sdl2text
-LIBRARIES = -lSDL2 -lSDL2_ttf
+LIBRARIES = -lSDL3 -lSDL3_ttf
 SOURCES = sdl2text.cpp
 
 all:
