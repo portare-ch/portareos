@@ -1,14 +1,14 @@
 From: portare-ch <hello@portare.org>
-Subject: [PATCH] input: a game guide hotkey that shows <content>.txt in sdl2text
+Subject: [PATCH] input: a game guide hotkey that shows <content>.txt in sdl3text
 
 A text file next to the content, with the content's name and a .txt
 extension, is a game guide. The new hotkey (input_game_guide) shows it
-through /usr/bin/sdl2text and comes back to the game where it was.
+through /usr/bin/sdl3text and comes back to the game where it was.
 
 The panel has one DRM master and the video driver holds it through its
 Vulkan display instance, so the guide cannot be drawn over the game by
 another process. Instead the drivers go down the way a fullscreen
-toggle takes them down, sdl2text runs to completion on kmsdrm while
+toggle takes them down, sdl3text runs to completion on kmsdrm while
 they are down, and they come back up. The core is not stepped in
 between, so its state is untouched: no savestate, no reload.
 
@@ -18,7 +18,7 @@ forced off, because a cached instance would keep the display.
 
 The hotkey is exempt from the hotkey enabler, like Game Focus: it is
 meant for a button no core reads (the Nova's M2), so a bare press
-opens the guide and the same press in sdl2text closes it.
+opens the guide and the same press in sdl3text closes it.
 
 diff --git a/command.h b/command.h
 index c569d8b1e9..fdae86cd23 100644
@@ -280,7 +280,7 @@ index 4c2fa29b15..2f1a903aa0 100644
 +#include <sys/wait.h>
 +#include <unistd.h>
 +#define HAVE_GAME_GUIDE 1
-+#define GAME_GUIDE_READER "/usr/bin/sdl2text"
++#define GAME_GUIDE_READER "/usr/bin/sdl3text"
 +#endif
 +
  #if defined(_WIN32) && !defined(_XBOX) && !defined(__WINRT__)

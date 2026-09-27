@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0
 // Copyright (C) 2025-present ROCKNIX (https://github.com/ROCKNIX)
+// Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
 
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_ttf.h>
+#include <SDL3/SDL.h>
+#include <SDL3_ttf/SDL_ttf.h>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -29,14 +30,20 @@ static std::filesystem::path get_home_dir() {
 }
 
 static std::filesystem::path get_config_dir() {
-    std::filesystem::path cfgDir = get_home_dir() / ".config" / "sdl2text";
+    std::filesystem::path cfgDir = get_home_dir() / ".config" / "sdl3text";
     std::error_code ec;
+    // The positions saved while this was sdl2text move with it, once.
+    std::filesystem::path old = get_home_dir() / ".config" / "sdl2text";
+    if(!std::filesystem::exists(cfgDir, ec) && std::filesystem::exists(old / "sdl2text.conf", ec)) {
+        std::filesystem::rename(old / "sdl2text.conf", old / "sdl3text.conf", ec);
+        std::filesystem::rename(old, cfgDir, ec);
+    }
     std::filesystem::create_directories(cfgDir, ec);
     return cfgDir;
 }
 
 std::filesystem::path get_config_file() {
-    return get_config_dir() / "sdl2text.conf";
+    return get_config_dir() / "sdl3text.conf";
 }
 
 // -------------------- Single instance --------------------
@@ -46,7 +53,7 @@ std::filesystem::path get_config_file() {
 // moment this process dies -- normal exit, SIGKILL, battery pull, all of it --
 // so it can never go stale. bind() is atomic, so two launches racing in the
 // same millisecond cannot both win.
-static const char* LOCK_NAME = "sdl2text-single-instance";
+static const char* LOCK_NAME = "sdl3text-single-instance";
 static int g_lockSock = -1;   // held open for the life of the process
 
 // How long to keep holding the name after the window is gone. A hotkey press
@@ -159,8 +166,7 @@ std::string find_any_ttf_font() {
 
 // -------------------- UTF-8 safe filtering --------------------
 static bool font_can_render_codepoint(TTF_Font* font, uint32_t cp) {
-    if (cp <= 0xFFFF) return TTF_GlyphIsProvided(font, static_cast<Uint16>(cp)) != 0;
-    return false;
+    return TTF_FontHasGlyph(font, cp);
 }
 
 std::string filter_invalid_chars(const std::string& s, TTF_Font* font) {
@@ -200,7 +206,7 @@ std::vector<std::string> wrap_line(const std::string& line, TTF_Font* font, int 
         while(lo<=hi) {
             size_t mid=(lo+hi)/2;
             std::string chunk=line.substr(start,mid);
-            int w=0,h=0; TTF_SizeUTF8(font, chunk.c_str(), &w,&h);
+            int w=0,h=0; TTF_GetStringSize(font, chunk.c_str(), 0, &w, &h);
             if(w>maxWidth) hi=mid-1;
             else { best=mid; lo=mid+1; }
         }
@@ -242,7 +248,7 @@ int main(int argc,char* argv[]) {
     LockResult lock = acquire_single_instance();
     if(lock == LOCK_BUSY) return 0;   // the guide is already on screen, nothing to do
     if(lock == LOCK_UNAVAILABLE)
-        std::cerr << "sdl2text: single-instance check unavailable, continuing\n";
+        std::cerr << "sdl3text: single-instance check unavailable, continuing\n";
 
     // Exit cleanly on SIGTERM/SIGINT so the scroll position still gets saved.
     struct sigaction sa;
@@ -257,8 +263,8 @@ int main(int argc,char* argv[]) {
     auto lines=load_file_lines(textFile);
     if(lines.empty()) { std::cout << "Failed to load file\n"; return 1; }
 
-    if(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_GAMECONTROLLER)!=0) { std::cerr << "SDL_Init error\n"; return 1; }
-    if(TTF_Init()!=0) { std::cerr << "TTF_Init error\n"; SDL_Quit(); return 1; }
+    if(!SDL_Init(SDL_INIT_VIDEO|SDL_INIT_GAMEPAD)) { std::cerr << "SDL_Init error: " << SDL_GetError() << "\n"; return 1; }
+    if(!TTF_Init()) { std::cerr << "TTF_Init error\n"; SDL_Quit(); return 1; }
 
     std::string fontPath=find_any_ttf_font();
     if(fontPath.empty()) { std::cout<<"No TTF font found\n"; TTF_Quit(); SDL_Quit(); return 1; }
@@ -266,17 +272,23 @@ int main(int argc,char* argv[]) {
     auto cfg=load_config();
     FileConfig fcfg=cfg[textFile];
     int fontSize=fcfg.fontSize;
-    auto loadFont=[&](int size)->TTF_Font* { TTF_Font* f=TTF_OpenFont(fontPath.c_str(),size); if(!f) std::cout<<"Failed to load font size "<<size<<"\n"; return f; };
+    auto loadFont=[&](int size)->TTF_Font* { TTF_Font* f=TTF_OpenFont(fontPath.c_str(),(float)size); if(!f) std::cout<<"Failed to load font size "<<size<<"\n"; return f; };
     TTF_Font* font=loadFont(fontSize);
     if(!font) { TTF_Quit(); SDL_Quit(); return 1; }
 
-    SDL_Window* win=SDL_CreateWindow("Text Viewer",SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,0,0,SDL_WINDOW_FULLSCREEN_DESKTOP|SDL_WINDOW_BORDERLESS);
-    if(!win) { std::cerr<<"SDL_CreateWindow error\n"; TTF_CloseFont(font); TTF_Quit(); SDL_Quit(); return 1; }
-    SDL_Renderer* ren=SDL_CreateRenderer(win,-1,SDL_RENDERER_ACCELERATED);
+    int modeW=0,modeH=0;
+    const SDL_DisplayMode* mode=SDL_GetCurrentDisplayMode(SDL_GetPrimaryDisplay());
+    if(mode) { modeW=mode->w; modeH=mode->h; }
+    SDL_Window* win=SDL_CreateWindow("Text Viewer",modeW,modeH,SDL_WINDOW_FULLSCREEN|SDL_WINDOW_BORDERLESS|SDL_WINDOW_VULKAN);
+    if(!win) { std::cerr<<"SDL_CreateWindow error: "<<SDL_GetError()<<"\n"; TTF_CloseFont(font); TTF_Quit(); SDL_Quit(); return 1; }
+    // Vulkan by name: SDL's default order tries OpenGL first, and OpenGL
+    // here is zink over the same Vulkan driver, one layer further away.
+    SDL_Renderer* ren=SDL_CreateRenderer(win,"vulkan");
     if(!ren) {
-        std::cerr<<"Accelerated renderer failed ("<<SDL_GetError()<<"), trying software\n";
-        ren=SDL_CreateRenderer(win,-1,SDL_RENDERER_SOFTWARE);
+        std::cerr<<"Vulkan renderer failed ("<<SDL_GetError()<<"), trying the default\n";
+        ren=SDL_CreateRenderer(win,nullptr);
     }
+    if(ren) std::cerr<<"sdl3text: renderer "<<SDL_GetRendererName(ren)<<"\n";
     if(!ren) { std::cerr<<"SDL_CreateRenderer error: "<<SDL_GetError()<<"\n"; SDL_DestroyWindow(win); TTF_CloseFont(font); TTF_Quit(); SDL_Quit(); return 1; }
 
     int WINDOW_W=0,WINDOW_H=0; SDL_GetWindowSize(win,&WINDOW_W,&WINDOW_H);
@@ -288,11 +300,16 @@ int main(int argc,char* argv[]) {
     SDL_Color white={255,255,255,255};
     int scroll_y=fcfg.scroll;
     const int SCROLL_SPEED=15,SKIP_LINES=5;
-    int lineHeight=TTF_FontHeight(font);
+    int lineHeight=TTF_GetFontHeight(font);
     if(lineHeight<1) lineHeight=1;
 
-    SDL_GameController* pad=nullptr;
-    for(int i=0;i<SDL_NumJoysticks();i++) { if(SDL_IsGameController(i)) { pad=SDL_GameControllerOpen(i); if(pad) break; } }
+    SDL_Gamepad* pad=nullptr;
+    {
+        int count=0;
+        SDL_JoystickID* ids=SDL_GetGamepads(&count);
+        for(int i=0;ids && i<count && !pad;i++) pad=SDL_OpenGamepad(ids[i]);
+        SDL_free(ids);
+    }
 
     // -------------------- Wrapped text (strings only, no textures) --------------------
     std::vector<std::string> wrapped;
@@ -331,12 +348,12 @@ int main(int argc,char* argv[]) {
         lt.h=lineHeight;
         const std::string& s=wrapped[idx];
         if(!s.empty()) {
-            SDL_Surface* surf=TTF_RenderUTF8_Blended(font,s.c_str(),white);
+            SDL_Surface* surf=TTF_RenderText_Blended(font,s.c_str(),0,white);
             if(surf) {
                 lt.tex=SDL_CreateTextureFromSurface(ren,surf);
                 lt.w=surf->w;
                 lt.h=surf->h;
-                SDL_FreeSurface(surf);
+                SDL_DestroySurface(surf);
             }
         }
         return texCache.emplace(idx,lt).first->second;
@@ -358,7 +375,7 @@ int main(int argc,char* argv[]) {
         TTF_CloseFont(font);
         font=nf;
         fontSize=newSize;
-        lineHeight=TTF_FontHeight(font);
+        lineHeight=TTF_GetFontHeight(font);
         if(lineHeight<1) lineHeight=1;
         rewrap();
         scroll_y=(int)(frac*(double)wrapped.size()*lineHeight);
@@ -371,8 +388,8 @@ int main(int argc,char* argv[]) {
     const float AXIS_SCROLL_SCALE=0.002f;
 
     bool running=true,showHelp=false;
-    const Uint32 PADDLE_GRACE_MS=500;
-    Uint32 startTicks=SDL_GetTicks();
+    const Uint64 PADDLE_GRACE_MS=500;
+    Uint64 startTicks=SDL_GetTicks();
     SDL_Event e;
     bool touchActive=false;
     float lastTouchY=0.0f;
@@ -383,59 +400,59 @@ int main(int argc,char* argv[]) {
         if(g_quitSignal) { running=false; break; }
 
         while(SDL_PollEvent(&e)) {
-            if(e.type==SDL_QUIT) { running=false; break; }
+            if(e.type==SDL_EVENT_QUIT) { running=false; break; }
 
-            if(e.type==SDL_CONTROLLERDEVICEADDED && !pad) {
-                if(SDL_IsGameController(e.cdevice.which)) pad=SDL_GameControllerOpen(e.cdevice.which);
+            if(e.type==SDL_EVENT_GAMEPAD_ADDED && !pad) {
+                pad=SDL_OpenGamepad(e.gdevice.which);
             }
-            if(e.type==SDL_CONTROLLERDEVICEREMOVED && pad) {
-                SDL_GameControllerClose(pad); pad=nullptr;
+            if(e.type==SDL_EVENT_GAMEPAD_REMOVED && pad && e.gdevice.which==SDL_GetGamepadID(pad)) {
+                SDL_CloseGamepad(pad); pad=nullptr;
                 upPressed=downPressed=l1Pressed=r1Pressed=startPressed=false;
                 axisLeftY=axisRightY=0;
             }
 
-            if(e.type==SDL_CONTROLLERAXISMOTION) {
-                if(e.caxis.axis==SDL_CONTROLLER_AXIS_LEFTY)  axisLeftY  = e.caxis.value;
-                if(e.caxis.axis==SDL_CONTROLLER_AXIS_RIGHTY) axisRightY = e.caxis.value;
+            if(e.type==SDL_EVENT_GAMEPAD_AXIS_MOTION) {
+                if(e.gaxis.axis==SDL_GAMEPAD_AXIS_LEFTY)  axisLeftY  = e.gaxis.value;
+                if(e.gaxis.axis==SDL_GAMEPAD_AXIS_RIGHTY) axisRightY = e.gaxis.value;
             }
 
-            if(e.type==SDL_CONTROLLERBUTTONDOWN) {
-                switch(e.cbutton.button) {
-                    case SDL_CONTROLLER_BUTTON_DPAD_UP: upPressed=true; break;
-                    case SDL_CONTROLLER_BUTTON_DPAD_DOWN: downPressed=true; break;
-                    case SDL_CONTROLLER_BUTTON_LEFTSHOULDER: l1Pressed=true; break;
-                    case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: r1Pressed=true; break;
-                    case SDL_CONTROLLER_BUTTON_START: startPressed=true; break;
-                    case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: changeFontSize(+2); break;
-                    case SDL_CONTROLLER_BUTTON_DPAD_LEFT:  changeFontSize(-2); break;
-                    case SDL_CONTROLLER_BUTTON_A: running=false; break;
-                    case SDL_CONTROLLER_BUTTON_B: running=false; break;
+            if(e.type==SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
+                switch(e.gbutton.button) {
+                    case SDL_GAMEPAD_BUTTON_DPAD_UP: upPressed=true; break;
+                    case SDL_GAMEPAD_BUTTON_DPAD_DOWN: downPressed=true; break;
+                    case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: l1Pressed=true; break;
+                    case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: r1Pressed=true; break;
+                    case SDL_GAMEPAD_BUTTON_START: startPressed=true; break;
+                    case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: changeFontSize(+2); break;
+                    case SDL_GAMEPAD_BUTTON_DPAD_LEFT:  changeFontSize(-2); break;
+                    case SDL_GAMEPAD_BUTTON_SOUTH: running=false; break;
+                    case SDL_GAMEPAD_BUTTON_EAST: running=false; break;
                     // The paddle that opened the guide from RetroArch closes
                     // it. SDL reports a button still held at open as a press,
                     // so a paddle counts only once the opening press is over.
-                    case SDL_CONTROLLER_BUTTON_PADDLE1:
-                    case SDL_CONTROLLER_BUTTON_PADDLE2:
-                    case SDL_CONTROLLER_BUTTON_PADDLE3:
-                    case SDL_CONTROLLER_BUTTON_PADDLE4:
+                    case SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1:
+                    case SDL_GAMEPAD_BUTTON_LEFT_PADDLE1:
+                    case SDL_GAMEPAD_BUTTON_RIGHT_PADDLE2:
+                    case SDL_GAMEPAD_BUTTON_LEFT_PADDLE2:
                         if(SDL_GetTicks()-startTicks>PADDLE_GRACE_MS) running=false;
                         break;
-                    case SDL_CONTROLLER_BUTTON_BACK: showHelp=!showHelp; break;
+                    case SDL_GAMEPAD_BUTTON_BACK: showHelp=!showHelp; break;
                 }
             }
 
-            if(e.type==SDL_CONTROLLERBUTTONUP) {
-                switch(e.cbutton.button) {
-                    case SDL_CONTROLLER_BUTTON_DPAD_UP: upPressed=false; break;
-                    case SDL_CONTROLLER_BUTTON_DPAD_DOWN: downPressed=false; break;
-                    case SDL_CONTROLLER_BUTTON_LEFTSHOULDER: l1Pressed=false; break;
-                    case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: r1Pressed=false; break;
-                    case SDL_CONTROLLER_BUTTON_START: startPressed=false; break;
+            if(e.type==SDL_EVENT_GAMEPAD_BUTTON_UP) {
+                switch(e.gbutton.button) {
+                    case SDL_GAMEPAD_BUTTON_DPAD_UP: upPressed=false; break;
+                    case SDL_GAMEPAD_BUTTON_DPAD_DOWN: downPressed=false; break;
+                    case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: l1Pressed=false; break;
+                    case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: r1Pressed=false; break;
+                    case SDL_GAMEPAD_BUTTON_START: startPressed=false; break;
                 }
             }
 
-            if(e.type==SDL_FINGERDOWN) { touchActive=true; lastTouchY=e.tfinger.y; }
-            if(e.type==SDL_FINGERMOTION && touchActive) { float y=e.tfinger.y; float dy_norm=y-lastTouchY; lastTouchY=y; scroll_y+=(int)(-dy_norm*WINDOW_H*TOUCH_MULTIPLIER); }
-            if(e.type==SDL_FINGERUP) touchActive=false;
+            if(e.type==SDL_EVENT_FINGER_DOWN) { touchActive=true; lastTouchY=e.tfinger.y; }
+            if(e.type==SDL_EVENT_FINGER_MOTION && touchActive) { float y=e.tfinger.y; float dy_norm=y-lastTouchY; lastTouchY=y; scroll_y+=(int)(-dy_norm*WINDOW_H*TOUCH_MULTIPLIER); }
+            if(e.type==SDL_EVENT_FINGER_UP) touchActive=false;
         }
 
         // D-pad continuous scrolling
@@ -454,7 +471,7 @@ int main(int argc,char* argv[]) {
         applyAxis(axisRightY);
 
         // Secret kill combo: L1 + START + SELECT  (pad may be null)
-        if(pad && l1Pressed && startPressed && SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_BACK)) running=false;
+        if(pad && l1Pressed && startPressed && SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_BACK)) running=false;
 
         // Clamp -- O(1) now that every line is the same height
         int totalLines=(int)wrapped.size();
@@ -474,8 +491,8 @@ int main(int argc,char* argv[]) {
         for(int i=firstLine;i<totalLines && offsetY<WINDOW_H;++i) {
             const LineTexture& lt=getLine(i);
             if(lt.tex) {
-                SDL_Rect dst={10,offsetY,lt.w,lt.h};
-                SDL_RenderCopy(ren,lt.tex,nullptr,&dst);
+                SDL_FRect dst={10.0f,(float)offsetY,(float)lt.w,(float)lt.h};
+                SDL_RenderTexture(ren,lt.tex,nullptr,&dst);
             }
             lastLine=i;
             offsetY+=lineHeight;
@@ -504,12 +521,12 @@ int main(int argc,char* argv[]) {
                 "A / B / M2      - Exit"
             };
 
-            int helpLineHeight=TTF_FontLineSkip(font);
+            int helpLineHeight=TTF_GetFontLineSkip(font);
             int boxH=40+((int)helpLines.size()*(helpLineHeight+8));
             int boxW=WINDOW_W/2;
             int boxX=(WINDOW_W-boxW)/2, boxY=(WINDOW_H-boxH)/2;
 
-            SDL_Rect helpBox={boxX,boxY,boxW,boxH};
+            SDL_FRect helpBox={(float)boxX,(float)boxY,(float)boxW,(float)boxH};
             SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_BLEND);
             SDL_SetRenderDrawColor(ren, boxColor.r, boxColor.g, boxColor.b, boxColor.a);
             SDL_RenderFillRect(ren,&helpBox);
@@ -523,34 +540,34 @@ int main(int argc,char* argv[]) {
                     std::string leftPart=line.substr(0,dashPos);
                     std::string rightPart=line.substr(dashPos);
 
-                    SDL_Surface* surf1=TTF_RenderUTF8_Blended(font,leftPart.c_str(),helpColor);
+                    SDL_Surface* surf1=TTF_RenderText_Blended(font,leftPart.c_str(),0,helpColor);
                     if(surf1) {
                         SDL_Texture* tex1=SDL_CreateTextureFromSurface(ren,surf1);
-                        SDL_Rect dst1={boxX+20,ty,surf1->w,surf1->h};
-                        if(tex1) SDL_RenderCopy(ren,tex1,nullptr,&dst1);
+                        SDL_FRect dst1={(float)(boxX+20),(float)ty,(float)surf1->w,(float)surf1->h};
+                        if(tex1) SDL_RenderTexture(ren,tex1,nullptr,&dst1);
                         int h1=surf1->h;
                         if(tex1) SDL_DestroyTexture(tex1);
-                        SDL_FreeSurface(surf1);
+                        SDL_DestroySurface(surf1);
 
-                        SDL_Surface* surf2=TTF_RenderUTF8_Blended(font,rightPart.c_str(),helpColor);
+                        SDL_Surface* surf2=TTF_RenderText_Blended(font,rightPart.c_str(),0,helpColor);
                         if(surf2) {
                             SDL_Texture* tex2=SDL_CreateTextureFromSurface(ren,surf2);
-                            SDL_Rect dst2={boxX+20+columnSplit,ty,surf2->w,surf2->h};
-                            if(tex2) SDL_RenderCopy(ren,tex2,nullptr,&dst2);
+                            SDL_FRect dst2={(float)(boxX+20+columnSplit),(float)ty,(float)surf2->w,(float)surf2->h};
+                            if(tex2) SDL_RenderTexture(ren,tex2,nullptr,&dst2);
                             if(tex2) SDL_DestroyTexture(tex2);
-                            SDL_FreeSurface(surf2);
+                            SDL_DestroySurface(surf2);
                         }
                         ty+=h1+8;
                     }
                 } else {
-                    SDL_Surface* surf=TTF_RenderUTF8_Blended(font,line.c_str(),helpColor);
+                    SDL_Surface* surf=TTF_RenderText_Blended(font,line.c_str(),0,helpColor);
                     if(surf) {
                         SDL_Texture* tex=SDL_CreateTextureFromSurface(ren,surf);
-                        SDL_Rect dst={boxX+20,ty,surf->w,surf->h};
-                        if(tex) SDL_RenderCopy(ren,tex,nullptr,&dst);
+                        SDL_FRect dst={(float)(boxX+20),(float)ty,(float)surf->w,(float)surf->h};
+                        if(tex) SDL_RenderTexture(ren,tex,nullptr,&dst);
                         ty+=surf->h+8;
                         if(tex) SDL_DestroyTexture(tex);
-                        SDL_FreeSurface(surf);
+                        SDL_DestroySurface(surf);
                     }
                 }
             }
@@ -565,17 +582,17 @@ int main(int argc,char* argv[]) {
             std::string lcText = std::to_string(currentLine) + "/" + std::to_string(totalLines);
             SDL_Color lcColor = {255,255,255,255};
 
-            SDL_Surface* lcSurf = TTF_RenderUTF8_Blended(font, lcText.c_str(), lcColor);
+            SDL_Surface* lcSurf = TTF_RenderText_Blended(font, lcText.c_str(), 0, lcColor);
             if (lcSurf) {
                 SDL_Texture* lcTex = SDL_CreateTextureFromSurface(ren, lcSurf);
                 if (lcTex) {
-                    SDL_Rect textRect;
-                    textRect.w = lcSurf->w;
-                    textRect.h = lcSurf->h;
+                    SDL_FRect textRect;
+                    textRect.w = (float)lcSurf->w;
+                    textRect.h = (float)lcSurf->h;
                     textRect.x = WINDOW_W - textRect.w - 15;
                     textRect.y = WINDOW_H - textRect.h - 10;
 
-                    SDL_Rect bgRect;
+                    SDL_FRect bgRect;
                     bgRect.x = textRect.x - 8;
                     bgRect.y = textRect.y - 4;
                     bgRect.w = textRect.w + 16;
@@ -585,10 +602,10 @@ int main(int argc,char* argv[]) {
                     SDL_SetRenderDrawColor(ren, 0, 0, 0, 200);
                     SDL_RenderFillRect(ren, &bgRect);
 
-                    SDL_RenderCopy(ren, lcTex, nullptr, &textRect);
+                    SDL_RenderTexture(ren, lcTex, nullptr, &textRect);
                     SDL_DestroyTexture(lcTex);
                 }
-                SDL_FreeSurface(lcSurf);
+                SDL_DestroySurface(lcSurf);
             }
         }
 
@@ -601,7 +618,7 @@ int main(int argc,char* argv[]) {
     save_config(cfg);
 
     clearCache();
-    if(pad) SDL_GameControllerClose(pad);
+    if(pad) SDL_CloseGamepad(pad);
     if(font) TTF_CloseFont(font);
     if(ren) SDL_DestroyRenderer(ren);
     if(win) SDL_DestroyWindow(win);
