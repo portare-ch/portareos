@@ -373,6 +373,13 @@ Actions > bump-emulator-pins has a run for each of the last three days and
 a PR exists for any pin that moved. Checked from the repository, not the
 device.
 
+### E11 Core options from the shipped file (auto)
+
+Auto, idle: `retroarch.cfg` has `global_core_options = "true"`, so every
+core reads `retroarch-core-options.cfg` and no per-core `.opt`. With a
+GameCube game running, Dolphin's geometry is 1280x1056, the shipped 2x;
+a per-core file would give the core's own 1x, 640x528.
+
 ## Launcher and system
 
 ### L1 portarelauncher (auto+human)
