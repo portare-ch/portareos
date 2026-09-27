@@ -4,18 +4,27 @@
 # Copyright (C) 2023 JELOS (https://github.com/JustEnoughLinuxOS)
 # Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
 
-# External display audio routing.
+# External display audio routing, run at boot (050-audio) and by
+# hdmi-sense.service on every connector change of the display card.
 #
-# The name is inherited. On this platform the external display is DisplayPort
-# over USB-C alt mode, so the connector is DP-1: see 111-sway-init, which
-# reads /sys/class/drm/card0-DP-1/edid, and power-handler, which is written
-# around msm_dp_display_disable(). Scanning only HDMI-A-* meant this never
-# saw a plug event here.
+# The name is inherited. On the Nova the external display is DisplayPort
+# over USB-C alt mode, connector DP-1. Its audio device shares a PCM with
+# the headphones, so the card's UCM puts it in a profile of its own,
+# "HiFi (DisplayPort, Speaker)", which ranks below the headphone profile:
+# WirePlumber never picks it by itself. This script switches the profile,
+# waits for the sink the switch creates, and makes it the default; on
+# unplug it switches back and restores the sink the display displaced.
+#
+# Headphones win over the display: plugged in, they get the sound whether
+# a display is attached or not, and at their own rate rather than the
+# display's. While a display is attached, hdmi-headphones.service runs this
+# with --watch-headphones to re-route when they are plugged or pulled.
 
 . /etc/profile
 
 TMP_STATUS="/run/hdmi-status.last"
-CURRENT_STATE=""
+PREV_SINK="/run/hdmi-audio.previous"
+DISPLAY_RE='hdmi|displayport|[._-]dp[._-]'
 
 # No action on S922X
 [ "${HW_DEVICE}" = "S922X" ] && exit 0
@@ -28,46 +37,157 @@ sinks() {
     | select(.info.props["media.class"] == "Audio/Sink")
     | "\(.id)\t\(.info.props["node.name"] // "")"'
 }
+external_sink() { sinks | awk -F'\t' -v re="${DISPLAY_RE}" 'tolower($2) ~ re  { print $1; exit }'; }
+internal_sink() { sinks | awk -F'\t' -v re="${DISPLAY_RE}" 'tolower($2) !~ re { print $1; exit }'; }
+sink_id()       { sinks | awk -F'\t' -v n="$1" '$2 == n { print $1; exit }'; }
+configured_sink() {
+  pw-metadata 0 default.configured.audio.sink 2>/dev/null | sed -n 's/.*"name": *"\([^"]*\)".*/\1/p' | tail -1
+}
 
-# The ALSA device behind a DP output is still named for HDMI on this SoC, so
-# both spellings count as external.
-external_sink() { sinks | awk -F'\t' 'tolower($2) ~ /hdmi|displayport|[._-]dp[._-]/  { print $1; exit }'; }
-internal_sink() { sinks | awk -F'\t' 'tolower($2) !~ /hdmi|displayport|[._-]dp[._-]/ { print $1; exit }'; }
+# "device-id index" for the ALSA card: the best HiFi profile with a display
+# device, or without one.
+profiles() {
+  pw-dump 2>/dev/null | jq -r --arg want "$1" --arg re "${DISPLAY_RE}" '.[]
+    | select(.type == "PipeWire:Interface:Device")
+    | select(.info.props["device.api"] == "alsa")
+    | .id as $id
+    | [ .info.params.EnumProfile[]?
+        | select(.name | startswith("HiFi"))
+        | select((.name | ascii_downcase | test($re)) == ($want == "display")) ]
+    | sort_by(-.priority) | .[0] | select(. != null)
+    | "\($id) \(.index)"' | head -1
+}
 
-# Connected wins over disconnected: a device can expose more than one
-# connector, and only the unmatched globs stay literal.
-for STATUS in /sys/class/drm/card*/card*-DP-[0-9]/status \
-              /sys/class/drm/card*/card*-HDMI-A-[0-9]/status
-do
-  [ -r "${STATUS}" ] || continue
-  case "$(<${STATUS})" in
-    connected)
-      CURRENT_STATE="connected"
-      break
-      ;;
-    disconnected)
-      CURRENT_STATE="disconnected"
-      ;;
+# Switches the card to the display or internal profile. Returns 1 when the
+# card has no such profile. Which one is active is read from the sinks: the
+# device's own Profile param kept reporting the headphone profile while the
+# display one was live.
+use_profile() {
+  local dev want
+  read -r dev want <<<"$(profiles "$1")"
+  [ -n "${want}" ] || return 1
+  if [ -n "$(external_sink)" ]; then
+    [ "$1" = display ] && return 0
+  else
+    [ "$1" = internal ] && return 0
+  fi
+  wpctl set-profile "${dev}" "${want}"
+}
+
+# Waits up to five seconds for a sink the profile switch creates.
+wait_for() { # external_sink | internal_sink
+  local i id
+  for i in $(seq 25); do
+    id=$($1)
+    [ -n "${id}" ] && { echo "${id}"; return 0; }
+    sleep 0.2
+  done
+  return 1
+}
+
+# The sound card's own jack input, not a controller's headset jack.
+headphone_input() {
+  local d
+  for d in /sys/class/sound/card*/input*; do
+    case "$(cat "${d}/name" 2>/dev/null)" in
+      *"Headset Jack"|*"Headphone Jack")
+        ls -d "${d}"/event* 2>/dev/null | sed -n 's|.*/|/dev/input/|p' | head -1
+        return ;;
+    esac
+  done
+}
+
+headphones_in() {
+  local dev
+  dev=$(headphone_input)
+  [ -n "${dev}" ] || return 1
+  # evtest --query exits 10 when the switch is on.
+  evtest --query "${dev}" EV_SW SW_HEADPHONE_INSERT
+  [ $? = 10 ]
+}
+
+if [ "$1" = "--watch-headphones" ]; then
+  DEV=$(headphone_input)
+  [ -n "${DEV}" ] || exit 0
+  evtest "${DEV}" | while read -r line; do
+    case "${line}" in
+      *"(SW_HEADPHONE_INSERT), value "*) systemctl --no-block start hdmi-sense.service ;;
+    esac
+  done
+  exit 0
+fi
+
+connector_state() {
+  # Connected wins over disconnected: only the unmatched globs stay literal.
+  local status state=""
+  for status in /sys/class/drm/card*/card*-DP-[0-9]/status \
+                /sys/class/drm/card*/card*-HDMI-A-[0-9]/status
+  do
+    [ -r "${status}" ] || continue
+    case "$(<${status})" in
+      connected)    echo connected; return ;;
+      disconnected) state=disconnected ;;
+    esac
+  done
+  echo "${state}"
+}
+
+# Where the sound goes: display, internal, or empty when this device has
+# no external connector at all.
+target() {
+  case "$(connector_state)" in
+    connected)    headphones_in && echo internal || echo display ;;
+    disconnected) echo internal ;;
   esac
+}
+
+to_display() {
+  local id prev
+  use_profile display || return 1
+  id=$(wait_for external_sink) || return 1
+  prev=$(configured_sink)
+  if [ -n "${prev}" ] && ! echo "${prev}" | grep -qiE "${DISPLAY_RE}"; then
+    echo "${prev}" > "${PREV_SINK}"
+  fi
+  wpctl set-default "${id}"
+}
+
+to_internal() {
+  local id prev
+  if use_profile internal; then
+    wait_for internal_sink >/dev/null
+  fi
+  prev=$(cat "${PREV_SINK}" 2>/dev/null)
+  id=""
+  [ -n "${prev}" ] && id=$(sink_id "${prev}")
+  if [ -n "${id}" ]; then
+    wpctl set-default "${id}"
+  elif configured_sink | grep -qiE "${DISPLAY_RE}"; then
+    # Left over from a shutdown with a display attached: let WirePlumber's
+    # priorities choose again.
+    wpctl clear-default
+  fi
+  rm -f "${PREV_SINK}"
+}
+
+# The headphone watcher runs exactly while a display is attached.
+if [ "$(connector_state)" = connected ]; then
+  systemctl --no-block start hdmi-headphones.service
+else
+  systemctl --no-block stop hdmi-headphones.service
+fi
+
+# A plug fires several change events, and one can arrive while this runs
+# and be merged into the running start job; so act until the target holds
+# still.
+for pass in 1 2 3; do
+  TARGET=$(target)
+  [ -n "${TARGET}" ] || exit 0
+  [ "$(cat "${TMP_STATUS}" 2>/dev/null)" = "${TARGET}" ] && exit 0
+  case "${TARGET}" in
+    # Not recorded on failure, so the next event tries again.
+    display)  to_display || exit 1 ;;
+    internal) to_internal ;;
+  esac
+  echo "${TARGET}" > "${TMP_STATUS}"
 done
-
-# The udev event fires more than once per plug. Bail before touching the graph
-# rather than after: this check used to sit below the switching, so it saved
-# nothing but a write to the status file.
-if [ -n "${CURRENT_STATE}" ] && [ -f "${TMP_STATUS}" ]; then
-  [ "$(cat "${TMP_STATUS}")" = "${CURRENT_STATE}" ] && exit 0
-fi
-
-DEFAULT_SINK=""
-[ "${CURRENT_STATE}" = "connected" ] && DEFAULT_SINK=$(external_sink)
-
-# Falls back to the internal sink when nothing is plugged in, and also when a
-# display is attached but has not registered a sink.
-[ -z "${DEFAULT_SINK}" ] && DEFAULT_SINK=$(internal_sink)
-
-if [ -n "${DEFAULT_SINK}" ]; then
-  wpctl set-default "${DEFAULT_SINK}"
-fi
-
-[ -z "${CURRENT_STATE}" ] && exit 0
-echo "${CURRENT_STATE}" > "${TMP_STATUS}"

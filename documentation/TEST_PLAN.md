@@ -248,12 +248,23 @@ pw-top -b -n 1 | awk 'NR>1{print $3}' | sort -u   # 256 during a game
 grep -A3 allowed-rates /etc/pipewire/pipewire.conf # 48000 44100 32000
 ```
 
-### A5 HDMI audio sink switch (human)
+### A5 Display audio switch (auto+human)
 
-With a game or mpv playing, plug HDMI: within two seconds sound moves to
-the TV and `wpctl status` marks the HDMI sink default. Unplug: sound
-returns to the speakers. `journalctl -u hdmi-hotplug` shows one run per
-plug event. Fail if sound stays on the device, or comes from both.
+Auto, idle: a change event on the display card
+(`udevadm trigger --action=change /sys/class/drm/card0`) runs
+`hdmi-sense.service` to success, and `hdmi-headphones.service` runs only
+while a display is attached.
+
+Human, with a game or mpv playing:
+
+1. Plug a USB-C DisplayPort display: within two seconds sound moves to it
+   and `wpctl status` marks the DisplayPort sink default.
+2. Plug headphones: sound moves to them. Pull them: back to the display.
+3. Unplug the display: sound returns to the speaker, or to the headphones
+   if they are in.
+
+`journalctl -u hdmi-sense` shows a run per change. Fail if sound stays on
+the device with a display and no headphones, or comes from two places.
 
 ## Emulation
 

@@ -1,0 +1,8 @@
+[Unit]
+Description=Move audio between headphones and an external display
+After=pipewire.service wireplumber.service
+
+[Service]
+Environment=HOME=/storage
+ExecStart=/usr/bin/hdmi_sense --watch-headphones
+Restart=on-failure
