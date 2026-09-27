@@ -92,8 +92,8 @@ if [ -n "${GAME}" ]; then
   else
     check D2 "timed presents ${MS} ms apart in the log" grep -q "Timed presents: swap interval 2, one present a frame, ${MS%?}" "${RA_LOG}"
   fi
-  if [ "${GAME}" = n64 ]; then
-    check D3 "three swapchain images for ParaLLEl N64" [ "$(cfg_val video_max_swapchain_images)" = 3 ]
+  if [ "${GAME}" = n64 ] || [ "${GAME}" = gamecube ] || [ "${GAME}" = wii ]; then
+    check D3 "three swapchain images for ${GAME}" [ "$(cfg_val video_max_swapchain_images)" = 3 ]
   else
     check D3 "two swapchain images" [ "$(cfg_val video_max_swapchain_images)" = 2 ]
   fi
