@@ -591,6 +591,14 @@
 			regulator-min-microvolt = <3296000>;
 			regulator-max-microvolt = <3960000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+
+			/* The codec's mic bias and five LDO inputs keep bob1 on
+			 * through s2idle; in the SLEEP set it idles in LPM. From
+			 * armada-os 431bf57, with l15b below. */
+			regulator-state-mem {
+				regulator-on-in-suspend;
+				regulator-mode = <RPMH_REGULATOR_MODE_LPM>;
+			};
 		};
 
 		vreg_bob2: bob2 {
@@ -713,6 +721,13 @@
 			regulator-allow-set-load;
 			regulator-allowed-modes = <RPMH_REGULATOR_MODE_LPM
 						   RPMH_REGULATOR_MODE_HPM>;
+
+			/* The codec's buck, RX/TX and IO supply, and the panel's
+			 * 1.8 V: on through s2idle, LPM in the SLEEP set. */
+			regulator-state-mem {
+				regulator-on-in-suspend;
+				regulator-mode = <RPMH_REGULATOR_MODE_LPM>;
+			};
 		};
 
 		vreg_l16b_2p8: ldo16 {
