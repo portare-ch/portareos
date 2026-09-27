@@ -25,6 +25,9 @@ makeinstall_target() {
       ;;
     SM8550|SM8750)
       sed -i 's|/sys/module/retroid/parameters|/sys/module/rsinput/parameters|g' ${INSTALL}/usr/local/share/gpcal/Klib/RPocket.py
+      # The tool finds the pad by its evdev name, and rsinput reports the
+      # name retroarch's autoconfig is keyed on.
+      sed -i 's|^GAMEPAD_NAME=.*|GAMEPAD_NAME = "AYN Odin2 Gamepad"|' ${INSTALL}/usr/local/share/gpcal/Klib/PyxUI.py
       ;;
     SM6115)
       sed -i 's|/sys/module/retroid/parameters|/sys/module/mangmi/parameters|g' ${INSTALL}/usr/local/share/gpcal/Klib/RPocket.py
