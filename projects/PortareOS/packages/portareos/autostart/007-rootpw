@@ -7,12 +7,6 @@
 
 tocon "Setting root password..."
 
-if [ ! -d "/storage/.cache/samba" ]
-then
-  mkdir -p /storage/.cache/samba
-  touch /storage/.cache/samba/smbpasswd
-fi
-
 # Every device used to ship with the same root password, and it opens ssh.
 # So a device makes its own: on first boot, when there is none yet, and on
 # the first boot after an update for one still on a shared default - the
