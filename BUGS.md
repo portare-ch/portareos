@@ -293,6 +293,82 @@ has been set by hand. Nothing in the tree defines a default for it, so
 `get_setting` comes back empty and the launcher takes the `else` arm, which
 writes 0.
 
+## PlayStation
+
+### Preemptive frames cost the frame rate on a two-image queue
+
+Reported as performance dips on the PlayStation, with two workarounds found by
+hand: turning preemptive frames off, or raising the swapchain to three images.
+Both are real, and they are the same mechanism.
+
+Measured on Tekken 3, SwanStation, the 119.652 Hz mode, MangoHud frametimes
+over a window of real play. Frametimes in ms, target 16.715:
+
+| renderer | images | preempt | input | mean | p95 | p99 | >30 ms | fps |
+|---|---|---|---|---|---|---|---|---|
+| Vulkan 4x | 2 | off | play | 16.71 | 18.23 | 19.70 | 0 | 59.8 |
+| Software 1x | 2 | on | play | 19.43 | 31.48 | 34.05 | 154 | 51.5 |
+| Vulkan 4x | 2 | on | mashing | 20.96 | 37.05 | 39.63 | 23% | 47.7 |
+| Vulkan 4x | 3 | on | mashing | 16.71 | 32.89 | 34.99 | 14% | 59.8 |
+
+A frame whose input changed loads a state, runs the core twice and saves
+twice. With two images the long frame cannot start until the short one is on
+screen, so it misses its vblank and costs a whole refresh - the ParaLLEl N64
+and Dolphin case of #389 and #397, reached through emulation cost rather than
+an uneven VI frame. A third image lets it start early and the frame rate comes
+back whole, 47.7 to 59.8.
+
+The renderer is not the variable. The `latency` profile picks the software
+renderer at 1x so that savestates carry no GPU state, on the reasoning that
+this is what makes a preemptive frame affordable. Vulkan at 4x with preemptive
+frames measures the same, 50.7 fps against the software renderer's 51.5, so
+what costs is running the emulator twice on the one thread, not what the
+savestate holds. Nothing is saturated while this happens: 10% CPU across eight
+cores, 25% GPU.
+
+Three images does not make preemptive frames free. It restores throughput -
+the mean lands exactly on the target - but p99 stays at 35 ms against 19.7 ms
+with preemptive frames off, and 14% of frames still cross 30 ms against none.
+The profile buys about a frame of input latency and pays a visibly less even
+frame for it, so it is a preference rather than a better setting, and the
+frame rate part of the cost is avoidable.
+
+Ruled out first, both verified on the device rather than reasoned about:
+
+The audio stack, including the quantum. `pw-top` during play: the speaker sink
+at quantum 256 and 44100, RetroArch's node at 352, ERR 0 on both, wait and
+busy in the tens of microseconds against a 5.8 ms cycle. SwanStation asks for
+44100 and the graph is allowed to run there, so no resampler is in the path -
+RetroArch's own log says so, `the writer blocks, so the source follows the
+device and resampling is not biased`. A blocked write could cost at most one
+quantum, which is too small for the refresh-sized dips seen.
+
+The timed presents patch. The log reports `presents are timed by the driver`
+and `swap interval 2, one present a frame, 16.715 ms apart`, which is two
+periods of the 119.652 Hz mode, and `video_refresh_rate` is 119.652237. Mode
+and pacing are right, and the patch's target agrees with what Mesa 26.2.3's
+`wsi_common_display.c` does with it.
+
+What was done about it: the PlayStation's mode switch is gone, from
+`setsettings.sh` and from the launcher's Settings > Consoles both. The
+shipped configuration is the one measured above and there is no longer a
+setting that makes it worse. E3 in the test plan is now the frametime
+reference rather than a test of the removed mode.
+
+One real bug fell out of this and is fixed with it. The guard that turns off
+automatic frame delay was keyed on `profile = latency`, but `set_runahead`
+also enables preemptive frames for `<system>.preempt=1`, so that path shipped
+`video_frame_delay_auto = "true"` next to `preemptive_frames_enable = "true"`
+- confirmed on the device - which is the combination the comment there warns
+about. It reached every 2D console using `preempt`, not just the PlayStation.
+The condition now lives in `preempt_enabled` and both callers read it.
+
+Still open, and untested: `set_swapchain_images` keys the third image on the
+core name (`parallel_n64|dolphin`). On the PlayStation a third image was
+worth 12 fps once preemptive frames were on, so the 2D consoles that still
+offer `preempt` may want the same. Their cores are far cheaper to rerun and
+none of this was measured on them, so nothing was changed on a guess.
+
 ## Audio
 
 ### hdmi_sense sink match is unverified

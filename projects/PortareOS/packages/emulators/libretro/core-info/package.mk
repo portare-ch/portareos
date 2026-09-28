@@ -28,7 +28,8 @@ makeinstall_target() {
   # libretro-core-info de2472e (July 2024) without a stated reason. The core
   # serialises the whole machine, takes the cheap memory-state path when the
   # frontend says a load is for run-ahead, and its own run-ahead option
-  # tells users to prefer the frontend's. The latency profile needs this.
+  # tells users to prefer the frontend's. An explicit <system>.runahead
+  # on the PlayStation needs this.
   sed -i 's/^savestate_features = "basic"$/savestate_features = "deterministic"/' \
     ${INSTALL}/usr/lib/libretro/swanstation_libretro.info
   grep -q '^savestate_features = "deterministic"$' \

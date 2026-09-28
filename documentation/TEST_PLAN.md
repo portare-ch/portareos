@@ -297,37 +297,45 @@ minute; no frame flickers backwards and the sound does not stutter. Then
 set an explicit `<system>.runahead=2` and confirm classic run-ahead
 (`run_ahead_enabled = "true"`, `run_ahead_frames = "2"`).
 
-### E3 PlayStation latency mode (auto+human)
+### E3 PlayStation runs every frame on time (auto+human)
 
-Auto, with `psx.profile=latency`, after a PSX launch:
+The PlayStation has one configuration and no mode switch. It is the
+Vulkan renderer at 4x with preemptive frames off, two swapchain images
+and automatic frame delay on, and it was measured at the ceiling: every
+frame the console asks for, delivered on its vblank. A change to this
+path is a regression unless it reproduces the numbers below. The
+alternative was measured too and removed; BUGS.md has both.
+
+Auto, after a PSX launch:
 
 ```
 grep -E 'GPU_Renderer|GPU_ResolutionScale' \
-  /storage/.config/retroarch/config/SwanStation/SwanStation.opt
-# "Software" and "1"
-ls /storage/.config/retroarch/config/SwanStation/.latency-profile   # exists
+  /storage/.config/retroarch/retroarch-core-options.cfg    # "Vulkan" and "4"
+grep -E 'preemptive_frames_enable|video_frame_delay_auto|video_max_swapchain_images' \
+  /tmp/.retroarch.cfg          # "false", "true", "2"
+grep -E 'video_refresh_rate' /tmp/.retroarch.cfg           # 119.652237
+grep 'Timed presents' /storage/.config/retroarch/logs/retroarch.log
+# swap interval 2, one present a frame, 16.715 ms apart
 ```
-plus E2's three keys, and
 
-```
-grep savestate_features /usr/lib/libretro/swanstation_libretro.info   # deterministic
-```
-with no "lacks deterministic save state support" message on screen or in
-the log, and `video_frame_delay_auto = "false"` in `/tmp/.retroarch.cfg`.
-Human: statistics overlay on, mash a button for a minute; no frame time
-spikes past one frame and no dropped frames counted (nightly 157 dipped
-on every press with the delay on). Switch to `visuals` and launch again:
-renderer and
-scale return to the shipped values (`Vulkan`, `4`), the marker is gone.
-Launch a third time with the user having changed the scale to 2 by hand:
-it stays 2 (visuals does not rewrite an untouched profile).
+Human, with MangoHud logging on (`portareos.mangohud.enabled=1`, and
+`output_folder`, `autostart_log`, `log_duration` in MangoHud.conf): play
+Tekken 3 for the whole window. Against the 16.715 ms target the reference
+run is mean 16.71, p95 18.23, p99 19.70, max 22.07, and 59.8 fps.
 
-Human: latency mode shows a 320×240 picture at integer scale with sharp
-console pixels and one beam per console line (240 across the picture, not
-60 thick bands, not a bilinear blur); `/tmp/.retroarch.cfg` names
-`portare/crt-240-1x.slangp` while `psx.shaderset` in system.cfg still
-says `crt-240.slangp`. A button press lands one frame sooner than visuals
-in a 240 fps recording of Tekken 3's practice mode.
+Three things make it a pass, and each fails differently:
+
+* **The frame count.** Rows logged must be the window in seconds times
+  59.826 - 1794 in 30 s. Fewer means frames were dropped, whatever the
+  percentiles say.
+* **No missed vblank.** No frametime at or above 25.07 ms, which is the
+  target plus one refresh. The reference run's worst frame was 22.07.
+* **The mean on target.** Within about 0.05 ms of 16.715, so cumulative
+  drift over the run is nil.
+
+Spread below 25.07 ms is the core finishing early or late against a
+present deadline the swapchain absorbs; it does not reach the panel and
+is not a failure.
 
 ### E4 Game guide on M2 (human)
 

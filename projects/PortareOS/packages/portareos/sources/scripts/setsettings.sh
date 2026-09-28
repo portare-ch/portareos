@@ -878,15 +878,6 @@ function set_rgascale() {
 
 function set_shader() {
     local SHADER="$(game_setting shaderset)"
-    # The 240-line CRT preset expects SwanStation's 4x picture. The latency
-    # profile renders at 1x, where it would draw 60 beams over a bilinear
-    # blow-up; the 1x preset is the same shader told so. The user's
-    # psx.shaderset is left as it is.
-    if [ "${PLATFORM}" = "psx" ] && [ "$(game_setting profile)" = "latency" ] \
-       && [ "${SHADER}" = "portare/crt-240.slangp" ]
-    then
-        SHADER="portare/crt-240-1x.slangp"
-    fi
     case ${SHADER} in
         0|false|none)
             add_setting "none" "video_shader_enable" "false"
@@ -1009,25 +1000,30 @@ function set_autosave() {
     add_setting "none" "savestate_auto_save" "${SETAUTOSAVE}"
 }
 
+# Whether this launch runs RetroArch's preemptive frames. Settings >
+# Consoles stores <system>.preempt, 1 or 0, for the consoles that offer
+# it; an explicit runahead count is classic run-ahead and wins, and the
+# two exclude each other. set_runahead writes the setting, set_frame_delay
+# reads the same answer, so the condition lives here once.
+function preempt_enabled() {
+    local RUNAHEAD="$(game_setting runahead)"
+    [ "$(match ${PLATFORM} ${NO_RUNAHEAD[@]})" = "1" ] && return 1
+    [ "${RUNAHEAD:-0}" -gt 0 ] && return 1
+    [ "$(game_setting preempt)" = "1" ]
+}
+
 function set_runahead() {
     local RUNAHEAD="$(game_setting runahead)"
     local HAS_RUNAHEAD="$(match ${PLATFORM} ${NO_RUNAHEAD[@]})"
-    # Settings > Consoles in the launcher. A 2D console stores
-    # <system>.preempt, 1 or 0; the PlayStation stores <system>.profile,
-    # "latency" or "visuals", since its latency mode also changes the
-    # renderer (set_psxopts). Either turns on RetroArch's preemptive
-    # frames, one frame: the same savestate and core requirements as
-    # run-ahead, but the frame is rerun only when the input changed, so
-    # idle play costs a savestate per frame rather than a second
-    # emulation. An explicit runahead count is classic run-ahead and
-    # wins; the two exclude each other.
+    # Preemptive frames are one frame: the same savestate and core
+    # requirements as run-ahead, but the frame is rerun only when the
+    # input changed, so idle play costs a savestate per frame rather than
+    # a second emulation. The PlayStation does not offer them - measured
+    # at 12 fps on Tekken 3, see BUGS.md - so this is the 2D consoles.
     local PREEMPT="false"
-    if [ "${RUNAHEAD:-0}" -le 0 ]
+    if preempt_enabled
     then
-        if [ "$(game_setting preempt)" = "1" ] || [ "$(game_setting profile)" = "latency" ]
-        then
-            PREEMPT="true"
-        fi
+        PREEMPT="true"
     fi
     case ${HAS_RUNAHEAD} in
         1)
@@ -1189,61 +1185,24 @@ function set_swapchain_images() {
     add_setting "none" "video_max_swapchain_images" "${IMAGES}"
 }
 
-function set_psxopts() {
-    log "Set up SwanStation..."
-    # No automatic frame delay with the PlayStation's preemptive frame. The
-    # delay grows to eat the slack it measures on quiet frames; a frame
-    # where input changed loads a state, runs the core twice and saves
-    # twice (preempt_run), and that spike lands past the vblank before the
-    # delay backs off. Seen as dips on every press, gone with vsync off.
-    # Written for every core: add_setting also deletes the key from
-    # retroarch.cfg, so a value written only under latency left every
-    # later game without the delay.
+function set_frame_delay() {
+    # No automatic frame delay with a preemptive frame. The delay grows to
+    # eat the slack it measures on quiet frames; a frame where input
+    # changed loads a state, runs the core twice and saves twice
+    # (preempt_run), and that spike lands past the vblank before the delay
+    # backs off. Seen as dips on every press, gone with vsync off. Keyed on
+    # the preemptive frame itself rather than on one console's setting, so
+    # every console offering it gets the guard. Written for every core:
+    # add_setting also deletes the key from retroarch.cfg, so a value
+    # written only where preemptive frames are on left every later game
+    # without the delay.
     local DELAY_AUTO="true"
-    if [ "${CORE}" = "swanstation" ] && [ "$(game_setting profile)" = "latency" ]
+    if preempt_enabled
     then
         DELAY_AUTO="false"
     fi
     add_setting "none" "video_frame_delay_auto" "${DELAY_AUTO}"
     add_setting "none" "video_frame_delay" "0"
-    if [ "${CORE}" = "swanstation" ]
-    then
-        # Settings > Consoles for the PlayStation. Visuals is the shipped
-        # core: the Vulkan renderer at 4x, from retroarch-core-options.cfg.
-        # Latency is the software renderer at 1x: the console's own
-        # resolution, and savestates that carry no GPU state, which is what
-        # makes a pre-emptive frame cheap enough to run every frame.
-        # The two keys are written when latency is on, and written back
-        # to the shipped values once when it goes off; a renderer or scale
-        # chosen in RetroArch's own menu under visuals is otherwise left
-        # alone. The marker file says latency wrote them last.
-        local SWANDIR="${RETROARCH_PATH}/config/SwanStation"
-        local SHIPPED="/usr/config/retroarch/retroarch-core-options.cfg"
-        local MARKER="${SWANDIR}/.latency-profile"
-        local RENDERER SCALE
-        if [ "$(game_setting profile)" = "latency" ]
-        then
-            RENDERER="Software"
-            SCALE="1"
-        elif [ -e "${MARKER}" ]
-        then
-            RENDERER="$(sed -n 's/^swanstation_GPU_Renderer = "\(.*\)"/\1/p' "${SHIPPED}")"
-            SCALE="$(sed -n 's/^swanstation_GPU_ResolutionScale = "\(.*\)"/\1/p' "${SHIPPED}")"
-            RENDERER="${RENDERER:-Vulkan}"
-            SCALE="${SCALE:-4}"
-        else
-            return 0
-        fi
-        mkdir -p "${SWANDIR}"
-        set_core_option swanstation_GPU_Renderer "${RENDERER}"
-        set_core_option swanstation_GPU_ResolutionScale "${SCALE}"
-        if [ "${RENDERER}" = "Software" ]
-        then
-            touch "${MARKER}"
-        else
-            rm -f "${MARKER}"
-        fi
-    fi
 }
 
 function set_melondsdsopts() {
@@ -1536,7 +1495,7 @@ set_n64opts &
 set_saturnopts &
 set_dreamcastopts &
 set_melondsdsopts &
-set_psxopts &
+set_frame_delay &
 set_swapchain_images &
 
 ### Sed operations are expensive, so they are staged and executed as
