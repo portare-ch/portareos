@@ -108,7 +108,7 @@ function create_game_dirs() {
 }
 
 function load_modules() {
-  for MODULE in exfat vfat ntfs ntfs3
+  for MODULE in exfat vfat
   do
     lsmod | grep ${MODULE} >/dev/null 2>&1
     if [ ! $? = 0 ]
@@ -123,7 +123,7 @@ function mount_games() {
       MOUNT_PATH="/storage/games-external"
       FSTYPE=$(blkid -o export ${1} | awk 'BEGIN {FS="="} /TYPE/ {print $2}')
       case ${FSTYPE} in
-        ext4 | btrfs)
+        ext4)
           log $0 "Found supported partition for overlayfs."
           if [ -e "/storage/.ms_unsupported" ]
           then
@@ -141,12 +141,6 @@ function mount_games() {
         ;;
       esac
 
-      # busybox has some weird behaviour with helpers.
-      # Despite mount.ntfs is present, it is not used, so just a stupid rewrite to use newer kernel ntfs3 driver
-      case ${FSTYPE} in
-        ntfs)   MOUNT_ARGS="-t ntfs3" ;;
-        *)      true ;;
-      esac
 
       if [ ! -d "${MOUNT_PATH}" ]
       then
@@ -164,14 +158,14 @@ function mount_games() {
         umount /var/media/* 2>/dev/null
 
         log $0 "Mounting ${1} on ${MOUNT_PATH}"
-        /usr/bin/busybox mount ${MOUNT_ARGS} ${1} ${MOUNT_PATH} >/dev/null 2>&1
+        /usr/bin/busybox mount ${1} ${MOUNT_PATH} >/dev/null 2>&1
 
         log $0 "Checking filesystem ${1}."
         if ! touch "${MOUNT_PATH}/.tmp-portareos"; then
           log $0 "Fixing filesystem ${1}."
           /usr/bin/busybox umount ${1} >/dev/null 2>&1
           /usr/sbin/fsck -Mly ${1} >/dev/null 2>&1
-          /usr/bin/busybox mount ${MOUNT_ARGS} ${1} ${MOUNT_PATH} >/dev/null 2>&1
+          /usr/bin/busybox mount ${1} ${MOUNT_PATH} >/dev/null 2>&1
         else
           rm "${MOUNT_PATH}/.tmp-portareos"
 	      fi
@@ -184,7 +178,7 @@ function mount_games() {
 function find_games() {
   if /usr/bin/busybox mountpoint -q /storage
   then
-    for DEV in $(for dev in mmcblk[0-9] sd[a-z] nvme[0-9]n[0-9]; do blkid | grep ${dev} | awk 'BEGIN {FS=":"}; /ext4/ || /btrfs/ || /fat/ || /ntfs/ {print $1}' | sort -r; done)
+    for DEV in $(for dev in mmcblk[0-9] sd[a-z] nvme[0-9]n[0-9]; do blkid | grep ${dev} | awk 'BEGIN {FS=":"}; /ext4/ || /fat/ {print $1}' | sort -r; done)
     do
       ROOTDEV=$(echo ${DEV} | sed -e "s#^/.*/##g" -e "s#p[0-9].*\$##g")
       log $0 "Inspecting ${DEV}."

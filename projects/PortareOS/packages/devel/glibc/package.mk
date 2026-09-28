@@ -122,6 +122,53 @@ post_makeinstall_target() {
 
     mkdir -p ${INSTALL}/usr/share/i18n/locales
       cp -PR ${PKG_BUILD}/localedata/locales/POSIX ${INSTALL}/usr/share/i18n/locales
+  else
+# 369 locale definitions is 12.1MB, and this device is asked for two of
+# them: English, and Japanese because game and ROM text comes that way.
+# A definition is not self-contained - en_US and ja_JP both copy i18n and
+# iso14651_t1 and include the transliteration tables - so the list is the
+# transitive closure of copy and include, 19 files rather than 2. Most of
+# what survives is iso14651_t1_common at 3.2MB, which collation needs.
+    LOCALES_KEEP="en_US ja_JP POSIX i18n i18n_ctype iso14651_t1 \
+                  iso14651_t1_common translit_circle translit_cjk_compat \
+                  translit_cjk_variants translit_combining translit_compat \
+                  translit_emojis translit_font translit_fraction \
+                  translit_narrow translit_neutral translit_small \
+                  translit_wide"
+    mkdir -p ${INSTALL}/.locales-keep
+    for _l in ${LOCALES_KEEP}; do
+      [ -f ${INSTALL}/usr/share/i18n/locales/${_l} ] &&
+        cp -p ${INSTALL}/usr/share/i18n/locales/${_l} ${INSTALL}/.locales-keep/
+    done
+    safe_remove ${INSTALL}/usr/share/i18n/locales
+    mkdir -p ${INSTALL}/usr/share/i18n/locales
+      mv ${INSTALL}/.locales-keep/* ${INSTALL}/usr/share/i18n/locales/
+    rmdir ${INSTALL}/.locales-keep
+  fi
+
+# gconv is 257 charset converters, 19MB, on a system that is UTF-8
+# throughout - and UTF-8 is built into glibc, so it needs no module here at
+# all. What is kept is Latin-1 and -15, the UTF-16/32 forms libraries
+# convert through, and the Japanese encodings to go with the ja_JP locale
+# above. EUC-JP links against libJIS, so that stays too; CP932 and SJIS
+# carry their tables inside. The full set is still in .noinstall for the
+# build. Anything asking iconv for a charset that is gone gets a failed
+# iconv_open rather than wrong text.
+  GCONV_KEEP="ISO8859-1.so ISO8859-15.so UNICODE.so UTF-16.so UTF-32.so \
+              UTF-7.so CP932.so SJIS.so EUC-JP.so EUC-JP-MS.so \
+              libJIS.so libJISX0213.so ANSI_X3.110.so"
+  if [ -d ${INSTALL}/usr/lib/gconv ]; then
+    mkdir -p ${INSTALL}/.gconv-keep
+    for _m in ${GCONV_KEEP}; do
+      [ -f ${INSTALL}/usr/lib/gconv/${_m} ] &&
+        mv ${INSTALL}/usr/lib/gconv/${_m} ${INSTALL}/.gconv-keep/
+    done
+    cp -a ${INSTALL}/usr/lib/gconv/gconv-modules ${INSTALL}/.gconv-keep/ 2>/dev/null || :
+    cp -a ${INSTALL}/usr/lib/gconv/gconv-modules.d ${INSTALL}/.gconv-keep/ 2>/dev/null || :
+    safe_remove ${INSTALL}/usr/lib/gconv
+    mkdir -p ${INSTALL}/usr/lib/gconv
+      mv ${INSTALL}/.gconv-keep/* ${INSTALL}/usr/lib/gconv/
+    rmdir ${INSTALL}/.gconv-keep
   fi
 
 # create default configs
