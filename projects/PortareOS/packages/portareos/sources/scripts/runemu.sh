@@ -193,17 +193,17 @@ function bluetooth() {
                 ${VERBOSE} && log $0 "Disabling BT"
                 if [[ "${BLUETOOTH_STATE}" == "1" ]]
                 then
-                        NPID=$(pgrep -f portareos-bluetooth-agent)
-                        if [[ ! -z "$NPID" ]]; then
-                                kill "$NPID"
-                        fi
+                        systemctl stop bluetooth-agent
                 fi
         elif [ "$1" == "enable" ]
         then
                 ${VERBOSE} && log $0 "Enabling BT"
                 if [[ "${BLUETOOTH_STATE}" == "1" ]]
                 then
-                        systemd-run portareos-bluetooth-agent
+                        # The service, not systemd-run: a transient unit left
+                        # bluetooth-agent.service inactive, and the next
+                        # start of the service ran a second agent.
+                        systemctl start bluetooth-agent
                 fi
         fi
 }
