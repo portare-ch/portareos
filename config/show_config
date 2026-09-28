@@ -90,10 +90,7 @@ show_config() {
   config_message+="\n\n Network service configuration:"
   config_message+="\n ${dashes}${dashes}"
 
-  config_message+="\n - Avahi (Zeroconf) support:\t\t ${AVAHI_DAEMON}"
   config_message+="\n - NFS mounting support:\t\t ${NFS_SUPPORT}"
-  config_message+="\n - SAMBA mounting support:\t\t ${SAMBA_SUPPORT}"
-  config_message+="\n - SAMBA server support:\t\t ${SAMBA_SERVER}"
   config_message+="\n - SFTP server support:\t\t\t ${SFTP_SERVER}"
   config_message+="\n - OpenVPN support:\t\t\t ${OPENVPN_SUPPORT}"
   config_message+="\n - WireGuard support:\t\t\t ${WIREGUARD_SUPPORT}"

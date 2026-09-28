@@ -64,27 +64,12 @@
 # build and install bluetooth support (yes / no)
   BLUETOOTH_SUPPORT="yes"
 
-# build and install Avahi (Zeroconf) daemon (yes / no)
-  AVAHI_DAEMON="yes"
-
 # build with NFS support (mounting nfs shares via the OS) (yes / no)
 # Off: the package installs mount.nfs and nothing in the image ever calls it.
 # Nothing under packages/portareos/sources mounts an NFS share, the front-end
 # has no UI for one, and there is no fstab entry. Turning this back on is one
 # word here, and brings back nfs-utils, rpcbind and libevent with it.
   NFS_SUPPORT="no"
-
-# build with Samba Client support (mounting samba shares via the OS) (yes / no)
-  SAMBA_SUPPORT="no"
-
-# build and install Samba Server (yes / no)
-#
-# Off. This shipped smbd, nmbd, wsdd2 and 99 samba libraries - 21MB - to serve
-# shares nothing asks for. Roms arrive over ssh or on a card, and there is a
-# working sftp server below for the same job.
-#
-# Turning it back on is one word here, the same as NFS_SUPPORT above.
-  SAMBA_SERVER="no"
 
 # build and install SFTP Server (yes / no)
   SFTP_SERVER="yes"

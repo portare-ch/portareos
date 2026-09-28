@@ -3,7 +3,6 @@
 HOSTNAME=$(get_setting system.hostname)
 echo ${HOSTNAME} >/proc/sys/kernel/hostname
 hostnamectl --transient hostname ${HOSTNAME}
-avahi-set-host-name ${HOSTNAME}
 
 rm -f /run/portareos/hosts
 if [ -f /storage/.config/hosts.conf ]; then

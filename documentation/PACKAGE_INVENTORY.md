@@ -38,18 +38,17 @@ The rule this applies is the README's: if it is not needed for a smooth game, it
 | Package | MB | The question |
 |---|---|---|
 | **python3** with pyudev, six, pyyaml, setuptools | 34 | Real users: `portareos-bluetooth-agent`, the pairing agent that runs as a service, and Steam's `steamdeps`. Rewrite the agent in C against bluez's D-Bus API, or as a bluetoothctl script, and Python goes. |
-| **avahi, nss-mdns** | 3 | mDNS. Useful for `portareos.local` over SSH; otherwise off. |
 | **mangohud, mangoapp** | 12 | A performance overlay: handy for development, an anti-feature for a player. gamescope runs without it. |
 | **scummvm-lr** | 77 | ScummVM as the libretro core, with the standalone's engines less ten that want a keyboard or carry nothing playable here. Every engine in the tree would be 120. |
 | **fbneo** core | 76 | The largest core: every arcade driver. Fine for as long as arcade is a system. |
 | **`/usr/lib/compat`**: libavcodec 58, librsvg, x265, aom, openssl 1.1, SDL2 | 41 | Old-ABI libraries for PortMaster ports: a second copy of ffmpeg and friends. Stays exactly as long as PortMaster does. |
 | **portmaster** | – | Ports need the compat set above and their own launcher scripts. If ports are not a goal, it and the 41 MB leave together. |
 | **umtprd** (MTP) beside the USB network gadget | – | Two USB file-transfer paths where one would do. |
-| **btrfs-progs, libtirpc and rpcbind, heimdal, samba's libraries** | ~10 | NFS and Samba are off in the options, but these came along as dependencies of something. Find whose. |
+| **btrfs-progs, libtirpc and rpcbind, heimdal** | ~10 | NFS is off in the options, but these came along as dependencies of something. Find whose. |
 
 ## Services that start at boot and deserve a look
 
-`avahi-daemon`, `batteryledstatus` (idle unless `led.color=battery`), `hdmi-sense` (runs on a display plug; the sway-era `hdmi-hotplug` is gone), `debug-shell`, `debugconfig`.
+`batteryledstatus` (idle unless `led.color=battery`), `hdmi-sense` (runs on a display plug; the sway-era `hdmi-hotplug` is gone), `debug-shell`, `debugconfig`.
 
 ## Removed
 
