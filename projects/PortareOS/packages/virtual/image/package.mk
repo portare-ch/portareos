@@ -44,7 +44,7 @@ PKG_GRAPHICS=""
 
 PKG_FONTS="corefonts"
 
-PKG_MULTIMEDIA="ffmpeg mpv gmu"
+PKG_MULTIMEDIA="ffmpeg mpv"
 
 # espeak spoke EmulationStation's menus; EmulationStation is gone.
 PKG_SOUND=""
