@@ -16,8 +16,8 @@ PKG_BUILD_FLAGS="+pic"
 # SDL_AUDIODRIVER=pipewire pinned in /etc/profile, which is the route ARMSX2
 # already takes.
 #
-# Four things link libmpg123 to decode with, and none of them runs the binary:
-# SDL2_mixer, gmu, amiberry and easyrpg-lr. Building no output module at all
+# Three things link libmpg123 to decode with, and none of them runs the
+# binary: SDL2_mixer, amiberry and easyrpg-lr. Building no output module at all
 # would be defensible on that, but a PortMaster port can call anything on
 # PATH, and one small module is cheaper than a silent player.
 #

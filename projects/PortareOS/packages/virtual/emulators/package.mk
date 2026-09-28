@@ -493,8 +493,11 @@ makeinstall_target() {
   add_emu_core movies mpv mpv true
   add_es_system movies
 
-  ### Music Player
-  add_emu_core music gmu gmu true
+  ### Music. PORTAMP: the same mpv as the films, with a spectrum
+  ### analyser for a picture and a player drawn around it - see
+  ### start_portamp.sh. It replaced gmu, a second audio stack for a job
+  ### mpv already did.
+  add_emu_core music portamp portamp true
   add_es_system music
 
   ### Tools

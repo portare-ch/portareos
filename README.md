@@ -121,7 +121,7 @@ the settings nobody had tuned for them.
 | Xbox | xemu |
 | Point-and-click | ScummVM |
 | Ports, streaming, PC | PortMaster (as a platform of its own, with the pad's buttons as printed), Moonlight, Steam |
-| Movies, music | mpv, gmu |
+| Movies, music | mpv, PORTAMP |
 
 Every emulator quits with the same buttons, Home + Start. M1 with the
 volume keys sets the brightness, anywhere. Settings > Consoles has a

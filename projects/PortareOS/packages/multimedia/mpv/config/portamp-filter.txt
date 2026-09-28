@@ -1,0 +1,6 @@
+[aid1] asplit [ao],
+firequalizer = gain = '1.4884e8 * f*f*f / (f*f + 424.36) / (f*f + 1.4884e8) / sqrt(f*f + 25122.25)' : scale = linlin : wfunc = tukey : zero_phase = on : fft2 = on,
+showfreqs    = size = 48x340 : mode = bar : ascale = log : fscale = log : win_size = 2048 : win_func = hann : averaging = 2 : colors = 0x30FF30|0x30FF30,
+scale        = 1000:340 : flags = neighbor,
+setsar       = 1,
+format       = yuv420p [vo]

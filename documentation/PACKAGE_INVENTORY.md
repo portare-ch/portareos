@@ -74,7 +74,7 @@ Done in #351:
 | rkmpp | 0 | Rockchip only; ffmpeg loses its `RK*` case |
 | the root ffmpeg folder | 0 | shadowed by the project's package and never read |
 
-gmu stays: it is the music player system, not a leftover. The GStreamer plugins, libmpeg2 and x264 stay as well, kept in reserve for playback; nothing links them today (gmu decodes with mpg123, vorbis, flac and opus, mpv through ffmpeg).
+gmu has gone: it was a second audio stack - SDL2, mpg123, vorbis, flac, opus - for the one job mpv already did through ffmpeg. PORTAMP is that mpv with a spectrum analyser for a picture and a player drawn around it, and adds no package. The GStreamer plugins, libmpeg2 and x264 stay, kept in reserve for playback; nothing links them today.
 
 Done in #347:
 

@@ -104,7 +104,7 @@ The first rate column is the console's own: the rate its sound hardware produces
 | ps2 (ARMSX2) | 48,000 (SPU2) | 48,000 (44,100 in PS1 mode) | 48,000 |
 | xbox (xemu) | 48,000 (AC'97) | 48,000 | 48,000 |
 | psp, pspminis (PPSSPP) | 44,100 | 44,100 | 44,100 |
-| movies, music (mpv, gmu) | the file's rate | the file's rate | the file's rate |
+| movies, music (mpv, PORTAMP) | the file's rate | the file's rate | the file's rate |
 
 In short:
 
