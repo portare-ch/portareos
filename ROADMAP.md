@@ -52,9 +52,48 @@ the scan is the target.
 ### Black frame insertion
 
 A 120 Hz panel showing 60 Hz content can spend the second refresh on black,
-for CRT-like motion clarity. `video_black_frame_insertion` is 0 today. Wants
-a panel measurement first: brightness loss, and whether the mode switch and
-the timed presents keep their cadence with it on.
+for CRT-like motion clarity. `video_black_frame_insertion` is 0 today. It
+works on snes9x and looks right; one artefact is in the way.
+
+Measured, snes9x at the exact 120.1976 mode, swap interval 1, BFI 1:
+
+| swapchain images | presents / refreshes in 20 s | rate | flicker |
+|---|---|---|---|
+| 2 | 2231 / 2404 | 111.6 fps | constant |
+| 3 | 2403 / 2404 | 120.2 fps | none seen |
+
+Three images is the whole difference, for the reason ParaLLEl N64 and
+Dolphin need it: the black frame is presented inside the frame call, and
+with two images the acquire blocks until the light frame is off screen,
+halving what the core has. At two images a seventh of the refreshes carry
+no new frame and the strobe breaks; at three it does not.
+
+What is left is a black band rolling down the panel, a few times a minute,
+content missing inside it. The mechanism is known: a slipped flip inverts
+the light/dark alternation. Forced onto the wrong mode (119.88, where the
+core must lose a frame every 6.3 s) it appeared every 6 to 8 s, which is
+that prediction.
+
+Ruled out, each with a measurement: dropped presents (the present count
+matches the refresh count), DSI tearing (`MIPI_DSI_MODE_VIDEO`, no
+command-mode latch to tear), automatic frame delay (off changed nothing),
+GPU devfreq (flat at 401 MHz, no transitions), and the PLL missing the
+modeline (`dsi0_pll_bit_clk` 937,439,941 Hz against an ideal 937,440,000,
+0.063 ppm, a frame of drift every 73 hours).
+
+Two candidates remain. CPU frequency scaling is untested - the run that
+looked like a negative had its governor reset by the launch, so it proved
+nothing, and redoing it costs minutes over SSH. The other is the vertical
+blanking window: 41 lines is 340.8 us to land a flip, BFI meets that
+deadline twice as often as anything else, and three misses in 10,800 is
+the 0.028% that would follow. `bfi-taller-vblank` widens it to 647.3 us
+for 4% more DSI bit clock; unbuilt.
+
+Brightness loss is real and unmeasured. BFI halves the duty cycle, and
+whatever ships should raise the panel with it.
+
+Not for the heavy cores. Dolphin glitched and crashed on Soulcalibur II
+when this was last tried, and the blocking above says why.
 
 ### The last 130 MB
 
