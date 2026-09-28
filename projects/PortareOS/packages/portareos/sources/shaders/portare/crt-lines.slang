@@ -10,8 +10,8 @@
 // 224-line game gets 224 beams and a 240-line game 240; with UPSCALE at 0
 // the LINES parameter is used instead.
 //
-// At UPSCALE 1 the source is the console's own 320x240 (the PlayStation
-// latency profile, software renderer). Sampling it where the panel pixel
+// At UPSCALE 1 the source is the console's own 320x240. Sampling it
+// where the panel pixel
 // falls would then be a bilinear blow-up, four panel pixels wide: blur, not
 // a beam. So at 1 every read snaps to the centre of a console pixel, and
 // the horizontal spread reaches the neighbour only from the outer half of

@@ -126,10 +126,10 @@ the settings nobody had tuned for them.
 Every emulator quits with the same buttons, Home + Start. M1 with the
 volume keys sets the brightness, anywhere. Settings > Consoles has a
 PRMPT switch per 2D console (`<console>.preempt`), one pre-emptive frame
-(RetroArch's cheaper run-ahead) on or off; the PlayStation has latency or
-visuals instead (`psx.profile`), because latency also takes SwanStation
-from its 4x Vulkan rendering to the software renderer at native.
-Experimental. In RetroArch, M2 shows a game
+(RetroArch's cheaper run-ahead) on or off. Experimental. The PlayStation
+has no switch: its shipped configuration was measured delivering every
+frame on its vblank, and the pre-emptive frame cost 12 fps for a frame of
+input latency, so there is nothing worth choosing. In RetroArch, M2 shows a game
 guide: a text file next to the ROM with the ROM's name and `.txt`. The game
 waits where it was, and M2 or B brings it back.
 
