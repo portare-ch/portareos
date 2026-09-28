@@ -8,6 +8,8 @@ Home: **[os.portare.org](https://os.portare.org)**
 
 > Black coffee without sugar and milk. With the right amount of beans and water.
 
+> ⚠️ **EXCITING BFI WORK ONGOING. PREPARE FOR SMOOTHNESS SOON**
+
 ## What it is
 
 The Nova has a 1280×960 panel at 120 Hz. That is 4:3, the shape of everything
