@@ -252,11 +252,29 @@ index 000000000000..1c8ed849edbf
 +		 *
 +		 *   156654000 / (1302 * 1001) = 120.19778...
 +		 *
-+		 * +1.2ppm from 2 x 60.0988. The only mode in the table above
-+		 * 120Hz, by 0.16%: the pixel clock is 0.26% above the 119.88
-+		 * mode's.
++		 * +1.8ppm from 2 x 60.0988. The only mode in the table above
++		 * 120Hz: the pixel clock is 4.0% above the 119.88 mode's.
++		 *
++		 * The back porch is 67 lines rather than the 27 every other
++		 * mode here carries, and that is the point of this mode. Black
++		 * frame insertion flips on every refresh instead of every
++		 * second one, so it meets the vertical blanking deadline twice
++		 * as often, and the DPU begins fetching the next frame inside
++		 * that window. At 27 lines the window is 340.8us; measured with
++		 * BFI on snes9x, about three flips in 10,800 missed it, and a
++		 * missed flip inverts the light/dark alternation and shows as a
++		 * black band rolling down the panel.
++		 *
++		 *   41 lines  / 8.31126us a line = 340.8us
++		 *   81 lines  / 7.99195us a line = 647.3us
++		 *
++		 * 1.90x the margin for 4% more DSI bit clock, 977.5MHz a lane
++		 * against 939.9. The 119.88 mode cannot be widened this way:
++		 * its exactness needs htotal * vtotal divisible by 1001, and
++		 * vtotal supplies the 11 and the 13, so it only grows in steps
++		 * of 143 lines. This one is an approximation already.
 +		 */
-+		.clock = 156654,
++		.clock = 162914,
 +		.hdisplay = 1280,
 +		.hsync_start = 1280 + 12,
 +		.hsync_end = 1280 + 12 + 2,
@@ -264,7 +282,7 @@ index 000000000000..1c8ed849edbf
 +		.vdisplay = 960,
 +		.vsync_start = 960 + 12,
 +		.vsync_end = 960 + 12 + 2,
-+		.vtotal = 960 + 12 + 2 + 27,
++		.vtotal = 960 + 12 + 2 + 67,
 +	},
 +	{
 +		/*
