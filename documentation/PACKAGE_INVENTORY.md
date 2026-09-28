@@ -112,3 +112,4 @@ Not removals of a package, but of what a package installs.
 | `i18n/locales` | 12.1 MB, 369 | 4.1 MB, 19 | en_US and ja_JP, and the closure of what they copy and include - mostly `iso14651_t1_common` at 3.2 MB, which collation needs. |
 | `p7zip` | 5.0 MB, 3 binaries | 1.1 MB, 1 | 7za, the standalone one. 7z needed `7z.so` and Codecs behind it; 7zr read only .7z. Nothing on the image called any of them. |
 | `btrfs-progs` | 1.6 MB | gone | `CONFIG_BTRFS_FS` is off with it, asserted `=n` in `kernel_options`, so the device declines such a card rather than mounting one it cannot check. |
+| btrfs and ntfs kernel drivers | - | gone | Asserted `=n` in `kernel_options`. Neither filesystem has a checker on the image any more - ntfs-3g went in #403 - so a card formatted either way is declined rather than mounted unrepairable. Cards arrive FAT32 or exFAT; internal storage is ext4. |

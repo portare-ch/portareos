@@ -46,3 +46,9 @@ CONFIG_CPU_IDLE_GOV_TEO=y
 # card the device can mount but cannot check is worse than one it declines.
 # Cards arrive FAT32 or exFAT; internal storage is ext4.
 CONFIG_BTRFS_FS=n
+# ntfs: ntfs-3g and its tools came out in #403, which left two kernel drivers
+# for a filesystem nothing here can check either. A card or drive formatted
+# NTFS is now declined rather than mounted unrepairable. Both symbols, because
+# the legacy driver and ntfs3 are separate.
+CONFIG_NTFS_FS=n
+CONFIG_NTFS3_FS=n
