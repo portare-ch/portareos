@@ -363,11 +363,31 @@ also enables preemptive frames for `<system>.preempt=1`, so that path shipped
 about. It reached every 2D console using `preempt`, not just the PlayStation.
 The condition now lives in `preempt_enabled` and both callers read it.
 
-Still open, and untested: `set_swapchain_images` keys the third image on the
-core name (`parallel_n64|dolphin`). On the PlayStation a third image was
-worth 12 fps once preemptive frames were on, so the 2D consoles that still
-offer `preempt` may want the same. Their cores are far cheaper to rerun and
-none of this was measured on them, so nothing was changed on a guess.
+The 2D consoles keep their switch, and it was measured too rather than left
+to the same guess. SNES, Super Mario World, snes9x, idle and playing, with
+`preempt` off and on: all four runs delivered every frame the console asked
+for - 1802 in 30 s and 2704 in 45 s against 60.0989 Hz - with the mean on
+16.638 ms either way and no frame reaching the 24.96 ms a missed refresh
+costs. Playing with it on moved p99 from 20.82 to 21.11. That is the
+opposite of the PlayStation above, and the reason is the same one: snes9x is
+cheap enough to rerun inside the frame, SwanStation at 4x is not.
+
+So `set_swapchain_images` keying the third image on the core name
+(`parallel_n64|dolphin`) is left alone. A third image is what rescued the
+PlayStation once preemptive frames were on, but the 2D consoles never reach
+the case it fixes, and it would cost them a frame of queueing for nothing.
+
+What none of this measures is what the preemptive frame buys. It is worth a
+frame of input latency and it turns off the automatic frame delay, which was
+already claiming most of one, so the net may be close to nothing - and
+playing it blind, nobody noticed the difference. Settling it needs a 240 fps
+recording of a button press rather than a frametime log. It stays off by
+default on every console, which is also the safer answer: the preemptive
+frame asks the core to round-trip a savestate every frame and polls input
+only through `preempt_input_state` with the core's own poll stubbed out, so
+a core whose `deterministic` claim in its info file is not quite true drifts
+quietly rather than failing. We assert that claim ourselves for SwanStation,
+over an upstream that lowered it to `basic`.
 
 ## Audio
 

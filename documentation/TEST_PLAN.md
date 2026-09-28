@@ -290,12 +290,52 @@ preemptive_frames_enable = "true"
 run_ahead_enabled = "false"
 run_ahead_frames = "1"
 ```
-in `/tmp/.retroarch.cfg`, and the log has no `[Run-Ahead Preemptive]`
-line: RetroArch logs one only when the preemptive frame fails. With `preempt=0` the
-first key is `false`. Human: hold the D-pad and tap jump repeatedly for a
-minute; no frame flickers backwards and the sound does not stutter. Then
-set an explicit `<system>.runahead=2` and confirm classic run-ahead
+in `/tmp/.retroarch.cfg`, plus `video_frame_delay_auto = "false"`, which
+the preemptive frame turns off. With `preempt=0` the first key is
+`false` and the delay is back on.
+
+The log has no `[Run-Ahead Preemptive]` line: RetroArch logs one only
+when the preemptive frame fails. That absence is worth nothing until the
+line has been seen, and `run_ahead_frames = "0"` makes `preempt_init`
+return silently, so a config check alone cannot tell working from inert.
+To make it fail on purpose, both steps are needed:
+
+```
+sed -i 's/"deterministic"/"basic"/' /tmp/cores/<core>_libretro.info
+rm -f /tmp/cores/core_info.cache      # or the cache answers instead
+```
+and the launch then logs "Preemptive Frames unavailable because this
+core lacks deterministic save state support". Note the info file
+RetroArch reads is the one in `/tmp/cores`, not `/usr/lib/libretro`.
+
+Human: hold the D-pad and tap jump repeatedly for a minute; no frame
+flickers backwards and the sound does not stutter. Then set an explicit
+`<system>.runahead=2` and confirm classic run-ahead
 (`run_ahead_enabled = "true"`, `run_ahead_frames = "2"`).
+
+Measured on SNES, Super Mario World, snes9x, with MangoHud as E3 sets it
+up. The preemptive frame is free here: every run delivered every frame
+the console asked for, and playing changed nothing that a second run of
+the same setting would not.
+
+| run | frames | expected | mean | p99 | max |
+|---|---|---|---|---|---|
+| idle, preempt=0 | 1802 | 1802.9 | 16.638 | 20.87 | 22.42 |
+| idle, preempt=1 | 1802 | 1802.9 | 16.637 | 20.77 | 21.69 |
+| playing, preempt=0 | 2704 | 2704.4 | 16.637 | 20.82 | 22.56 |
+| playing, preempt=1 | 2704 | 2704.4 | 16.638 | 21.11 | 23.46 |
+
+Target 16.639 ms, one refresh 8.32, so a missed refresh is 24.96 and
+none of the four runs reached it. This is the opposite of the
+PlayStation in E3, where the same switch cost 12 fps: snes9x is cheap
+enough to rerun inside the frame, SwanStation at 4x is not.
+
+What is not measured is the other side of it. A frame of input latency
+is what the preemptive frame buys, and turning it on gives up the
+automatic frame delay, which was already claiming most of a frame, so
+the net may be close to nothing. Deciding that needs a 240 fps recording
+of a button press, not a frametime log, and nobody has taken one. It
+stays off by default.
 
 ### E3 PlayStation runs every frame on time (auto+human)
 
