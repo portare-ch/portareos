@@ -10,7 +10,7 @@ The console modes use the same 1302 × 1001 total timings and change only the pi
 |---|---|---|
 | 119.880120 Hz | 156240 kHz | default (launcher, everything else) |
 | 119.455046 Hz | 155686 kHz | `gambatte`, `mgba` |
-| 120.197482 Hz | 163070 kHz, vtotal 1042 | `snes9x`, `nestopia` - the wide-blanking mode, see below |
+| 120.197628 Hz | 174651 kHz, vtotal 1116 | `snes9x`, `nestopia` - exact, and the wide-blanking mode; see below |
 | 119.652237 Hz | 155943 kHz | `parallel_n64`, `swanstation`, `mednafen_saturn` |
 | 119.845592 Hz | 156195 kHz | `genesis_plus_gx` |
 | 118.360134 Hz | 154259 kHz | `fbneo`, for `neogeo` only |
@@ -28,14 +28,23 @@ BFI, about three flips in 10,800 missed it over 90 seconds. A missed
 flip inverts the light/dark alternation, which shows as a black band
 rolling down the panel.
 
-82 lines gives 654.7us, 1.92x the margin, for 4.1% more DSI bit clock -
-978.4MHz a lane against 939.9. 82 rather than 81 because the pixel clock
-is a whole number of kHz: the ideal works out at about 156497.31Hz per
-line of vtotal, so an even vtotal rounds well and an odd one rounds from
-the half-kHz. 1041 would be +1.8ppm, 1042 is -1.2ppm - the same distance
-from the SNES rate as the 41-line mode, on the other side. Exactness
-exists at vtotal 1116, 0.00ppm and 1163us, but wants 11.5% more bit
-clock. The 119.88 mode cannot be widened the
+156 lines gives 1163.0us, 3.41x the margin. It is also the one mode in
+the table that is exact: 174651000 / (1302 x 1116) is 120.197628, which
+is 2 x 60.0988 to the six figures a whole-kHz pixel clock can express,
+so the frontend has no correction to make and the cadence does not drift
+- a frame every 823 hours against every two.
+
+The cost is DSI bit clock, 1047.9MHz a lane against 939.9, up 11.5%, and
+that is the part of this that is a test rather than a calculation. The
+PHY on this SoC goes far higher; whether the panel controller takes it
+is what the first boot answers. If it does not, the same mode at vtotal
+1042 is -1.2ppm with 654.7us for 4.1% more clock, and 1001 is where it
+started.
+
+vtotal has to be even either way. The ideal clock is about 156497.31Hz
+per line, so an even vtotal lands near a whole kHz and an odd one near
+the half, which is the worst place to round from: 1041 would be +1.8ppm
+where 1042 is -1.2. The 119.88 mode cannot be widened the
 same way: its exactness needs `htotal * vtotal` divisible by 1001 and
 `vtotal` supplies the 11 and the 13, so it only grows in steps of 143
 lines, which would be 14% more bit clock.

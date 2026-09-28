@@ -252,10 +252,12 @@ index 000000000000..1c8ed849edbf
 +		 *
 +		 *   156654000 / (1302 * 1001) = 120.19778...
 +		 *
-+		 * -1.2ppm from 2 x 60.0988, the same distance the 41-line
-+		 * version of this mode sat on the other side. The only mode in
-+		 * the table above 120Hz: the pixel clock is 4.1% above the
-+		 * 119.88 mode's.
++		 * Exactly 2 x 60.0988, to the six figures the pixel clock can
++		 * express: 174651000 / (1302 * 1116) = 120.197628, which is
++		 * 0.00ppm and a frame of drift every 823 hours. Every other
++		 * mode in this table is a near miss of one to two ppm. The
++		 * only mode above 120Hz, and the pixel clock is 11.5% above
++		 * the 119.88 mode's.
 +		 *
 +		 * The back porch is 67 lines rather than the 27 every other
 +		 * mode here carries, and that is the point of this mode. Black
@@ -268,27 +270,25 @@ index 000000000000..1c8ed849edbf
 +		 * black band rolling down the panel.
 +		 *
 +		 *   41 lines  / 8.31126us a line = 340.8us
-+		 *   82 lines  / 7.98431us a line = 654.7us
++		 *  156 lines  / 7.45489us a line = 1163.0us
 +		 *
-+		 * 1.92x the margin for 4.1% more DSI bit clock, 978.4MHz a lane
-+		 * against 939.9.
++		 * 3.41x the margin, and the rate stops drifting at all. The
++		 * cost is DSI bit clock: 1047.9MHz a lane against 939.9, up
++		 * 11.5%, which is the part of this that is a test rather than
++		 * a calculation. The PHY on this SoC goes far higher; whether
++		 * the panel controller takes it is what the first boot says.
++		 * If it does not, the same mode at vtotal 1042 is -1.2ppm and
++		 * 654.7us for 4.1% more clock, and 1001 is where it started.
 +		 *
-+		 * 82 rather than 81 because the pixel clock is a whole number
-+		 * of kHz. The ideal clock works out at about 156497.31Hz per
-+		 * line of vtotal, so an even vtotal lands near a whole kHz and
-+		 * an odd one lands near the half, which is the worst place to
-+		 * round from: 1041 gives +1.8ppm and 1042 gives -1.2ppm, for
-+		 * the same blanking and 0.1% more clock. Every vtotal that
-+		 * beats the old mode's accuracy is even.
-+		 *
-+		 * Exactness is available further up - vtotal 1116 is 0.00ppm
-+		 * with 1163us of blanking - but it wants 11.5% more bit clock,
-+		 * and this panel is already the only mode above 120Hz. The 119.88 mode cannot be widened this way:
++		 * vtotal has to be even. The ideal clock is about 156497.31Hz
++		 * per line, so an even vtotal lands near a whole kHz and an
++		 * odd one near the half, which is the worst place to round
++		 * from - 1041 would be +1.8ppm where 1042 is -1.2. The 119.88 mode cannot be widened this way:
 +		 * its exactness needs htotal * vtotal divisible by 1001, and
 +		 * vtotal supplies the 11 and the 13, so it only grows in steps
 +		 * of 143 lines. This one is an approximation already.
 +		 */
-+		.clock = 163070,
++		.clock = 174651,
 +		.hdisplay = 1280,
 +		.hsync_start = 1280 + 12,
 +		.hsync_end = 1280 + 12 + 2,
@@ -296,7 +296,7 @@ index 000000000000..1c8ed849edbf
 +		.vdisplay = 960,
 +		.vsync_start = 960 + 12,
 +		.vsync_end = 960 + 12 + 2,
-+		.vtotal = 960 + 12 + 2 + 68,
++		.vtotal = 960 + 12 + 2 + 142,
 +	},
 +	{
 +		/*
