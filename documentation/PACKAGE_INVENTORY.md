@@ -111,4 +111,4 @@ Not removals of a package, but of what a package installs.
 | `gconv` | 19.2 MB, 257 modules | 1.2 MB, 13 | Latin-1 and -15, UTF-16/32, the Japanese encodings and libJIS. UTF-8 is inside glibc and needs no module. |
 | `i18n/locales` | 12.1 MB, 369 | 4.1 MB, 19 | en_US and ja_JP, and the closure of what they copy and include - mostly `iso14651_t1_common` at 3.2 MB, which collation needs. |
 | `p7zip` | 5.0 MB, 3 binaries | 1.1 MB, 1 | 7za, the standalone one. 7z needed `7z.so` and Codecs behind it; 7zr read only .7z. Nothing on the image called any of them. |
-| `btrfs-progs` | 1.6 MB | gone | The kernel still has `CONFIG_BTRFS_FS=y`, so a btrfs card mounts; it can no longer be created or repaired here. |
+| `btrfs-progs` | 1.6 MB | gone | `CONFIG_BTRFS_FS` is off with it, asserted `=n` in `kernel_options`, so the device declines such a card rather than mounting one it cannot check. |

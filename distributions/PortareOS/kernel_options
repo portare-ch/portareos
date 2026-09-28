@@ -36,3 +36,13 @@ CONFIG_PREEMPT_DYNAMIC=y
 # teo only runs because the cmdline names it. Check which one actually won with
 #   cat /sys/devices/system/cpu/cpuidle/current_governor
 CONFIG_CPU_IDLE_GOV_TEO=y
+
+# Filesystems deliberately absent. Asserted as =n because the check treats an
+# undefined symbol as satisfying it, so this fails the build if a kernel bump
+# or a config refresh brings one back - the same silent-return problem the
+# options above guard against, in the other direction.
+#
+# btrfs: nothing here makes or repairs one since btrfs-progs came out, and a
+# card the device can mount but cannot check is worse than one it declines.
+# Cards arrive FAT32 or exFAT; internal storage is ext4.
+CONFIG_BTRFS_FS=n
