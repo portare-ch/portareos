@@ -17,7 +17,7 @@ The rule this applies is the README's: if it is not needed for a smooth game, it
 | portarelauncher, portareos, system-utils, quirks, autostart, powerstate, sleep, inputplumber (10 MB) | Our own stack; inputplumber is the gamepad. |
 | steam, gamescope, xwayland, seatd, fex-emu, pressure-vessel, the X11 libraries | The one compositor exception, about 35 MB on the image; the runtime lives on `/storage`. |
 | retroarch-assets (33 MB) | RetroArch's own menu needs its assets. Trimmable to one menu driver's. |
-| e2fsprogs, dosfstools, exfatprogs, ntfs-3g, parted, udevil, umtprd | Cards, drives, USB file transfer. |
+| e2fsprogs, dosfstools, exfatprogs, parted, udevil, umtprd | Cards, drives, USB file transfer. |
 | dbus, glib, openssl, gnutls, curl, wget, jq, xmlstarlet | What the scripts use. |
 
 ## Candidates for removal

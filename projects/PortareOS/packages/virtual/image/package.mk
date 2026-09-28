@@ -93,9 +93,6 @@ fi
 # NFS support
 [ "${NFS_SUPPORT}" = "yes" ] && PKG_DEPENDS_TARGET+=" nfs-utils"
 
-# NTFS 3G support
-[ "${NTFS3G}" = "yes" ] && PKG_DEPENDS_TARGET+=" ntfs-3g_ntfsprogs"
-
 # Installer support
 [ "${INSTALLER_SUPPORT}" = "yes" ] && PKG_DEPENDS_TARGET+=" installer"
 
