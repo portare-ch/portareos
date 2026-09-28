@@ -10,7 +10,7 @@ PKG_URL="${PKG_SITE}/archive/${PKG_VERSION}.tar.gz"
 # No gtk3: xemu draws with SDL3 and imgui, and QEMU's GTK display backend is
 # an auto feature that stays off when GTK is not found. It was the only thing
 # on the image that pulled GTK, pango, atk and their tools in.
-PKG_DEPENDS_TARGET="toolchain libsamplerate libpcap SDL3 Python3 zlib pixman bzip2 openssl xwayland libslirp"
+PKG_DEPENDS_TARGET="toolchain libsamplerate libpcap SDL3 Python3 zlib pixman bzip2 openssl xwayland libslirp curl"
 PKG_LONGDESC="Xemu - A free and open-source application that emulates the original Microsoft Xbox game console."
 PKG_TOOLCHAIN="make"
 PKG_PATCH_DIRS+="${DEVICE}"
