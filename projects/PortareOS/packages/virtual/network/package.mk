@@ -12,7 +12,7 @@ PKG_SECTION="virtual"
 PKG_LONGDESC="Metapackage for various packages to install network support"
 
 if [ "${BLUETOOTH_SUPPORT}" = "yes" ]; then
-  PKG_DEPENDS_TARGET="${PKG_DEPENDS_TARGET} bluez dbussy"
+  PKG_DEPENDS_TARGET="${PKG_DEPENDS_TARGET} bluez bluetooth-agent"
 fi
 
 if [ "${OPENVPN_SUPPORT}" = "yes" ]; then
