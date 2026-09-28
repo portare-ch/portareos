@@ -102,12 +102,25 @@ def renamed_into_foreign_urls(recipes):
 # Our name is legitimate in an install path (${INSTALL}/...), which is ours, and
 # in the toolchain triplet, which is why that has to be spelled ${TARGET_NAME}
 # rather than written out.
+#
+# The exception is a recipe with no PKG_URL and no unpack() of its own: then
+# scripts/unpack fills ${PKG_BUILD} from nothing but the package's sources/
+# directory, so the tree is ours and so is whatever our Makefile names in it.
 UPSTREAM_PATH = re.compile(r'\$\{(?:PKG_BUILD|PKG_SOURCE_DIR)\}\S*portareos', re.I)
+HAS_URL = re.compile(r'^\s*PKG_URL="[^"\s][^"]*"', re.M)
+HAS_UNPACK = re.compile(r'^\s*unpack\(\)', re.M)
+
+
+def builds_from_own_sources(path, text):
+    return (os.path.isdir(os.path.join(os.path.dirname(path), "sources"))
+            and not HAS_URL.search(text) and not HAS_UNPACK.search(text))
 
 
 def our_name_in_upstream_paths(recipes):
     bad = []
     for path, text in recipes:
+        if builds_from_own_sources(path, text):
+            continue
         for n, line in enumerate(text.splitlines(), 1):
             if UPSTREAM_PATH.search(line):
                 bad.append((path, n, line.strip()))
