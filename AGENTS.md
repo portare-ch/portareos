@@ -79,3 +79,14 @@ this tree.
   thing, not the visible one.
 * **DO** group changes sharing one purpose into a single pull request rather
   than splitting them.
+* **DO** open pull requests with `gh pr create`. This repository is a GitHub
+  fork of `ROCKNIX/distribution`, so the web UI offers ROCKNIX as the base
+  and it has to be changed by hand every time; `gh repo set-default
+  portare-ch/portareos` is set, and `gh` then targets this repository.
+* **DO NOT** remove the `upstream` remote to stop that. It is where
+  `tools/import-upstream-packages` reads from (`--to` defaults to
+  `upstream/next`), and it is not what picks the base repository. Leaving
+  the fork network on GitHub is what would, and it is permanent and takes
+  the issues and pull requests with it - the numbers this tree cites for
+  why things are the way they are, #211 and #217 among them. It was
+  considered and declined.
