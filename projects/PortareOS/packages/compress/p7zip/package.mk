@@ -37,8 +37,17 @@ make_target() {
   make CXX=${CXX} CC=${CC} -C ${PKG_BUILD}/.${TARGET_NAME} all3
 }
 
+# 7za only. The three binaries overlap almost completely: 7zr reads .7z and
+# nothing else, and 7z is a thin front end that needs 7z.so (2.3MB) and the
+# Codecs folder behind it, which together with the 7zCon.sfx stub is 3.9MB
+# for formats nothing here opens. 7za is the standalone one and handles 7z,
+# zip, tar, gzip and bzip2 by itself.
+#
+# Nothing on the image called any of them: RetroArch has 7-Zip compiled in
+# rather than shelling out, and PortMaster carries its own 7zzs. The host
+# build still gets 7za through makeinstall_host above, which is what the
+# package system extracts with.
 makeinstall_target() {
   mkdir -p ${INSTALL}/usr/bin
-    cp -pr ${PKG_BUILD}/.${TARGET_NAME}/bin/Codecs ${INSTALL}/usr/bin
-    cp -p ${PKG_BUILD}/.${TARGET_NAME}/bin/7z* ${INSTALL}/usr/bin
+    cp -p ${PKG_BUILD}/.${TARGET_NAME}/bin/7za ${INSTALL}/usr/bin
 }

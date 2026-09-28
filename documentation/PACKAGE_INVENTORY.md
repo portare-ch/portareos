@@ -28,10 +28,8 @@ The rule this applies is the README's: if it is not needed for a smooth game, it
 | **slang-shaders** — trim, not drop | 70 → ~10 | We use `crt/crt-guest-advanced`, `handheld/lcd-grid-v2` and our own `portare/`. Keep those families and what they include; drop the other 60 MB. |
 | **renderdoc, apitrace (with glretrace, eglretrace), gdb, gdbserver, perf, vulkan-tools, glslc, binutils (strings, readelf), v4l-utils, edid-decode, cec-ctl, plplay, gltrim, wflinfo** | ~55 | Debugging and GPU tracing tools, in a release image. `DEBUG_PACKAGES` is off, so they arrive as somebody's dependency; find whose. |
 | **gstreamer, gst-plugins-base, gst-plugins-good, gst-libav** | 8 | No binary links it. qt6 pulled it and is gone; portmaster still lists gst-plugins-base, for ports. Goes with portmaster. |
-| The sqlite3 CLI, nano and dialog, bluez's btmon, two of p7zip's three binaries | ~4 | Duplicates and unused command-line tools. |
+| The sqlite3 CLI, nano and dialog, bluez's btmon | ~1 | Duplicates and unused command-line tools. |
 | **iwd_get-networks, ukify, spit** | – | Leftover scripts; the launcher uses nmcli. |
-| **gconv** — trim to UTF-8 and Latin-1 | 19 | glibc's charset converters for every encoding there is. |
-| **i18n** — trim to en_US | 13 | Locales for the world. |
 
 ## Questionable: replace, or reconsider
 
@@ -44,7 +42,7 @@ The rule this applies is the README's: if it is not needed for a smooth game, it
 | **`/usr/lib/compat`**: libavcodec 58, librsvg, x265, aom, openssl 1.1, SDL2 | 41 | Old-ABI libraries for PortMaster ports: a second copy of ffmpeg and friends. Stays exactly as long as PortMaster does. |
 | **portmaster** | – | Ports need the compat set above and their own launcher scripts. If ports are not a goal, it and the 41 MB leave together. |
 | **umtprd** (MTP) beside the USB network gadget | – | Two USB file-transfer paths where one would do. |
-| **btrfs-progs, libtirpc and rpcbind, heimdal** | ~10 | NFS is off in the options, but these came along as dependencies of something. Find whose. |
+| **libtirpc, heimdal, rpcbind** | 0 | Checked on the device: libtirpc and heimdal are not on the image at all and rpcbind is a stray systemd target with no binary. The ~10 MB this row used to claim is not there to reclaim. |
 
 ## Services that start at boot and deserve a look
 
@@ -98,8 +96,19 @@ Done in #335:
 
 ## The sum
 
-Still on the table: slang-shaders ~60 + Python 34 + GStreamer 8 + locales and gconv ~25: **about 130 MB**, without touching a supported system. About 250 MB is out already (above); gdb and strace, 12 MB, come only with an unofficial build.
+Still on the table: slang-shaders ~60 + Python 34 + GStreamer 8: **about 100 MB**, without touching a supported system. Locales, gconv, p7zip and btrfs-progs came out for about 31 MB; see "Trimmed in place" below. About 250 MB is out already (above); gdb and strace, 12 MB, come only with an unofficial build.
 
 ## Method
 
 Package set: a walk of `PKG_DEPENDS_TARGET` from `virtual/image` through `packages/` and `projects/PortareOS/packages/` (project overrides winning), conditionals included. Ground truth: on the device, `ls -S /usr/bin`, `du -sm` over `/usr/lib` and `/usr/share`, `ldd` over every binary in `/usr/bin` to see who links GTK, GStreamer, Python, Qt and X11, the systemd unit list, and `command -v` for the tools in question.
+
+## Trimmed in place
+
+Not removals of a package, but of what a package installs.
+
+| What | Was | Now | Kept |
+|---|---|---|---|
+| `gconv` | 19.2 MB, 257 modules | 1.2 MB, 13 | Latin-1 and -15, UTF-16/32, the Japanese encodings and libJIS. UTF-8 is inside glibc and needs no module. |
+| `i18n/locales` | 12.1 MB, 369 | 4.1 MB, 19 | en_US and ja_JP, and the closure of what they copy and include - mostly `iso14651_t1_common` at 3.2 MB, which collation needs. |
+| `p7zip` | 5.0 MB, 3 binaries | 1.1 MB, 1 | 7za, the standalone one. 7z needed `7z.so` and Codecs behind it; 7zr read only .7z. Nothing on the image called any of them. |
+| `btrfs-progs` | 1.6 MB | gone | The kernel still has `CONFIG_BTRFS_FS=y`, so a btrfs card mounts; it can no longer be created or repaired here. |
