@@ -11,7 +11,7 @@ The rule this applies is the README's: if it is not needed for a smooth game, it
 | linux 7.2.5, linux-firmware, busybox, systemd, util-linux, coreutils, bash, kmod, udev | The base. |
 | mesa (turnip, freedreno; `libgallium` 21 MB), vulkan-loader, libdrm, libglvnd | The display. |
 | pipewire, wireplumber, alsa-lib, alsa-ucm-conf, alsa-topology-conf | Audio; the 32 / 44.1 / 48 kHz link runs through it. |
-| networkmanager, iwd, wireless-regdb, openssh, rsync, bluez | Wi-Fi, SSH, controllers. |
+| iwd, portnet, wireless-regdb, openssh, rsync, bluez | Wi-Fi, SSH, controllers. iwd does the 802.11 and the addressing; portnet is the command that drives it. |
 | retroarch, core-info, slang-shaders (trimmed, see below), the 15 cores (193 MB) | The systems. |
 | armsx2-sa, xemu-sa (19 MB), scummvm-lr, ppsspp-lr, mpv, ffmpeg, libplacebo, luajit | The standalone systems and the two large cores; mpv's Lua runs our seek script. |
 | portarelauncher, portareos, system-utils, quirks, autostart, powerstate, sleep, inputplumber (10 MB) | Our own stack; inputplumber is the gamepad. |
@@ -29,7 +29,7 @@ The rule this applies is the README's: if it is not needed for a smooth game, it
 | **renderdoc, apitrace (with glretrace, eglretrace), gdb, gdbserver, perf, vulkan-tools, glslc, binutils (strings, readelf), v4l-utils, edid-decode, cec-ctl, plplay, gltrim, wflinfo** | ~55 | Debugging and GPU tracing tools, in a release image. `DEBUG_PACKAGES` is off, so they arrive as somebody's dependency; find whose. |
 | **gstreamer, gst-plugins-base, gst-plugins-good, gst-libav** | 8 | No binary links it. qt6 pulled it and is gone; portmaster still lists gst-plugins-base, for ports. Goes with portmaster. |
 | The sqlite3 CLI, nano and dialog, bluez's btmon | ~1 | Duplicates and unused command-line tools. |
-| **iwd_get-networks, ukify, spit** | – | Leftover scripts; the launcher uses nmcli. |
+| **iwd_get-networks, ukify, spit** | – | Leftover scripts. |
 
 ## Questionable: replace, or reconsider
 

@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (C) 2023 JELOS (https://github.com/JustEnoughLinuxOS)
 # Copyright (C) 2022 kkoshelev (https://github.com/kkoshelev)
-# Wi-Fi via NetworkManager (iwd backend). AP/netplay still uses iwctl on the interface.
+# Wi-Fi via iwd, through portnet. AP/netplay uses iwctl on the interface.
 
 . /etc/profile
 
-NMCLI="$(command -v nmcli 2>/dev/null)"
+PORTNET="$(command -v portnet 2>/dev/null)"
 
 ###
 ### Basic WIFI properties used across the tool.
@@ -25,7 +25,7 @@ DEFAULT_CHAN="6"
 # Exit the script if the WiFi device isn't available
 [ -z "${WIFI_DEV}" ] && exit 0
 [ ! -d "/sys/class/net/${WIFI_DEV}" ] && exit 0
-[ -z "${NMCLI}" ] && exit 0
+[ -z "${PORTNET}" ] && exit 0
 
 SSID="${2:-$(get_setting wifi.ssid 2>/dev/null)}"
 PSK="${3:-$(get_setting wifi.key 2>/dev/null)}"
@@ -58,35 +58,31 @@ wait_for_wifi() {
 # lists all wifi networks
 list_wifi() {
   wait_for_wifi
-  "${NMCLI}" -w 15 dev wifi rescan ifname "${WIFI_DEV}" 2>/dev/null
-  sleep 1
-  "${NMCLI}" -t -f SSID dev wifi list ifname "${WIFI_DEV}" 2>/dev/null | sed '/^$/d' | sort -u
+  # portnet waits for the scan itself, so there is nothing to sleep on.
+  "${PORTNET}" list --rescan 2>/dev/null | cut -f1 | sed '/^$/d' | sort -u
 }
 
 connect_wifi() {
   wait_for_wifi
-  # Ensure NM has the device ready and has scanned
-  for i in $(seq 1 10); do
-    "${NMCLI}" -t -f DEVICE,STATE dev status 2>/dev/null | grep -q "^${WIFI_DEV}:disconnected" && break
-    "${NMCLI}" -t -f DEVICE,STATE dev status 2>/dev/null | grep -q "^${WIFI_DEV}:connected" && return 0
-    sleep 1
-  done
-  "${NMCLI}" dev wifi rescan ifname "${WIFI_DEV}" 2>/dev/null
-  sleep 2
-  # If a keyfile profile for this SSID already exists but is incomplete (e.g. missing
-  # 802-11-wireless-security.key-mgmt), NM fails connection-update with "key-mgmt: property is missing".
-  # Drop the stale profile so "device wifi connect" creates a clean one.
-  "${NMCLI}" connection delete id "${SSID}" >/dev/null 2>&1 || true
+  # Already on it: iwd reconnects to a known network by itself, so this is
+  # often true before anything is asked of it.
+  [ "$("${PORTNET}" status 2>/dev/null)" = "${SSID}" ] && return 0
+
+  # One scan so the network is there to connect to. The stale-profile
+  # delete the NetworkManager version did here has no equivalent: iwd
+  # writes credentials only after the association succeeds, so there is no
+  # half-written profile to trip over.
+  "${PORTNET}" list --rescan >/dev/null 2>&1
+
   if [ -n "${PSK}" ]; then
-    "${NMCLI}" -w 90 device wifi connect "${SSID}" password "${PSK}" ifname "${WIFI_DEV}" >/dev/null 2>&1
+    "${PORTNET}" join "${SSID}" "${PSK}" >/dev/null 2>&1
   else
-    "${NMCLI}" -w 90 device wifi connect "${SSID}" ifname "${WIFI_DEV}" >/dev/null 2>&1
+    "${PORTNET}" connect "${SSID}" >/dev/null 2>&1
   fi
 }
 
 create_adhoc() {
   wait_for_wifi
-  "${NMCLI}" device set "${WIFI_DEV}" managed no >/dev/null 2>&1
 
   # Create an iwd AP profile file
   mkdir -p "${IWD_AP_CFG_DIR}"
@@ -112,36 +108,21 @@ EOF
 destroy_adhoc() {
   iwctl ap ${WIFI_DEV} stop 2>/dev/null
   rm -f "${IWD_AP_CFG_DIR}/${SSID}.ap" 2>/dev/null
-  "${NMCLI}" device set "${WIFI_DEV}" managed yes >/dev/null 2>&1
 }
 
-# Prefer the network currently in use for the next automatic connection. On
-# resume the radio is only rfkill-unblocked, so NetworkManager autoconnect
-# chooses among every saved profile and can join a different access point than
-# the one in use -- often on another subnet, silently moving the device and
-# dropping whatever was connected. The same applies at boot. Raising the
-# priority of the active profile makes NM try that one first.
+# Nothing to do any more, and kept only because sleep.sh calls it.
 #
-# Priority only, deliberately: every profile keeps autoconnect enabled, so a
-# preferred network that is out of range just loses to whatever is in range.
-# Turning autoconnect off on the others would pin harder but strand the device
-# on a network it can no longer see. With no active connection there is nothing
-# to prefer, and the priorities from the previous call still stand.
+# This used to raise NetworkManager's autoconnect-priority on the network
+# in use, so that a resume - where the radio comes back with only an rfkill
+# unblock - rejoined the same access point instead of whichever saved
+# profile NetworkManager tried first, which could silently move the device
+# to another subnet.
+#
+# iwd ranks its known networks by when each was last connected, so the one
+# in use is already the one it tries first. The behaviour this bought is
+# now the default.
 pin_wifi() {
-  local active name
-
-  active=$("${NMCLI}" -t -f GENERAL.CONNECTION device show "${WIFI_DEV}" 2>/dev/null | cut -d: -f2-)
-  [ -z "${active}" ] && return 0
-
-  "${NMCLI}" -t -f NAME,TYPE connection show 2>/dev/null |
-    awk -F: '$2 ~ /wireless/ {print $1}' |
-    while IFS= read -r name; do
-      if [ "${name}" = "${active}" ]; then
-        "${NMCLI}" connection modify "${name}" connection.autoconnect-priority 100 >/dev/null 2>&1
-      else
-        "${NMCLI}" connection modify "${name}" connection.autoconnect-priority 0 >/dev/null 2>&1
-      fi
-    done
+  return 0
 }
 
 has_ap_mode() {
@@ -171,8 +152,6 @@ case "${1}" in
       create_adhoc >/dev/null 2>&1
     else
       destroy_adhoc >/dev/null 2>&1
-      # Allow NetworkManager time to re-initialize the device after setting managed=yes
-      sleep 3
       connect_wifi >/dev/null 2>&1
     fi
   ;;
@@ -181,7 +160,7 @@ case "${1}" in
       destroy_adhoc >/dev/null 2>&1
       iwctl ap ${WIFI_DEV} stop 2>/dev/null
     else
-      "${NMCLI}" device disconnect "${WIFI_DEV}" >/dev/null 2>&1
+      "${PORTNET}" disconnect >/dev/null 2>&1
     fi
     ;;
   reconnect)
@@ -198,11 +177,9 @@ case "${1}" in
     has_ap_mode
     ;;
   scan)
-    "${NMCLI}" dev wifi rescan ifname "${WIFI_DEV}" 2>/dev/null
+    "${PORTNET}" list --rescan >/dev/null 2>&1
     ;;
   scanlist)
-    "${NMCLI}" dev wifi rescan ifname "${WIFI_DEV}" 2>/dev/null
-    sleep 2
     list_wifi
     ;;
 esac
