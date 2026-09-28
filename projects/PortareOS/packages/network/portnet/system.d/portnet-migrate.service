@@ -1,0 +1,16 @@
+[Unit]
+Description=Hand NetworkManager's saved Wi-Fi to iwd
+# Before iwd rather than after: iwd does watch its storage directory, but
+# a network that is already there when it starts is one it can join on the
+# first scan instead of the second.
+Before=iwd.service
+ConditionPathExists=!/storage/.config/.portnet-migrated
+RequiresMountsFor=/storage
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/portnet-migrate
+
+[Install]
+WantedBy=basic.target

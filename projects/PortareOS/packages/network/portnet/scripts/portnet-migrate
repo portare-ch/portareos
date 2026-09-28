@@ -1,0 +1,93 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
+#
+# Hand NetworkManager's saved Wi-Fi to iwd, once.
+#
+# Until now NetworkManager held the credentials and iwd only did the
+# 802.11, so /var/lib/iwd is empty on every device that has ever joined a
+# network. Moving the credentials is the difference between an update that
+# comes back online by itself and one that asks the owner to type their
+# Wi-Fi password again from a handheld keyboard.
+#
+# This is a one-way copy, not a sync. NetworkManager's files are left where
+# they are: they cost nothing, and while it is still installed they are
+# what a rollback would need.
+#
+# It is deliberately not the "shipped config wins" case. A passphrase is
+# something the owner typed, like a save file, not a setting this build has
+# an opinion about.
+
+NM_DIR="/storage/.config/NetworkManager/system-connections"
+IWD_DIR="/var/lib/iwd"
+STAMP="/storage/.config/.portnet-migrated"
+
+[ -e "${STAMP}" ] && exit 0
+
+mkdir -p "${IWD_DIR}"
+chmod 0700 "${IWD_DIR}"
+
+# iwd names a file after the SSID when the SSID is safe to put in one, and
+# hex-encodes it behind an "=" when it is not. Mirror that rule rather than
+# assume: an SSID with a slash in it is legal and would otherwise land in
+# the wrong directory.
+iwd_name() {
+  case "${1}" in
+    ""|.*|*/*|*[!A-Za-z0-9\ ._-]*)
+      printf '=';
+      printf '%s' "${1}" | od -An -tx1 -v | tr -d ' \n'
+      ;;
+    *) printf '%s' "${1}" ;;
+  esac
+}
+
+migrated=0
+for f in "${NM_DIR}"/*.nmconnection; do
+  [ -f "${f}" ] || continue
+
+  # A keyfile is ini-shaped but the keys we want are unique across it, so
+  # the first match of each is the right one.
+  ssid=$(sed -n 's/^ssid=//p' "${f}" | head -1)
+  [ -n "${ssid}" ] || continue
+  type=$(sed -n 's/^type=//p' "${f}" | head -1)
+  [ "${type}" = "wifi" ] || continue
+
+  keymgmt=$(sed -n 's/^key-mgmt=//p' "${f}" | head -1)
+  psk=$(sed -n 's/^psk=//p' "${f}" | head -1)
+
+  case "${keymgmt}" in
+    wpa-psk|sae)
+      [ -n "${psk}" ] || continue
+      out="${IWD_DIR}/$(iwd_name "${ssid}").psk"
+      [ -e "${out}" ] && continue
+      # An 8-to-63 character passphrase is what a person typed; 64 hex
+      # digits is the pre-shared key itself, and iwd wants it under a
+      # different name.
+      case "${#psk}" in
+        64) printf '[Security]\nPreSharedKey=%s\n' "${psk}" >"${out}" ;;
+        *)  printf '[Security]\nPassphrase=%s\n' "${psk}" >"${out}" ;;
+      esac
+      ;;
+    ""|none)
+      out="${IWD_DIR}/$(iwd_name "${ssid}").open"
+      [ -e "${out}" ] && continue
+      : >"${out}"
+      ;;
+    *)
+      # 802.1X and WEP. Neither converts from a keyfile without more than
+      # a passphrase, and this device has never been able to ask for it.
+      continue
+      ;;
+  esac
+
+  chmod 0600 "${out}"
+  migrated=$((migrated + 1))
+done
+
+# The stamp is written even when nothing moved, so a device that never
+# joined a network does not re-scan the directory on every boot.
+mkdir -p "$(dirname "${STAMP}")"
+: >"${STAMP}"
+
+[ "${migrated}" -gt 0 ] && echo "portnet-migrate: moved ${migrated} network(s) to iwd"
+exit 0

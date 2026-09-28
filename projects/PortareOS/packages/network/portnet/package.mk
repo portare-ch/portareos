@@ -13,4 +13,6 @@ PKG_TOOLCHAIN="make"
 makeinstall_target() {
   mkdir -p ${INSTALL}/usr/bin
     cp -a ${PKG_BUILD}/portnet ${INSTALL}/usr/bin
+    cp -a ${PKG_DIR}/scripts/portnet-migrate ${INSTALL}/usr/bin
+    chmod 0755 ${INSTALL}/usr/bin/portnet-migrate
 }
