@@ -242,51 +242,54 @@ index 000000000000..1c8ed849edbf
 +	},
 +	{
 +		/*
-+		 * 120.19778Hz, which is 2 x 60.098814 - the NTSC Super
++		 * 120.197628Hz, which is 2 x 60.098814 - the NTSC Super
 +		 * Nintendo: a 21477272.7Hz master clock over 357366 cycles a
-+		 * frame, the rate snes9x reports.
++		 * frame, the rate snes9x reports. Nestopia's NES is the same
++		 * number and shares this mode.
 +		 *
 +		 *   119.880120 / 60.0988 = 1.9947   <- a frame dropped about
 +		 *                                       every 3.2 seconds
-+		 *   120.197775 / 60.0988 = 2.0000   <- this one
++		 *   120.197628 / 60.0988 = 2.0000   <- this one
 +		 *
-+		 *   156654000 / (1302 * 1001) = 120.19778...
++		 *   174651000 / (1302 * 1116) = 120.197628
 +		 *
-+		 * Exactly 2 x 60.0988, to the six figures the pixel clock can
-+		 * express: 174651000 / (1302 * 1116) = 120.197628, which is
-+		 * 0.00ppm and a frame of drift every 823 hours. Every other
-+		 * mode in this table is a near miss of one to two ppm. The
-+		 * only mode above 120Hz, and the pixel clock is 11.5% above
-+		 * the 119.88 mode's.
++		 * Exact, to the six figures a whole-kHz pixel clock can express:
++		 * 0.00ppm, a frame of drift every 823 hours. Every other mode in
++		 * this table is a near miss of one to two ppm, and this is the
++		 * only one above 120Hz.
 +		 *
-+		 * The back porch is 67 lines rather than the 27 every other
-+		 * mode here carries, and that is the point of this mode. Black
-+		 * frame insertion flips on every refresh instead of every
-+		 * second one, so it meets the vertical blanking deadline twice
-+		 * as often, and the DPU begins fetching the next frame inside
-+		 * that window. At 27 lines the window is 340.8us; measured with
-+		 * BFI on snes9x, about three flips in 10,800 missed it, and a
-+		 * missed flip inverts the light/dark alternation and shows as a
-+		 * black band rolling down the panel.
++		 * The back porch is 142 lines rather than the 27 every other mode
++		 * here carries, and that is the other half of the point. Black
++		 * frame insertion flips on every refresh instead of every second
++		 * one, so it meets the vertical blanking deadline twice as often,
++		 * and the DPU begins fetching the next frame inside that window.
++		 * At 27 lines the window is 340.8us; measured with BFI on snes9x,
++		 * about three flips in 10,800 missed it, and a missed flip
++		 * inverts the light/dark alternation and shows as a black band
++		 * rolling down the panel.
 +		 *
-+		 *   41 lines  / 8.31126us a line = 340.8us
-+		 *  156 lines  / 7.45489us a line = 1163.0us
++		 *    41 lines / 8.31126us a line =  340.8us
++		 *   156 lines / 7.45489us a line = 1163.0us
 +		 *
-+		 * 3.41x the margin, and the rate stops drifting at all. The
-+		 * cost is DSI bit clock: 1047.9MHz a lane against 939.9, up
-+		 * 11.5%, which is the part of this that is a test rather than
-+		 * a calculation. The PHY on this SoC goes far higher; whether
-+		 * the panel controller takes it is what the first boot says.
++		 * 3.41x the margin, and with no drift the frontend has no
++		 * correction to make either, so the BFI cadence holds on its own
++		 * rather than being re-established every couple of hours.
++		 *
++		 * The cost is DSI bit clock: 1047.9MHz a lane against 939.9, up
++		 * 11.5%. That is the part of this that is a test rather than a
++		 * calculation - the PHY on this SoC goes far higher, and whether
++		 * the panel controller takes it is what the first boot answers.
 +		 * If it does not, the same mode at vtotal 1042 is -1.2ppm and
 +		 * 654.7us for 4.1% more clock, and 1001 is where it started.
 +		 *
-+		 * vtotal has to be even. The ideal clock is about 156497.31Hz
-+		 * per line, so an even vtotal lands near a whole kHz and an
-+		 * odd one near the half, which is the worst place to round
-+		 * from - 1041 would be +1.8ppm where 1042 is -1.2. The 119.88 mode cannot be widened this way:
-+		 * its exactness needs htotal * vtotal divisible by 1001, and
-+		 * vtotal supplies the 11 and the 13, so it only grows in steps
-+		 * of 143 lines. This one is an approximation already.
++		 * vtotal has to be even. The ideal clock is about 156497.31Hz per
++		 * line, so an even vtotal lands near a whole kHz and an odd one
++		 * near the half, which is the worst place to round from: 1041
++		 * would be +1.8ppm where 1042 is -1.2.
++		 *
++		 * None of this transfers to the 119.88 mode. Its exactness needs
++		 * htotal * vtotal divisible by 1001 and vtotal supplies the 11
++		 * and the 13, so it only grows in steps of 143 lines.
 +		 */
 +		.clock = 174651,
 +		.hdisplay = 1280,
