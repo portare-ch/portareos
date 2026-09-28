@@ -19,10 +19,10 @@
 |Nintendo|Nintendo 64 (n64)|1996|`n64`|.z64 .n64 .v64 .zip .7z|**retroarch:** parallel_n64 (default)<br>|
 |Nintendo|Nintendo 64 Disk Drive (n64dd)|1999|`n64dd`|.z64 .n64 .v64 .ndd .zip .7z|**retroarch:** parallel_n64 (default)<br>|
 |Nintendo|Satellaview (satellaview)|1995|`satellaview`|.smc .fig .bs .sfc .bsx .swc .zip .7z|**retroarch:** snes9x (default)<br>|
-|Nintendo|Super Famicom (sfc)|1990|`sfc`|.smc .fig .sfc .swc .zip .7z|**retroarch:** snes9x (default)<br>**retroarch:** bsnes<br>|
+|Nintendo|Super Famicom (sfc)|1990|`sfc`|.smc .fig .sfc .swc .zip .7z|**retroarch:** snes9x (default)<br>|
 |Nintendo|Super NES MSU-1 (snesmsu1)|2012|`snesmsu1`|.smc .fig .sfc .swc .zip .7z|**retroarch:** snes9x (default)<br>|
-|Nintendo|Super Nintendo (Hacks) (snesh)|1991|`snesh`|.smc .fig .sfc .swc .zip .7z|**retroarch:** snes9x (default)<br>**retroarch:** bsnes<br>|
-|Nintendo|Super Nintendo (snes)|1991|`snes`|.smc .fig .sfc .swc .zip .7z|**retroarch:** snes9x (default)<br>**retroarch:** bsnes<br>|
+|Nintendo|Super Nintendo (Hacks) (snesh)|1991|`snesh`|.smc .fig .sfc .swc .zip .7z|**retroarch:** snes9x (default)<br>|
+|Nintendo|Super Nintendo (snes)|1991|`snes`|.smc .fig .sfc .swc .zip .7z|**retroarch:** snes9x (default)<br>|
 |Nintendo|Triforce (triforce)|2002|`triforce`|.gcm .iso .gcz .ciso .wbfs .rvz .dol .m3u|**retroarch:** dolphin (default)<br>|
 |Nintendo|Wii (wii)|2006|`wii`|.gcm .iso .gcz .ciso .wbfs .rvz .dol .wad .m3u|**retroarch:** dolphin (default)<br>|
 |Nintendo|WiiWare (wiiware)|2008|`wiiware`|.gcm .iso .gcz .ciso .wbfs .rvz .dol .wad .m3u|**retroarch:** dolphin (default)<br>|

@@ -56,12 +56,6 @@ for CRT-like motion clarity. `video_black_frame_insertion` is 0 today. Wants
 a panel measurement first: brightness loss, and whether the mode switch and
 the timed presents keep their cadence with it on.
 
-### The SNES core
-
-Snes9x ships; bsnes is built and unused. bsnes resamples to 48 kHz internally,
-so it cannot use the 32 kHz link, and it is slower. The question is accuracy
-on the games people play here, and it needs a side-by-side on the device.
-
 ### The last 130 MB
 
 From `documentation/PACKAGE_INVENTORY.md`: slang-shaders trimmed to the three

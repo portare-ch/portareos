@@ -30,37 +30,37 @@ fi
 
 case "${DEVICE}" in
   RK3399)
-    LIBRETRO_CORES+=" bsnes-lr dolphin-lr"
+    LIBRETRO_CORES+=" dolphin-lr"
     ;;
   RK3566|RK3576)
     LIBRETRO_CORES+=" dolphin-lr"
     ;;
   RK3588)
-    LIBRETRO_CORES+=" bsnes-lr dolphin-lr"
+    LIBRETRO_CORES+=" dolphin-lr"
     ;;
   SM6115)
     PKG_EMUS+=" armsx2-sa"
-    LIBRETRO_CORES+=" bsnes-lr dolphin-lr"
+    LIBRETRO_CORES+=" dolphin-lr"
     ;;
   SM8250)
     PKG_EMUS+=" xemu-sa steam armsx2-sa"
-    LIBRETRO_CORES+=" bsnes-lr dolphin-lr"
+    LIBRETRO_CORES+=" dolphin-lr"
     ;;
   SM8550)
     PKG_EMUS+=" xemu-sa steam armsx2-sa"
-    LIBRETRO_CORES+=" bsnes-lr dolphin-lr"
+    LIBRETRO_CORES+=" dolphin-lr"
     ;;
   SM8650|SM8750)
     PKG_EMUS+=" xemu-sa steam armsx2-sa"
-    LIBRETRO_CORES+=" bsnes-lr dolphin-lr"
+    LIBRETRO_CORES+=" dolphin-lr"
     ;;
   S922X)
     PKG_EMUS+=" armsx2-sa"
-    LIBRETRO_CORES+=" bsnes-lr dolphin-lr"
+    LIBRETRO_CORES+=" dolphin-lr"
     ;;
   AMD64)
     PKG_EMUS+=" xemu-sa armsx2-sa"
-    LIBRETRO_CORES+=" bsnes-lr dolphin-lr"
+    LIBRETRO_CORES+=" dolphin-lr"
 esac
 
 # Split building emulators into 2 stages, needed to fit the jobs into the 6 hour GH runner time limit.
@@ -450,29 +450,14 @@ makeinstall_target() {
 
   ### Nintendo SNES
   add_emu_core snes retroarch snes9x true
-  case ${DEVICE} in
-    RK3399|RK3588|SM6115|SM8250|SM8550|SM8650|SM8750|S922X|AMD64)
-      add_emu_core snes retroarch bsnes false
-      ;;
-  esac
   add_es_system snes
 
   ### Nintendo SNES Hacks
   add_emu_core snesh retroarch snes9x true
-  case ${DEVICE} in
-    RK3399|RK3588|SM6115|SM8250|SM8550|SM8650|SM8750|S922X|AMD64)
-      add_emu_core snesh retroarch bsnes false
-      ;;
-  esac
   add_es_system snesh
 
   ### Nintendo Super Famicom
   add_emu_core sfc retroarch snes9x true
-  case ${DEVICE} in
-    RK3399|RK3588|SM6115|SM8250|SM8550|SM8650|SM8750|S922X|AMD64)
-      add_emu_core sfc retroarch bsnes false
-      ;;
-  esac
   add_es_system sfc
 
   ### Nintendo Stellaview

@@ -108,7 +108,7 @@ the settings nobody had tuned for them.
 | Game Boy, Game Boy Color | Gambatte |
 | Game Boy Advance | mGBA |
 | NES, Famicom, Famicom Disk System | Nestopia UE |
-| Super Nintendo | Snes9x (bsnes still under evaluation) |
+| Super Nintendo | Snes9x |
 | Nintendo 64 | ParaLLEl N64 with ParaLLEl-RDP on Vulkan |
 | GameCube, Wii | Dolphin |
 | Master System, Game Gear, Mega Drive, Sega CD | Genesis Plus GX |

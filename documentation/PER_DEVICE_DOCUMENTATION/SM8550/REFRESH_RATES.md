@@ -10,7 +10,7 @@ The console modes use the same 1302 × 1001 total timings and change only the pi
 |---|---|---|
 | 119.880120 Hz | 156240 kHz | default (launcher, everything else) |
 | 119.455046 Hz | 155686 kHz | `gambatte`, `mgba` |
-| 120.197775 Hz | 156654 kHz | `snes9x`, `bsnes`, `nestopia` |
+| 120.197775 Hz | 156654 kHz | `snes9x`, `nestopia` |
 | 119.652237 Hz | 155943 kHz | `parallel_n64`, `swanstation`, `mednafen_saturn` |
 | 119.845592 Hz | 156195 kHz | `genesis_plus_gx` |
 | 118.360134 Hz | 154259 kHz | `fbneo`, for `neogeo` only |

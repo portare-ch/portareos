@@ -169,7 +169,7 @@ else
 fi
 
 echo "== Emulation"
-WANT_CORES="mednafen_saturn bsnes dolphin fbneo flycast gambatte genesis_plus_gx mgba neocd nestopia parallel_n64 picodrive ppsspp scummvm snes9x swanstation"
+WANT_CORES="mednafen_saturn dolphin fbneo flycast gambatte genesis_plus_gx mgba neocd nestopia parallel_n64 picodrive ppsspp scummvm snes9x swanstation"
 GOT_CORES=$(ls /usr/lib/libretro/ 2>/dev/null | sed -n 's/_libretro\.so$//p' | sort | tr '\n' ' ')
 check E1 "core set is the README table" [ "${GOT_CORES}" = "$(echo ${WANT_CORES} | tr ' ' '\n' | sort | tr '\n' ' ')" ]
 [ "${GOT_CORES}" = "$(echo ${WANT_CORES} | tr ' ' '\n' | sort | tr '\n' ' ')" ] || echo "     got: ${GOT_CORES}"
