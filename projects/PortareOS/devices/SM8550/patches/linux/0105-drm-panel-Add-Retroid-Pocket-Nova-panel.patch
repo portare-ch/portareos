@@ -35,7 +35,7 @@ new file mode 100644
 index 000000000000..1c8ed849edbf
 --- /dev/null
 +++ b/drivers/gpu/drm/panel/panel-ilitek-il97680a.c
-@@ -0,0 +1,696 @@
+@@ -0,0 +1,699 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * Ilitek IL97680A panels driver
@@ -244,8 +244,11 @@ index 000000000000..1c8ed849edbf
 +		/*
 +		 * 120.197628Hz, which is 2 x 60.098814 - the NTSC Super
 +		 * Nintendo: a 21477272.7Hz master clock over 357366 cycles a
-+		 * frame, the rate snes9x reports. Nestopia's NES is the same
-+		 * number and shares this mode.
++		 * frame. Nestopia computes that clock exactly. snes9x rounds
++		 * it to 21477272 and reports 0.034ppm low, which PortareOS
++		 * patches (001-exact-ntsc-rate.patch); without that patch this
++		 * mode is exact for the NES and +0.037ppm for the SNES it is
++		 * named after. Both cores share it.
 +		 *
 +		 *   119.880120 / 60.0988 = 1.9947   <- a frame dropped about
 +		 *                                       every 3.2 seconds

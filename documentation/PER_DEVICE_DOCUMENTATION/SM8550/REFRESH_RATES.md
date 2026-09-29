@@ -34,6 +34,12 @@ is 2 x 60.0988 to the six figures a whole-kHz pixel clock can express,
 so the frontend has no correction to make and the cadence does not drift
 - a frame every 823 hours against every two.
 
+That holds only while both cores report the clock exactly. Nestopia
+does. Snes9x rounds the master clock to 21477272 and comes out 0.034 ppm
+low, which would leave this mode +0.037 ppm against it - exact for the
+NES and a near miss for the SNES it is named after - so PortareOS
+patches it (`001-exact-ntsc-rate.patch`).
+
 The cost is DSI bit clock, 1047.9MHz a lane against 939.9, up 11.5%, and
 that is the part of this that is a test rather than a calculation. The
 PHY on this SoC goes far higher; whether the panel controller takes it
@@ -49,9 +55,19 @@ same way: its exactness needs `htotal * vtotal` divisible by 1001 and
 `vtotal` supplies the 11 and the 13, so it only grows in steps of 143
 lines, which would be 14% more bit clock.
 
-Unverified: the kernel carrying this has not been built or run. What it
-is meant to fix, and how to tell whether it did, is E3's frametime
-harness with BFI on - the band is visible by eye, a few times a minute.
+The mode runs. The panel takes 174651 kHz at vtotal 1116, 1047.9MHz a
+lane, and `modetest -c` lists it; RetroArch selects it by rate and logs
+`one present a frame, 16.639 ms apart`, with no DSI or PHY errors in
+dmesg. That answers the bit-clock question this mode was a test of.
+
+Still unverified, and both need BFI on, which it was not for that test:
+whether the wide blanking actually fixes the missed-flip band, which is
+what E3's frametime harness with BFI is for - the band is visible by
+eye, a few times a minute - and the panel's own measured rate. The
+vblank counter in `/sys/kernel/debug/dri/0/crtc-0/status` only advances
+while the vblank IRQ is enabled, so it cannot be sampled over wall
+clock; that measurement needs the `DRM_IOCTL_WAIT_VBLANK` program
+described above.
 
 ## Pacing: how a frame lands on a frame
 
