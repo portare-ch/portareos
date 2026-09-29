@@ -1,0 +1,71 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] input: rsinput: the MCU report interval as a parameter
+
+The driver sends a params command at init carrying two big-endian 32-bit
+values, 0x28 and 0x07. Patch 1012 calls this the framed-report-mode
+command, so 0x07 is the mode; 0x28, decimal 40, was never explained.
+
+Measured on a Nova, counting SYN_REPORT on the node the frontend reads:
+1903 reports in 20 s, a 9.77 ms median interval, 95.1 Hz. Forty quarter-
+milliseconds is 10.00 ms, so that field is the report interval and the
+vendor set it to the slowest value in the whole input path - 4.89 ms of
+average latency, more than the audio path costs.
+
+Ten is 2.5 ms, 400 Hz, worth 3.75 ms. The serial link is the ceiling
+above that: 115200 baud is 11520 bytes a second and a report is an eight
+byte header plus payload, so 500 Hz does not fit.
+
+A parameter rather than a constant, for two reasons. The meaning of the
+field is inferred from arithmetic matching a measurement, not from any
+documentation, so it may be wrong - and it says so immediately, because
+the rate will not move. And a pad that will not report at 2.5 ms is
+recovered with rsinput.report_interval=40 on the cmdline instead of a
+reflash.
+
+--- a/drivers/input/joystick/rsinput.c
++++ b/drivers/input/joystick/rsinput.c
+@@ -55,7 +55,28 @@
+ static int axis_righty_max=0x580;
+ static int axis_righty_deadzone=0x0;
+ static int axis_righty_antideadzone=0x0;
++
++/* The MCU's report interval, in quarter-milliseconds, as sent in the params
++ * command at init. The vendor value was 40, which is 10 ms - measured on a
++ * Nova at a 9.77 ms median, or 4.89 ms of average input latency, and the
++ * slowest setting of any term in the input path.
++ *
++ * 10 is 2.5 ms, 400 Hz. The link is the ceiling above that: serdev runs at
++ * 115200, which is 11520 bytes a second, and a report is an eight byte
++ * header plus payload, so 500 Hz does not fit.
++ *
++ * A parameter rather than a constant because the meaning of the field is
++ * inferred from the arithmetic matching the measurement, not from any
++ * documentation, and because a pad that will not report at 2.5 ms can be
++ * recovered with rsinput.report_interval=40 on the cmdline rather than a
++ * reflash.
++ */
++static int report_interval = 10;
+ 
++module_param(report_interval,int,0660);
++MODULE_PARM_DESC(report_interval,
++    "MCU report interval in quarter-milliseconds (10 = 2.5ms/400Hz, vendor default 40 = 10ms/100Hz)");
++
+ module_param(update_params,int,0660);
+ 
+ module_param(trigger_left_max,int,0660);
+@@ -238,10 +259,13 @@
+ 
+ static int rsinput_init_commands(struct rsinput_driver *drv) {
+     static const uint8_t version_request[] = {DATA_COMMOD_VERSION};
+-    static const uint8_t mcu_params[] = {
++    const uint8_t mcu_params[] = {
+         DATA_COMMOD_SET_PAR,
+         0x01,
+-        0x00, 0x00, 0x00, 0x28,
++        (report_interval >> 24) & 0xff,
++        (report_interval >> 16) & 0xff,
++        (report_interval >>  8) & 0xff,
++         report_interval        & 0xff,
+         0x00, 0x00, 0x00, 0x07
+     };
+     unsigned long timeout = msecs_to_jiffies(MCU_VERSION_ACK_TIMEOUT_MS);
