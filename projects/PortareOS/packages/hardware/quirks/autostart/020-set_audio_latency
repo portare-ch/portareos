@@ -14,7 +14,14 @@
 #
 # Swept downwards on the device to find a breaking point and there was none;
 # pw-top's ERR stayed flat on Snes9x and SwanStation. pcm-flags reads the
-# driver's own flags if this needs checking again. docs/audio-latency.md.
+# driver's own flags if this needs checking again.
+#
+# 8 was RetroArch's floor because its driver asked for a quantum of a
+# quarter of the setting and floored that at 128 frames, and held the ring
+# to two quanta: at 32 kHz both come to 256 frames, so asking for less was
+# raised back. RetroArch patch 0017 and PipeWire's min-quantum both move to
+# 64, so 4 is now a setting that means something - untested, which is why
+# this still writes 8. docs/audio-latency.md.
 AUDIO_LATENCY=$(get_setting audiolatency)
 if [ -z "${AUDIO_LATENCY}" ]
 then
