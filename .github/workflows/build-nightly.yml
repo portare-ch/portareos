@@ -400,8 +400,12 @@ jobs:
             echo "PortareOS - a minimalist distro for the Retroid Pocket Nova (SM8550),"
             echo "for people who like their coffee without milk and sugar. Extras are"
             echo "considered anti-features: no compositor, no EmulationStation, no"
-            echo "artwork, no PulseAudio, no resampling where none is needed (44.1 kHz),"
-            echo "and one display mode, 119.88 Hz, rather than VRR."
+            echo "artwork, no PulseAudio."
+            echo
+            echo "The panel has no VRR, so the driver carries a mode per console"
+            echo "family instead, each at twice that console's frame rate, and the"
+            echo "audio link follows the core at 32, 44.1 or 48 kHz. Nothing is"
+            echo "resampled where the console's own rate can be carried."
             echo
             echo "Write the .img.gz to a microSD card. See https://os.portare.org"
             echo "for installation steps."
