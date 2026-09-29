@@ -7,6 +7,15 @@ button-to-screen by about a frame. They also found RetroArch's audio latency
 setting would not go below 32 ms without crackling, where Android took 15. The
 game was Kirby Super Star, so the path under test was Snes9x at a 32 kHz link.
 
+**Measured after #422**, same tester, same method, same game: **8 to 15
+frames, averaging 13** - 33 to 63 ms against the original 42 to 79. The floor
+is now below Android's best of 10 frames, and the modelled budget for that
+path is 30.0 ms against a 33.3 ms measured floor, so the table below accounts
+for nearly all of it. The average still sits at 54 ms because the spread is
+29 ms: 16.6 of that is the emulator polling input once a frame and cannot be
+moved, and most of the rest is the period-granular pointer that #428 removes.
+That build did not carry #428.
+
 **What has been done:** the default is 24 ms rather than upstream's 32, worth
 4 ms at 48 and 44.1 kHz and **12 ms at 32 kHz**, so the path the report
 measured gains most. Since then the period step has gone (#422, on the device:
