@@ -62,9 +62,11 @@ and writes the default when the setting is absent. `setsettings.sh`'s
 `set_audiolatency` then writes it into RetroArch's `audio_latency` on **every**
 launch, so the global setting is what every core runs with and a value changed
 in RetroArch's own menu does not survive a relaunch. 32 was chosen for a tree
-that also has to boot on an RK3326; nothing picked it here. It is 24 now, with
-`migrate_audiolatency_24` in `post-update` moving an install that still sits on
-the old default and leaving any value chosen since alone.
+that also has to boot on an RK3326; nothing picked it here. It went to 24, and
+is 8 now that the DSP no longer sets the floor. `post-update` carries both
+moves, 32 to 24 and 24 to 8, registered in that order so an install still on
+upstream's value lands on 8 in one update; each moves only the old default and
+leaves a value chosen since alone.
 
 ### 2. What RetroArch does with the setting
 

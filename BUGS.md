@@ -391,7 +391,7 @@ over an upstream that lowered it to `basic`.
 
 ## Audio
 
-### Audio latency: the default is 24 ms now, the 480-frame floor is the rest
+### Audio latency: 8 ms now, and the DSP is no longer what sets the floor
 
 A user filming at 240 fps measured 10-19 frames of button-to-sound against
 Android's 10-12, on Snes9x at a 32 kHz link, and could not lower RetroArch's
