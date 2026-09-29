@@ -69,9 +69,24 @@ every time the audio device opens:
 | 32 kHz | Super Nintendo; N64 games at 32 kHz |
 | 48 kHz | PS2, Xbox, GameCube and Wii, and everything else |
 
-The DSP takes 10 ms of audio at a time at every one of those rates. Upstream
-steps it by a fixed 480 frames, which is 10 ms only at 48 kHz and 15 at the
-SNES's 32; the driver now steps by the stream's own rate.
+### Audio latency down to the frontend's floor
+
+Two changes to the path between RetroArch and the speakers. The DSP took its
+audio in a fixed 480 frames at a time, which is 10 ms only at 48 kHz and 15 at
+the SNES's 32; it now takes 10 ms of frames at the stream's own rate. And the
+playback graph moved to the AudioReach endpoint that publishes a sample
+accurate position, so the kernel stops calling the device batch and PipeWire
+stops keeping an extra period queued against a pointer that used to move a
+period at a time.
+
+A community tester with a 240 fps camera had found RetroArch's audio latency
+setting would not go below 32 ms here without crackling, where Android took
+15. It now runs at **8 ms**, which is as low as RetroArch itself allows: a
+sweep downwards never found a breaking point, because the frontend clamps
+first. The DSP has stopped being the limit. `pcm-flags`, in the debug set,
+reads the driver's own flags and period steps rather than inferring them.
+
+The working is in [audio-latency.md](docs/audio-latency.md).
 
 The N64 is per game: each game programs its own rate, the core reports it
 once the game has, and the device reopens at the matching link rate. No

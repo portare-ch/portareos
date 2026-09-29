@@ -15,5 +15,7 @@ PKG_LONGDESC="What a problem on the device gets debugged with: gdb and strace"
 # desktop GPU monitor. gdb and strace are what a problem on the device
 # gets debugged with. vblank-rate measures the panel's real refresh
 # rate, which REFRESH_RATES.md's procedure for adding a mode needs and
-# nothing else on the image can do.
-PKG_DEPENDS_TARGET="toolchain gdb strace vblank-rate"
+# nothing else on the image can do. pcm-flags reads a PCM's info flags and
+# period steps straight from the driver; SNDRV_PCM_INFO_BATCH decides how
+# much PipeWire queues ahead and no /proc file prints it.
+PKG_DEPENDS_TARGET="toolchain gdb strace vblank-rate pcm-flags"

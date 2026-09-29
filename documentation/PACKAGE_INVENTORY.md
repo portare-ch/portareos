@@ -84,7 +84,7 @@ Done in #347:
 | plplay | 0 | libplacebo's demo player, not built |
 | usb-modeswitch | 1 | out of the image |
 | bluez's meshctl and mesh-cfgclient | 1 | bluez built without mesh |
-| apitrace, renderdoc, nvtop, memtester, valgrind, kmsxx, libva-utils | 0 | never in an image: the debug set is off for official builds, which the nightlies are. The set is gdb, strace and vblank-rate now, 12 MB, in unofficial builds only. |
+| apitrace, renderdoc, nvtop, memtester, valgrind, kmsxx, libva-utils | 0 | never in an image: the debug set is off for official builds, which the nightlies are. The set is gdb, strace, vblank-rate and pcm-flags now, 12 MB, in unofficial builds only. |
 | v4l-utils | 3 | already gone from fresh builds since IR remote support went off (#422373c); the image on the device predates that |
 
 Done in #335:
@@ -103,7 +103,7 @@ Done in #429:
 
 ## The sum
 
-Still on the table: slang-shaders ~60 + Python 34 + GStreamer 8: **about 100 MB**, without touching a supported system. Locales, gconv, p7zip and btrfs-progs came out for about 31 MB; see "Trimmed in place" below. About 250 MB is out already (above); gdb, strace and vblank-rate, 12 MB, come only with an unofficial build.
+Still on the table: slang-shaders ~60 + Python 34 + GStreamer 8: **about 100 MB**, without touching a supported system. Locales, gconv, p7zip and btrfs-progs came out for about 31 MB; see "Trimmed in place" below. About 250 MB is out already (above); gdb, strace, vblank-rate and pcm-flags, 12 MB, come only with an unofficial build.
 
 ## Method
 

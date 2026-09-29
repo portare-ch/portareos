@@ -7,16 +7,51 @@ button-to-screen by about a frame. They also found RetroArch's audio latency
 setting would not go below 32 ms without crackling, where Android took 15. The
 game was Kirby Super Star, so the path under test was Snes9x at a 32 kHz link.
 
-**What has been done:** the default is 24 ms rather than upstream's 32, worth
-4 ms at 48 and 44.1 kHz and **12 ms at 32 kHz**, so the path the report
-measured gains most. Since then the period step has gone (#422, on the device:
-`period_size` 320 at 32 kHz, was 480) and the batch flag is cleared in
-push-pull mode (#428, merged, not yet run). Section 4 below describes the
-floor as it was.
+## Where it ended up
 
-Nothing below has been measured on the device. Every number is read out of the
-code this image ships; the last section is how to check whether the budget is
-what actually happens.
+**The setting now goes to 8 ms, which is as low as RetroArch allows.** The
+sweep was run downwards to find the breaking point and never found one: at 4
+the frontend logs `8 ms setting ... (raised to the minimum)` and runs at 8.
+`pw-top`'s ERR column stayed flat on Snes9x and on SwanStation, the core this
+tree already documents as having run 55.65 fps with the buffer running dry.
+
+| | `audio_latency` floor, 32 kHz |
+|---|---|
+| as reported | **32 ms**, crackled below |
+| after #422 | ~24 ms |
+| after #422 and #428 | **8 ms**, the frontend's own minimum |
+
+The DSP path has stopped being the constraint. Both changes are now read out
+of the driver rather than inferred, with `pcm-flags`:
+
+```
+info flags, as the driver reports them:
+  BATCH                  no          <- #428, patch 1074
+
+at 32000 Hz:  accepted period sizes  320 640 960    <- #422, step 320 = 10.0 ms
+at 44100 Hz:  accepted period sizes  448 896        <- #422, step 448 = 10.2 ms
+```
+
+`SNDRV_PCM_INFO_BATCH` is what made PipeWire keep an extra period queued, and
+it was the largest single term in the budget below. It is gone. The step that
+was 480 frames at every rate is now 10 ms of frames at the stream's own rate.
+
+The intermediate measurement, after #422 but before #428, was the same
+tester's camera method: **8 to 15 frames at 240 fps, averaging 13** - 33 to
+63 ms against the original 42 to 79, with the floor already below Android's
+best of 10 frames. The absolute figure has not been re-measured since.
+
+**Still open:** power, since pull mode has the DSP publish its position
+continuously and nothing has looked at idle wakeups or suspend; the systems
+other than SNES and PlayStation; and whether 8 ms is safe to ship as the
+default, which needs the quirk in `020-set_audio_latency` changed and a
+migration beside it.
+
+## How it was reasoned about first
+
+Everything below was written before any of it was measured, from the code this
+image ships. It is kept because it is what the fixes were aimed at, and it was
+right about where the milliseconds were.
 
 ## The chain, at the shipped values
 
