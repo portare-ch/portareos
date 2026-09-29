@@ -224,25 +224,6 @@ static void run(const char *cmdline)
 		logmsg("fork failed: %s", strerror(errno));
 }
 
-// mkcontroller is the one helper that does not source /etc/profile itself and
-// needs what it sets, so it gets a shell. volume, brightness, ledcontrol and
-// wifictl all source it at the top and are exec'd directly.
-static void run_profile(const char *cmdline)
-{
-	char script[256];
-	pid_t pid;
-
-	snprintf(script, sizeof(script), ". /etc/profile; %s", cmdline);
-	logmsg("run (profile): %s", cmdline);
-	pid = fork();
-	if (pid == 0) {
-		execl("/bin/sh", "sh", "-c", script, (char *)NULL);
-		_exit(127);
-	}
-	if (pid < 0)
-		logmsg("fork failed: %s", strerror(errno));
-}
-
 // The launcher draws the on-screen display, because it holds DRM master. A
 // FIFO with no reader would block a button press, so open it non-blocking and
 // drop the message if nobody is listening - O_NONBLOCK gives ENXIO there
@@ -598,7 +579,6 @@ int main(void)
 	}
 
 	scan_devices();
-	run_profile("mkcontroller");
 
 	for (;;) {
 		struct epoll_event out[MAX_FDS + 4];
@@ -619,10 +599,6 @@ int main(void)
 				while (read(inotify_fd, buf, sizeof(buf)) > 0)
 					;
 				scan_devices();
-				// The script was killed by a udev rule on every
-				// input change so that its startup re-ran this;
-				// a new pad still needs a mapping built.
-				run_profile("mkcontroller");
 				continue;
 			}
 
