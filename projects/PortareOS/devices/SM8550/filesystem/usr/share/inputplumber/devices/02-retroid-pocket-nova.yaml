@@ -6,7 +6,7 @@ version: 1
 kind: CompositeDevice
 
 # Name of the composite device mapping
-name: AYANEO Japanese Layout
+name: Retroid Pocket Nova
 
 # Only use this profile if *any* of the given matches matches. If this list is
 # empty, then the source devices will *always* be checked.
@@ -16,17 +16,7 @@ matches:
       sys_path: /sys/firmware/devicetree/base
       attributes:
         - name: model
-          value: AYANEO Pocket ACE
-  - udev:
-      sys_path: /sys/firmware/devicetree/base
-      attributes:
-        - name: model
-          value: AYANEO Pocket DMG
-  - udev:
-      sys_path: /sys/firmware/devicetree/base
-      attributes:
-        - name: model
-          value: AYANEO Pocket S Mini
+          value: Retroid Pocket Nova
 
 # Only allow a single source device per composite device of this type.
 single_source: false
@@ -36,27 +26,27 @@ single_source: false
 source_devices:
   - group: gamepad
     evdev:
-      vendor_id: "1c4f"
-      product_id: "0002"
+      phys_path: rsinput-gamepad/input0
       handler: event*
-    capability_map_id: ayaneo_mcu_japanese
+    capability_map_id: nova_mcu
+
   - group: gamepad
     evdev:
-      vendor_id: "045e"
-      product_id: "028e"
+      name: gpio-keys
+      phys_path: gpio-keys/input0
       handler: event*
-    capability_map_id: ayaneo_mcu_japanese
+    capability_map_id: nova_mcu
+
+  # AYN Odin 2 back buttons (M1/M2): a separate gpio-keys device from the
+  # Odin 2 dts emitting BTN_Z (M1) / BTN_C (M2). Matched by name because
+  # its phys_path is shared with the other gpio-keys node. The ayn_mcu map
+  # turns them into Left/RightPaddle2, which the ds5-edge target emits as
+  # the Edge's real back-lever buttons.
   - group: gamepad
     evdev:
-      vendor_id: "4001"
-      product_id: "0428"
+      name: gpio-keys-paddles
       handler: event*
-    capability_map_id: ayaneo_mcu_japanese
-  - group: gamepad
-    evdev:
-      name: gpio-keys-pocket-s-mini
-      handler: event*
-    capability_map_id: ayaneo_pocketsmini_gpio
+    capability_map_id: nova_mcu
 
 # Optional configuration for the composite device
 options:
@@ -65,7 +55,10 @@ options:
   # external service enables management of the device. Defaults to 'false'
   auto_manage: true
 
-# The target input device(s) to emulate by default
+# The target input device(s) to emulate by default. ds5-edge is the DualSense
+# variant with back paddles, so the Odin 2's physical back buttons can be
+# emitted as the Edge's real removable back-lever buttons (see ayn_mcu.yaml;
+# decoded by the hid-playstation Edge support in patches/mainline/0006).
 target_devices:
-  - ds5
+  - ds5-edge
   - keyboard
