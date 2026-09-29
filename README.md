@@ -10,6 +10,8 @@ Home: **[os.portare.org](https://os.portare.org)**
 
 > ⚠️ **EXCITING BFI WORK ONGOING. PREPARE FOR SMOOTHNESS SOON**
 
+A one-line-per-feature summary is in [FEATURES.md](FEATURES.md).
+
 ## What it is
 
 The Nova has a 1280×960 panel at 120 Hz. That is 4:3, the shape of everything
