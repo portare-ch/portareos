@@ -24,6 +24,12 @@
 //   Home emits BTN_MODE on the pad and KEY_F1 on the keyboard target, one for
 //   one. Anything acting on both fires twice.
 //
+// Measured against the script it replaces, SNES running, 30 s of play with
+// both sticks moving: 170 ms of CPU against 340, and one process against
+// sixteen. Frames delivered were identical, 1803 at 60.09/s, so this is a CPU
+// saving and not a demonstrated frametime one. The cost was never the buttons
+// - evtest formatted every EV_ABS sample as text for grep to throw away.
+//
 // None of that is hardcoded to an event number: the nodes renumber, and
 // InputPlumber's targets appear after this starts. Every event device is
 // opened and dispatched on the code, which is also how hotplug stays simple.
