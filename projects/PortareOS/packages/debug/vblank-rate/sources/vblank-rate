@@ -1,0 +1,185 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
+"""Measure the panel's real refresh rate from the DRM vblank counter.
+
+The counter in /sys/kernel/debug/dri/0/crtc-0/status only advances while
+the vblank IRQ is enabled, so it cannot be sampled against wall clock: an
+idle panel reads about 27 Hz on a 120 Hz mode.
+
+Waiting on vblank enables the IRQ, but DRM_IOCTL_WAIT_VBLANK times out at
+3 s (-EBUSY), and splitting the run into shorter waits reintroduces the
+same error - vblank can be disabled between them, and DRM then rebuilds
+the count from the mode's nominal frame duration, which is the number we
+are trying to measure independently.
+
+So queue a vblank *event* for a sequence far ahead instead. The ioctl
+returns at once, the kernel holds a vblank reference until the event
+fires - keeping the IRQ on for the whole run - and the event carries the
+sequence and the timestamp of the vblank itself, so no scheduling jitter
+enters the measurement. Needs no DRM master: it runs while a game or the
+launcher holds the panel.
+
+One trap: those timestamps are CLOCK_MONOTONIC, which NTP slews. The DSI
+pixel clock is not slewed, so on a machine running timesyncd the slew is
+measured as if it were panel error - about 68 ppm here, which is far more
+than any mode's own error. So sample CLOCK_MONOTONIC_RAW alongside and
+report the rate against both: RAW shares the SoC's oscillator with the
+display clock and is what the mode arithmetic should be judged against.
+"""
+
+import argparse
+import errno
+import fcntl
+import os
+import re
+import select
+import struct
+import sys
+import time
+
+# DRM_IOWR(0x3a, union drm_wait_vblank); the union's reply arm is
+# {__u32 type; __u32 sequence; long tval_sec; long tval_usec;} = 24 bytes.
+DRM_IOCTL_WAIT_VBLANK = 0xC018643A
+_DRM_VBLANK_ABSOLUTE = 0x0
+_DRM_VBLANK_RELATIVE = 0x1
+_DRM_VBLANK_EVENT = 0x4000000
+DRM_EVENT_VBLANK = 0x01
+VBLANK_EVENT_SIZE = 32  # drm_event(8) + user_data(8) + sec,usec,seq,crtc_id(16)
+
+
+def vblank_ioctl(fd, type_, sequence, signal=0):
+    buf = bytearray(struct.pack("<IIQQ", type_, sequence & 0xFFFFFFFF, signal, 0))
+    while True:
+        try:
+            fcntl.ioctl(fd, DRM_IOCTL_WAIT_VBLANK, buf, True)
+            break
+        except OSError as e:
+            if e.errno == errno.EINTR:
+                continue
+            raise
+    _, seq, sec, usec = struct.unpack("<IIqq", bytes(buf))
+    return seq, sec + usec / 1e6
+
+
+def why_einval():
+    """EINVAL from a vblank ioctl is almost always a blanked panel.
+
+    drm_crtc_vblank_get() -> __enable_vblank() -> the driver's enable_vblank,
+    which fails while the CRTC is off; the ioctl returns that verbatim.
+    """
+    try:
+        with open("/sys/kernel/debug/dri/0/state") as f:
+            state = f.read()
+    except OSError:
+        return "Could not read DRM state to say why."
+    if re.search(r"^\tactive=1", state, re.M):
+        return "A CRTC is active, so this is not a blanked panel."
+    return ("No CRTC is active - the panel is blanked. Wake the display and "
+            "run this again; vblank cannot be enabled on a disabled CRTC.")
+
+
+def read_event(fd, timeout):
+    """Return (sequence, time) of the queued vblank event."""
+    deadline = select.select
+    while True:
+        r, _, _ = deadline([fd], [], [], timeout)
+        if not r:
+            return None
+        data = os.read(fd.fileno(), VBLANK_EVENT_SIZE)
+        if len(data) < VBLANK_EVENT_SIZE:
+            continue
+        etype, _, _, sec, usec, seq, _ = struct.unpack("<IIQIIII", data)
+        if etype == DRM_EVENT_VBLANK:
+            return seq, sec + usec / 1e6
+
+
+def main():
+    p = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("-d", "--device", default="/dev/dri/card0")
+    p.add_argument("-s", "--seconds", type=float, default=30.0,
+                   help="how long to measure (default 30)")
+    p.add_argument("-r", "--rate", type=float, default=120.0,
+                   help="rough rate, only to turn seconds into a vblank count")
+    p.add_argument("-t", "--target", type=float,
+                   help="expected rate in Hz; prints the error in ppm")
+    p.add_argument("-i", "--intervals", action="store_true",
+                   help="time every vblank and report the spread instead")
+    args = p.parse_args()
+
+    try:
+        fd = open(args.device, "rb+", buffering=0)
+    except OSError as e:
+        sys.exit("%s: %s" % (args.device, e.strerror))
+
+    with fd:
+        try:
+            # The first wait is also what enables the vblank IRQ, and
+            # drm_update_vblank_count() runs on enable, so its timestamp is
+            # not a clean measurement. Throw it away and start from the next.
+            vblank_ioctl(fd, _DRM_VBLANK_RELATIVE, 1)
+            seq0, t0 = vblank_ioctl(fd, _DRM_VBLANK_RELATIVE, 1)
+            mono0 = time.clock_gettime(time.CLOCK_MONOTONIC)
+            raw0 = time.clock_gettime(time.CLOCK_MONOTONIC_RAW)
+        except OSError as e:
+            if e.errno == errno.EINVAL:
+                sys.exit("WAIT_VBLANK: EINVAL. %s" % why_einval())
+            sys.exit("WAIT_VBLANK: %s" % e.strerror)
+
+        if args.intervals:
+            # Each wait is its own short one; good enough for spread, and it
+            # keeps every timestamp a real IRQ rather than an extrapolation.
+            stamps = [t0]
+            while stamps[-1] - t0 < args.seconds:
+                stamps.append(vblank_ioctl(fd, _DRM_VBLANK_RELATIVE, 1)[1])
+            seq1, t1 = seq0 + len(stamps) - 1, stamps[-1]
+        else:
+            n = max(2, int(round(args.seconds * args.rate)))
+            vblank_ioctl(fd, _DRM_VBLANK_ABSOLUTE | _DRM_VBLANK_EVENT, seq0 + n)
+            got = read_event(fd, args.seconds + 10.0)
+            if got is None:
+                sys.exit("the vblank event never arrived (display blanked "
+                         "mid-run?)")
+            seq1, t1 = got
+            if seq1 - seq0 != n:
+                # drm_crtc_vblank_off() flushes pending events, so a blanked
+                # panel delivers early and would otherwise look like a result.
+                sys.exit("run cut short: %d of %d vblanks before the event "
+                         "fired. The panel almost certainly blanked - keep it "
+                         "awake for the whole run." % (seq1 - seq0, n))
+
+    mono1 = time.clock_gettime(time.CLOCK_MONOTONIC)
+    raw1 = time.clock_gettime(time.CLOCK_MONOTONIC_RAW)
+
+    vblanks, elapsed = seq1 - seq0, t1 - t0
+    if vblanks <= 0 or elapsed <= 0:
+        sys.exit("no vblanks counted: %d over %.6f s" % (vblanks, elapsed))
+
+    # How much NTP slewed CLOCK_MONOTONIC over the run, measured rather than
+    # taken from adjtimex, so it covers whatever correction was actually
+    # applied - base frequency and any offset being worked off.
+    slew = (raw1 - raw0) / (mono1 - mono0) if mono1 > mono0 else 1.0
+
+    rate = vblanks / elapsed
+    rate_raw = vblanks / (elapsed * slew)
+    print("%d vblanks in %.6f s" % (vblanks, elapsed))
+    print("  vs CLOCK_MONOTONIC_RAW : %.5f Hz   <- the SoC's own clock"
+          % rate_raw)
+    print("  vs CLOCK_MONOTONIC     : %.5f Hz   (NTP slew %+.2f ppm)"
+          % (rate, (slew - 1.0) * 1e6))
+    if args.target:
+        for label, r in (("RAW", rate_raw), ("MONOTONIC", rate)):
+            err = (r - args.target) / args.target
+            drift = abs(1 / err / r / 3600) if err else float("inf")
+            print("  target %.6f Hz, %-9s: %+8.2f ppm, a frame every %.1f h"
+                  % (args.target, label, err * 1e6, drift))
+    if args.intervals:
+        d = sorted((stamps[i + 1] - stamps[i]) * 1000
+                   for i in range(len(stamps) - 1))
+        print("intervals ms: min %.3f  median %.3f  max %.3f  (n=%d)"
+              % (d[0], d[len(d) // 2], d[-1], len(d)))
+
+
+if __name__ == "__main__":
+    main()

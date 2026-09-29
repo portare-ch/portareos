@@ -13,5 +13,7 @@ PKG_LONGDESC="What a problem on the device gets debugged with: gdb and strace"
 # apitrace, renderdoc and nvtop on top. apitrace traces GL and the image
 # renders through Vulkan; renderdoc needs a desktop client; nvtop is a
 # desktop GPU monitor. gdb and strace are what a problem on the device
-# gets debugged with.
-PKG_DEPENDS_TARGET="toolchain gdb strace"
+# gets debugged with. vblank-rate measures the panel's real refresh
+# rate, which REFRESH_RATES.md's procedure for adding a mode needs and
+# nothing else on the image can do.
+PKG_DEPENDS_TARGET="toolchain gdb strace vblank-rate"
