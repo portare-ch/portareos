@@ -10,7 +10,7 @@ index 0d54cf9b90..bdea2ca072 100644
 -    #default.clock.max-quantum   = 2048
 +    default.clock.allowed-rates = [ 48000 44100 32000 ]
 +    default.clock.quantum       = 1024
-+    default.clock.min-quantum   = 256
++    default.clock.min-quantum   = 128
 +    default.clock.max-quantum   = 2048
      #default.clock.quantum-limit = 8192
      #default.clock.quantum-floor = 4

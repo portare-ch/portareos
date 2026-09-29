@@ -41,6 +41,15 @@ tester's camera method: **8 to 15 frames at 240 fps, averaging 13** - 33 to
 63 ms against the original 42 to 79, with the floor already below Android's
 best of 10 frames. The absolute figure has not been re-measured since.
 
+**Why 8 and not less:** RetroArch's driver asks for a quantum of a quarter
+of the setting and floored that at 128 frames, and holds the ring to at least
+two quanta. At 32 kHz the ring wants 256 frames at 8 ms and two 128-frame
+quanta is the same 256, so a lower setting was raised straight back - the
+driver logs `(raised to the minimum)` when it does. Both floors are 64 now,
+RetroArch patch 0017 and `default.clock.min-quantum`, which have to move
+together because either one alone still pins the quantum at 128. That makes 4
+a setting that means something; the default is still 8 until it is tested.
+
 **Still open:** power, since pull mode has the DSP publish its position
 continuously and nothing has looked at idle wakeups or suspend; the systems
 other than SNES and PlayStation; and whether 8 ms is safe to ship as the
