@@ -4,8 +4,17 @@
 
 . /etc/profile.d/001-functions
 
+# 24 ms, not upstream's 32. RetroArch asks the graph for a quarter of this
+# setting and sizes its own ring to hold twice what it asked for, but PipeWire
+# floors the graph quantum to a power of two, so from about 21 ms to 42 the
+# quantum sits at 256 frames however the setting moves: the ring shrinks with
+# the setting and the pull it has to service does not. 24 leaves the ring 2.25
+# pulls deep at 48 kHz and 2.07 at 44.1, against 1.5 at 16 ms. The floor is
+# scaled by rate, so this holds at 32 kHz too - there it is the one rate where
+# the quantum drops to 128 and the ring is 3 pulls deep.
+# docs/audio-latency.md.
 AUDIO_LATENCY=$(get_setting audiolatency)
 if [ -z "${AUDIO_LATENCY}" ]
 then
-  set_setting global.audiolatency 32
+  set_setting global.audiolatency 24
 fi

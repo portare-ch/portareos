@@ -332,7 +332,18 @@ migrate_integerscale_on() {
   done
 }
 
+# audiolatency shipped as 32 from upstream and 020-set_audio_latency only ever
+# writes it when unset, so an install that has booted once keeps 32. 24 keeps
+# RetroArch's ring more than two graph quanta deep at every link rate this
+# device uses, and is worth 4 to 12 ms depending on the rate. Only the old
+# default is moved, so a value chosen since stays. docs/audio-latency.md.
+migrate_audiolatency_24() {
+  [ "$(get_setting global.audiolatency)" = "32" ] || return 0
+  set_setting global.audiolatency 24
+}
+
 migrate cpugovernor-schedutil migrate_cpugovernor
+migrate audiolatency-24 migrate_audiolatency_24
 migrate es-fpslimit migrate_es_fpslimit
 migrate ssh-default-on migrate_ssh_on
 migrate colorprofile-stock migrate_colorprofile_stock

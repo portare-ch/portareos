@@ -55,6 +55,17 @@ jobs:
           fi
           echo "✅ No pulse outside the pipewire-pulse compatibility server."
 
+      - name: Check that patch hunk headers match their contents
+        if: github.event_name == 'pull_request'
+        run: |
+          # A hunk header that under-counts its own lines makes GNU patch apply
+          # only the lines it declares and drop the rest, exit 0. The file
+          # arrives truncated and the failure surfaces as a compile error with
+          # no obvious cause. 0105's count drifted across three comment edits
+          # and broke the kernel build from #411 to #419 without anything in CI
+          # noticing.
+          python3 .github/scripts/check-patch-hunks.py
+
       - name: Validate pull request
         if: github.event_name == 'pull_request'
         run: |

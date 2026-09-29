@@ -42,7 +42,7 @@ new file mode 100644
 index 000000000000..913c499ad30a
 --- /dev/null
 +++ b/drivers/input/joystick/rsinput.c
-@@ -0,0 +1,592 @@
+@@ -0,0 +1,593 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * RSInput Gamepad Driver

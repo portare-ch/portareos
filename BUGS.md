@@ -391,6 +391,33 @@ over an upstream that lowered it to `basic`.
 
 ## Audio
 
+### Audio latency: the default is 24 ms now, the 480-frame floor is the rest
+
+A user filming at 240 fps measured 10-19 frames of button-to-sound against
+Android's 10-12, on Snes9x at a 32 kHz link, and could not lower RetroArch's
+audio latency setting below 32 ms without crackling where Android took 15.
+
+`docs/audio-latency.md` budgets the chain. The default is now 24 rather than
+upstream's 32, worth 4 ms at 48 and 44.1 kHz and 12 ms at 32 kHz, because at
+24 ms a 32 kHz link is the one whose request falls under 256 frames and takes
+the graph quantum to 128. That needed no device: PipeWire floors the quantum to
+a power of two and scales its bounds by rate, so the ring stays more than two
+quanta deep at every rate this device uses.
+
+What remains is the sink. `q6apm-dai` declares `SNDRV_PCM_INFO_BATCH` and steps
+`PERIOD_SIZE` by 480 frames, so PipeWire adds a 480-frame headroom on top of the
+quantum - 10 ms at 48 kHz, 15 at 32 - and that is now the largest term.
+Untested ways at it, in order: `api.alsa.disable-tsched` (IRQ mode drops the
+headroom entirely), then lowering the 480 step in the driver, which the doc
+argues is the experiment worth running before any topology work.
+
+**Two things in the report are still unexplained.** 16 ms at a 32 kHz link
+should not crackle by this model, so either something else was late on that
+device or the setting was not taking effect - `setsettings` rewrites
+`audio_latency` at every launch, so a value changed in RetroArch's own menu does
+not survive. And none of the model has been measured: the journal line stating
+`period frames` and `headroom` is what confirms or kills it.
+
 ### hdmi_sense sink match is unverified
 
 The external display is DisplayPort over USB-C alt mode, so the connector is
