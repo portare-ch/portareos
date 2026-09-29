@@ -1,0 +1,52 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] ASoC: qdsp6: q6apm-dai: no BATCH flag in push-pull mode
+
+q6apm_dai_hardware_playback and _capture both set SNDRV_PCM_INFO_BATCH
+unconditionally. The flag says the hardware position is only known to a
+period, which is true of the shared memory endpoints: q6apm_dai_pointer()
+returns
+
+	q6apm_get_hw_pointer(prtd->graph, substream->stream) *
+	runtime->period_size
+
+In push-pull mode it is not true. The DSP publishes a sample accurate
+position in a shared memory buffer and q6apm_dai_pointer() reads the
+frame counter and index out of it, which is why the driver already
+carries q6apm_push_pull_config(), q6apm_register_watermark_event() and
+the pos_buffer. The graph knows which mode it is in before the hardware
+descriptor is copied, so the flag can be cleared where it does not hold.
+
+It is not a cosmetic flag. A userspace driving the PCM from a timer has
+to keep an extra period queued to cover a pointer that only advances in
+period steps - PipeWire does exactly this in recalc_headroom(), and so
+every stream pays a period of latency and up to a period of jitter, for
+a position that in push-pull mode is exact.
+
+No functional change for a topology whose playback graph uses
+WR_SHARED_MEM_EP, which is every topology in linux-firmware today.
+
+--- a/sound/soc/qcom/qdsp6/q6apm-dai.c
++++ b/sound/soc/qcom/qdsp6/q6apm-dai.c
+@@ -462,6 +462,22 @@
+ 		runtime->hw = q6apm_dai_hardware_playback;
+ 	else if (substream->stream == SNDRV_PCM_STREAM_CAPTURE)
+ 		runtime->hw = q6apm_dai_hardware_capture;
++
++	/*
++	 * SNDRV_PCM_INFO_BATCH means the position is only known to a period.
++	 * That is true of the shared memory endpoints, where q6apm_dai_pointer()
++	 * returns the DSP's buffer index multiplied by the period size, but not
++	 * of push-pull mode, where the DSP publishes a sample accurate position
++	 * in shared memory and the pointer is read from there.
++	 *
++	 * The flag is not free: a userspace that drives the PCM from a timer
++	 * has to keep a whole extra period queued to cover a pointer that only
++	 * moves in period steps, which is a period of added latency and a
++	 * period of jitter on every stream. Clear it where the position is
++	 * exact, so only the graphs that need it pay for it.
++	 */
++	if (q6apm_is_graph_in_push_pull_mode(prtd->graph))
++		runtime->hw.info &= ~SNDRV_PCM_INFO_BATCH;
+ 
+ 	/* Ensure that buffer size is a multiple of period size */
+ 	ret = snd_pcm_hw_constraint_integer(runtime, SNDRV_PCM_HW_PARAM_PERIODS);
