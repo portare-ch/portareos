@@ -10,6 +10,8 @@ Home: **[os.portare.org](https://os.portare.org)**
 
 > ⚠️ **EXCITING BFI WORK ONGOING. PREPARE FOR SMOOTHNESS SOON**
 
+A one-line-per-feature summary is in [FEATURES.md](FEATURES.md).
+
 ## What it is
 
 The Nova has a 1280×960 panel at 120 Hz. That is 4:3, the shape of everything
@@ -186,7 +188,7 @@ scanlines, because a DVD was made for a CRT. Position is saved on quit.
 
 ### Lightweight
 
-* The image is about 540 MB compressed.
+* The image is about 470 MB compressed.
 * PipeWire and nothing else. PulseAudio is banned, and a check in CI fails the
   build if it comes back. The graph's minimum quantum is 128 frames, 2.7 ms.
 * No EmulationStation, no sway, no artwork scraping, no media centre, no file
