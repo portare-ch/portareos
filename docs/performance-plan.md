@@ -74,6 +74,10 @@ throttling, so run it for a full 10 minutes, not 60 seconds.
 
 ### 4. The compositor's presentation path is unconfigured
 
+*Moot: there is no compositor. Every program takes the panel through KMS, and
+RetroArch presents each frame once, timed to its vblank. Kept for the
+reasoning, which is why the presentation path was worth suspecting.*
+
 The sway config sets no output mode, no `max_render_time`, and no adaptive
 sync, on a 1280x960 120 Hz panel. `sway.sh` exports
 `WLR_NO_HARDWARE_CURSORS=1`, and a software cursor can stop wlroots handing a

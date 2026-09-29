@@ -46,7 +46,7 @@ The rule this applies is the README's: if it is not needed for a smooth game, it
 
 ## Services that start at boot and deserve a look
 
-`batteryledstatus` (idle unless `led.color=battery`), `hdmi-sense` (runs on a display plug; the sway-era `hdmi-hotplug` is gone), `debug-shell`, `debugconfig`.
+`batteryledstatus` (idle unless `led.color=battery`), `hdmi-sense` (runs on a display plug; the sway-era `hdmi-hotplug` is gone), `debug-shell`, `debugconfig`. `input` runs `portsense`, which replaced a shell script that ran an evtest per device.
 
 ## Removed
 
@@ -84,7 +84,7 @@ Done in #347:
 | plplay | 0 | libplacebo's demo player, not built |
 | usb-modeswitch | 1 | out of the image |
 | bluez's meshctl and mesh-cfgclient | 1 | bluez built without mesh |
-| apitrace, renderdoc, nvtop, memtester, valgrind, kmsxx, libva-utils | 0 | never in an image: the debug set is off for official builds, which the nightlies are. The set is gdb and strace now, 12 MB, in unofficial builds only. |
+| apitrace, renderdoc, nvtop, memtester, valgrind, kmsxx, libva-utils | 0 | never in an image: the debug set is off for official builds, which the nightlies are. The set is gdb, strace and vblank-rate now, 12 MB, in unofficial builds only. |
 | v4l-utils | 3 | already gone from fresh builds since IR remote support went off (#422373c); the image on the device predates that |
 
 Done in #335:
@@ -94,9 +94,16 @@ Done in #335:
 | scummvm as a standalone, fluidsynth and its service | ~10 | ScummVM is the libretro core now, with FluidLite inside it for MIDI; the soundfont stays. The standalone's 76 MB is replaced by the core's 77, with ten engines fewer. The saving is fluidsynth and the service. |
 | qt6, and the CI job that built it | ~60 | ARMSX2 is built as upstream's SDL frontend, `armsx2-sdl`: VK_KHR_display to the panel, FullscreenUI for the menus, no window. Tested on the Nova before the switch. FEXConfig, a Qt desktop dialog, is not built. |
 
+Done in #429:
+
+| Package | MB | How |
+|---|---|---|
+| mkcontroller and its autostart | 0 | wrote 27 `DEVICE_BTN_*` variables nothing reads. `control-gen` stopped printing a `DEVICE` line, so the GUID was empty and every value came out blank; the only consumer anywhere is a template for standalone Mednafen, which is not installed. |
+| six AYANEO and Thor inputplumber configs | 0 | other handhelds' input maps in a one-device tree. The Nova's was the file named `02-ayn-controller.yaml`. |
+
 ## The sum
 
-Still on the table: slang-shaders ~60 + Python 34 + GStreamer 8: **about 100 MB**, without touching a supported system. Locales, gconv, p7zip and btrfs-progs came out for about 31 MB; see "Trimmed in place" below. About 250 MB is out already (above); gdb and strace, 12 MB, come only with an unofficial build.
+Still on the table: slang-shaders ~60 + Python 34 + GStreamer 8: **about 100 MB**, without touching a supported system. Locales, gconv, p7zip and btrfs-progs came out for about 31 MB; see "Trimmed in place" below. About 250 MB is out already (above); gdb, strace and vblank-rate, 12 MB, come only with an unofficial build.
 
 ## Method
 

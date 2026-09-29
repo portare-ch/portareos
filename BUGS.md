@@ -404,12 +404,13 @@ the graph quantum to 128. That needed no device: PipeWire floors the quantum to
 a power of two and scales its bounds by rate, so the ring stays more than two
 quanta deep at every rate this device uses.
 
-What remains is the sink. `q6apm-dai` declares `SNDRV_PCM_INFO_BATCH` and steps
-`PERIOD_SIZE` by 480 frames, so PipeWire adds a 480-frame headroom on top of the
-quantum - 10 ms at 48 kHz, 15 at 32 - and that is now the largest term.
-Untested ways at it, in order: `api.alsa.disable-tsched` (IRQ mode drops the
-headroom entirely), then lowering the 480 step in the driver, which the doc
-argues is the experiment worth running before any topology work.
+What remained was the sink. `q6apm-dai` stepped `PERIOD_SIZE` by 480 frames
+whatever the rate, so PipeWire's batch headroom was 10 ms at 48 kHz and 15 at
+32. #422 replaced the step with 10 ms of frames at the stream's own rate, which
+the device confirms: `period_size` 320 at 32 kHz, and RetroArch's `Sink rate`
+line now reads -50 ppm where it used to report -17451 and refuse to bias
+resampling. #428 clears `SNDRV_PCM_INFO_BATCH` in push-pull mode and moves the
+topology to `SH_MEM_PULL_MODE` to drop the headroom as well; merged, not run.
 
 **Two things in the report are still unexplained.** 16 ms at a 32 kHz link
 should not crackle by this model, so either something else was late on that
@@ -656,7 +657,7 @@ calls in `sleep.sh` is the whole revert.
 Three separate faults wearing one symptom, which is why it took three goes.
 
 1. **The hardware +/- keys never reached ES at all.** `ViewController::input`
-   maps volume to `joystick2up`, the right stick. `input_sense` owns the
+   maps volume to `joystick2up`, the right stick. `portsense` owns the
    physical keys and calls `/usr/bin/volume`.
 2. **`/usr/bin/volume` was broken by the pulse ban.** It ended in `pactl
    set-sink-volume`, and #54 deleted `pactl`. Fixed in #63 by moving to
@@ -668,7 +669,7 @@ Three separate faults wearing one symptom, which is why it took three goes.
    `emulationstation-sdl3#12` by constructing on first use and retrying.
 
 **Confirmed on hardware.** The overlay now appears on a hardware volume press,
-which exercises the entire chain in one go: `input_sense` to `/usr/bin/volume`
+which exercises the entire chain in one go: `portsense` to `/usr/bin/volume`
 to `wpctl` setting the sink, `node_param` seeing `channelVolumes` change on the
 PipeWire loop thread, and `VolumeInfoComponent` noticing the new value 40ms
 later.
@@ -703,7 +704,8 @@ and the DPU carried on scanning out at 120Hz behind it.
 
 **Confirmed on hardware.** `swaymsg "output * power off"` takes
 `ae00000.display-subsystem` from `avg 735805` to `0` and the whole `ebi`
-aggregate with it. A sway fallback is in place, internal outputs only.
+aggregate with it. That was the sway-era fallback; sway is gone from the image
+and the launcher holds DRM master, so the equivalent is a DPMS off on the CRTC.
 
 ### ondemand parked the little cluster at maximum
 

@@ -69,6 +69,10 @@ every time the audio device opens:
 | 32 kHz | Super Nintendo; N64 games at 32 kHz |
 | 48 kHz | PS2, Xbox, GameCube and Wii, and everything else |
 
+The DSP takes 10 ms of audio at a time at every one of those rates. Upstream
+steps it by a fixed 480 frames, which is 10 ms only at 48 kHz and 15 at the
+SNES's 32; the driver now steps by the stream's own rate.
+
 The N64 is per game: each game programs its own rate, the core reports it
 once the game has, and the device reopens at the matching link rate. No
 resampling where the console's rate can be carried. An exact 32040 Hz, the
@@ -176,8 +180,8 @@ scanlines, because a DVD was made for a CRT. Position is saved on quit.
   image, what has gone and what is still on the list is in
   [PACKAGE_INVENTORY.md](documentation/PACKAGE_INVENTORY.md): about 250 MB
   out so far, about 130 MB still to go.
-* Debug tools, gdb and strace, come only in builds that are not official
-  releases.
+* Debug tools come only in builds that are not official releases: gdb, strace
+  and `vblank-rate`, which measures the panel's real refresh rate.
 
 ### Latency
 
@@ -185,8 +189,11 @@ scanlines, because a DVD was made for a CRT. Position is saved on quit.
 schedutil with the chip's energy model, and the emulator frame queue kept as
 short as it goes: two swapchain images, no threaded video, each frame
 presented once and timed to its vblank, and automatic frame delay in
-RetroArch. Black frame insertion, which a 120 Hz panel showing 60 Hz content
-can afford, is work in progress.
+RetroArch. The panel holds the mode it is given to better than a part per
+million, measured against the SoC's own clock with `vblank-rate`, so the
+console rates above are what the display actually runs. Black frame
+insertion, which a 120 Hz panel showing 60 Hz content can afford, is work in
+progress.
 
 ### Kept current
 

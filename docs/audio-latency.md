@@ -7,10 +7,12 @@ button-to-screen by about a frame. They also found RetroArch's audio latency
 setting would not go below 32 ms without crackling, where Android took 15. The
 game was Kirby Super Star, so the path under test was Snes9x at a 32 kHz link.
 
-**What has been done:** the default is 24 ms rather than upstream's 32, which
-is worth 4 ms at 48 and 44.1 kHz and **12 ms at 32 kHz** - so the path the
-report measured is the one that gains most. Nothing else has changed, because
-nothing else can be justified without the device.
+**What has been done:** the default is 24 ms rather than upstream's 32, worth
+4 ms at 48 and 44.1 kHz and **12 ms at 32 kHz**, so the path the report
+measured gains most. Since then the period step has gone (#422, on the device:
+`period_size` 320 at 32 kHz, was 480) and the batch flag is cleared in
+push-pull mode (#428, merged, not yet run). Section 4 below describes the
+floor as it was.
 
 Nothing below has been measured on the device. Every number is read out of the
 code this image ships; the last section is how to check whether the budget is
@@ -89,6 +91,9 @@ has actually taken here.
 
 ### 4. The sink: a 480-frame floor that nothing above it can move
 
+*Superseded by #422 and #428; kept because the mechanism is unchanged and the
+numbers below are what the fixes were measured against.*
+
 `q6apm-dai.c` declares `SNDRV_PCM_INFO_BATCH` on both playback and capture, and
 constrains `PERIOD_SIZE` and `BUFFER_SIZE` to steps of **480 frames**, with the
 comment *"setup 10ms latency to accommodate DSP restrictions"*.
@@ -120,6 +125,8 @@ it.
 | 44.1 kHz, now 24 ms | 12.0 | 5.8 | 16.7 | **34.5** |
 | 32 kHz, was 32 ms | 16.0 | 8.0 | 23.0 | **47.0** |
 | 32 kHz, now 24 ms | 12.0 | 4.0 | 19.0 | **35.0** |
+| 32 kHz, 24 ms, with #422 | 12.0 | 4.0 | 14.0 | **30.0** |
+| 44.1 kHz, 24 ms, with #422 | 12.0 | 5.8 | 16.0 | **33.8** |
 
 The 32 kHz row gains 12 ms rather than 4, because at 24 ms it is the one rate
 whose request falls below 256 and takes the quantum down to 128 - which shrinks
@@ -181,12 +188,14 @@ the way in. Three pieces, in increasing order of how much is unknown:
    `SNDRV_PCM_INFO_BATCH` are applied in `q6apm_dai_open` to every substream,
    whatever graph is behind it. The comment says the step accommodates "DSP
    restrictions", which is a claim about the DSP that may only be true of the
-   default graph - downstream constants carried into mainline often are. **This
-   is the experiment to run first**: lower the step to 240 or 120 and see
-   whether the DSP still starts the graph. It is a one-constant patch, it is
-   independently testable, and it is where 10 to 15 ms of the budget lives. If
-   the DSP tolerates it, most of the gap closes without any topology work at
-   all.
+   default graph. **Done, and the claim was false.** #422 replaced the fixed
+   step with 10 ms of frames at the stream's own rate - 320 at 32 kHz, 448 at
+   44.1, 480 unchanged at 48 - and the DSP starts the graph as before. Measured
+   on the device with a SNES game running: `period_size: 320`, and the
+   pathological `Sink rate` warning RetroArch used to log (-17451 ppm of 32000)
+   is gone, replaced by -50 ppm. #428 then clears `SNDRV_PCM_INFO_BATCH` in
+   push-pull mode and moves the topology to `SH_MEM_PULL_MODE`, which should
+   take the headroom too; merged, not yet run.
 2. **Whether the shipped blob even has a low-latency graph.** Answerable by
    inspection: `tplg-playback-rates.py` already walks the type-7 PCM blocks and
    found only `MultiMedia1 Playback` and `MultiMedia2 Playback`. Android's
