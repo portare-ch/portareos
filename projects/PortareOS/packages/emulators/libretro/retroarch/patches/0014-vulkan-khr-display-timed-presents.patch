@@ -1,5 +1,5 @@
 From: portare-ch <hello@portare.org>
-Subject: [PATCH] vulkan/khr_display: a swap interval above 1 is a timed present, not a repeated one
+Subject: [PATCH] vulkan/khr_display: a held frame is a timed present, not a repeated one
 
 The Vulkan driver keeps a swap interval above 1 by presenting each frame
 interval times into a FIFO swapchain. On the KHR display context with
@@ -16,6 +16,16 @@ present the driver has timed, counted per present issued since it. The
 acquire then returns when the previous frame reaches the display, and
 the core has the whole frame period. The repeat loop stays for contexts
 that cannot time a present.
+
+Black frame insertion is the same problem at an interval of 1. It
+issues two presents a frame, the frame and the black one, so with two
+swapchain images the second present's acquire returns at the vblank
+between them and the core again has one refresh rather than two.
+setsettings gives BFI an interval of 1 because a frame must reach the
+display on every refresh for the black one to land in the gap; gating
+timed presents above 1 therefore left BFI on exactly the path this
+patch replaces, measured at 11% of frames missed on snes9x. The
+condition is an interval of at least 1, which is every held frame.
 
 Each target is half a refresh before the vblank it means. Mesa floors
 the time from its last vblank to whole refreshes and flips on the one
@@ -175,7 +185,7 @@ index e7cd7bd..d086725 100644
  
     /* Present mode logging */
     if (vk->swapchain == VK_NULL_HANDLE)
-@@ -3518,28 +3595,97 @@ void vulkan_context_destroy(gfx_ctx_vulkan_data_t *vk,
+@@ -3518,28 +3595,106 @@ void vulkan_context_destroy(gfx_ctx_vulkan_data_t *vk,
  #endif
  }
  
@@ -230,14 +240,23 @@ index e7cd7bd..d086725 100644
 +}
 +
 +/* Timed presents are on when the context asked for them, the device can
-+ * time presents, and the swapchain runs a swap interval above 1. */
++ * time presents, and the swapchain holds each present for a refresh or
++ * more.
++ *
++ * An interval of exactly 1 is black frame insertion, which issues two
++ * presents a frame - the frame and the black one - and needs this for
++ * the same reason everything above 1 does: with two swapchain images
++ * the second present's acquire returns at the vblank between them, so
++ * the core gets one refresh to make the next frame rather than two.
++ * Measured on snes9x, that missed 11% of frames. Gating this above 1
++ * left BFI on the repeated-present path this patch exists to replace. */
 +void vulkan_update_timed_presents(gfx_ctx_vulkan_data_t *vk)
 +{
 +   if (     vk->timed_presents
 +         && vk->display_timing_supported
 +         && vk->display_timing_query
 +         && vk->display_timing_refresh
-+         && vk->context.swap_interval > 1)
++         && vk->context.swap_interval >= 1)
 +      vk->context.flags |=  VK_CTX_FLAG_SWAP_INTERVAL_TIMED;
 +   else
 +      vk->context.flags &= ~VK_CTX_FLAG_SWAP_INTERVAL_TIMED;
