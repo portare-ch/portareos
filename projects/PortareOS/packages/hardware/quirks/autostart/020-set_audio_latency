@@ -4,17 +4,19 @@
 
 . /etc/profile.d/001-functions
 
-# 24 ms, not upstream's 32. RetroArch asks the graph for a quarter of this
-# setting and sizes its own ring to hold twice what it asked for, but PipeWire
-# floors the graph quantum to a power of two, so from about 21 ms to 42 the
-# quantum sits at 256 frames however the setting moves: the ring shrinks with
-# the setting and the pull it has to service does not. 24 leaves the ring 2.25
-# pulls deep at 48 kHz and 2.07 at 44.1, against 1.5 at 16 ms. The floor is
-# scaled by rate, so this holds at 32 kHz too - there it is the one rate where
-# the quantum drops to 128 and the ring is 3 pulls deep.
-# docs/audio-latency.md.
+# 8 ms, which is as low as RetroArch goes: ask for less and it logs "raised
+# to the minimum" and runs at 8 anyway. Upstream ships 32, and this was 24
+# until the DSP stopped being what set the floor - #422 gave the period 10 ms
+# at every rate instead of 480 frames, and #428 moved the playback graph to
+# SH_MEM_PULL_MODE, so the DSP publishes a sample accurate position, the
+# kernel stops setting SNDRV_PCM_INFO_BATCH and PipeWire stops keeping an
+# extra period queued against a pointer that moved a period at a time.
+#
+# Swept downwards on the device to find a breaking point and there was none;
+# pw-top's ERR stayed flat on Snes9x and SwanStation. pcm-flags reads the
+# driver's own flags if this needs checking again. docs/audio-latency.md.
 AUDIO_LATENCY=$(get_setting audiolatency)
 if [ -z "${AUDIO_LATENCY}" ]
 then
-  set_setting global.audiolatency 24
+  set_setting global.audiolatency 8
 fi

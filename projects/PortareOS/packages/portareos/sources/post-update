@@ -342,8 +342,20 @@ migrate_audiolatency_24() {
   set_setting global.audiolatency 24
 }
 
+# 24 held while the DSP set the floor. It does not any more: the period is
+# 10 ms at every rate (#422) and the playback graph publishes a sample
+# accurate position (#428), so 8 runs clean - and 8 is RetroArch's own
+# minimum, so there is nothing below it to try. Registered after the 24
+# migration, so an install still on upstream's 32 lands on 8 in one update.
+# Only the old default is moved; a value chosen since stays.
+migrate_audiolatency_8() {
+  [ "$(get_setting global.audiolatency)" = "24" ] || return 0
+  set_setting global.audiolatency 8
+}
+
 migrate cpugovernor-schedutil migrate_cpugovernor
 migrate audiolatency-24 migrate_audiolatency_24
+migrate audiolatency-8 migrate_audiolatency_8
 migrate es-fpslimit migrate_es_fpslimit
 migrate ssh-default-on migrate_ssh_on
 migrate colorprofile-stock migrate_colorprofile_stock
