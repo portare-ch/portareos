@@ -66,7 +66,9 @@ on the default mode, whose pixel clock the DSI PLL synthesises as
 and 119.88009 over 60, -0.50 and -0.17 ppm** from the 119.880113 those
 timings work out to. This is a video-mode panel, so the DPU drives the
 timing and the rate is the pixel clock over `htotal x vtotal`; the
-measurement says the chain delivers that.
+measurement says the chain delivers that. The SNES mode itself measures
+**+0.05 ppm over 20 s and -0.15 over 60**, with a game running to select
+it, so both modes are inside measurement error.
 
 **Measure against `CLOCK_MONOTONIC_RAW`, not `CLOCK_MONOTONIC`.** DRM
 timestamps vblanks with `ktime_get()`, which NTP slews; the pixel clock
@@ -76,11 +78,14 @@ slew was separately seen swinging between -114 and -142 ppm between
 runs - orders of magnitude more than the mode errors this table is cut
 to. `vblank-rate` samples both clocks and reports both rates.
 
-Still unverified, and it needs BFI on, which it was not for any of the
-above: whether the wide blanking actually fixes the missed-flip band,
-which is what E3's frametime harness with BFI is for - the band is
-visible by eye, a few times a minute. The 120.197628 mode's own rate has
-not been measured either; that needs a SNES game running to select it.
+**The band is still there with BFI on**, on this mode, and the test is not
+yet a fair one. `setsettings` gives BFI a swap interval of 1 so a frame
+reaches the display on every refresh, and the timed-present path was gated
+on an interval above 1, so BFI fell back to the repeated presents that
+patch exists to replace: visibly slowed, frames arriving a refresh late.
+A flip that late inverts the light/dark alternation whatever the blanking
+window is, and this mode widened a 340 us one. #427 opens the gate; until
+it is built, nothing here tests what the 156 lines are for.
 
 ## Pacing: how a frame lands on a frame
 
