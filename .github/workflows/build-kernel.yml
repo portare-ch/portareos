@@ -1,0 +1,172 @@
+name: Kernel
+
+# Build the kernel alone and swap it into a published nightly's update
+# tarball, for testing kernel changes (device-tree timings, audio and display
+# drivers) without waiting for a full build.
+#
+# Why a full build cannot do this cheaply: glibc builds against linux:host,
+# so linux is in the toolchain stage's recipe list, and that list's digest
+# includes projects/PortareOS/devices/SM8550/patches/linux/. Any kernel patch
+# therefore sends the toolchain stage cold, and every stage after it gates on
+# the stamps upstream handed it, so they go cold too.
+#
+# What this trusts, deliberately:
+# - The saved toolchain state is restored although the kernel recipe moved
+#   (build-state.sh --ignore-recipes). linux:host is rebuilt, because its own
+#   stamp no longer matches. glibc, built against the previous headers, is
+#   not. That is safe for driver and device-tree patches, which do not touch
+#   the userspace ABI headers. A patch under include/uapi needs a full build.
+# - Out-of-tree modules are carried over from the base image unchanged. They
+#   still load because the kernel version is the same. If it is not, repack
+#   refuses rather than ship modules built for another kernel.
+#
+# Runs on whatever branch is picked in the "Run workflow" form, so a PR can be
+# tested on the device before it is merged. Only reads the shared build
+# state, never writes it, so it does not need the "build" concurrency group.
+
+on:
+  workflow_dispatch:
+    inputs:
+      base:
+        description: 'Release tag to patch into (empty: the newest release that has an update tarball)'
+        required: false
+        default: ''
+        type: string
+
+concurrency:
+  group: kernel-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kernel:
+    timeout-minutes: 150
+    # The toolchain state is built on arm64 runners and holds arm64 host
+    # binaries, so this has to run on the same kind.
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+    env:
+      EMULATION_DEVICE: no
+      ENABLE_32BIT: no
+      MODULES_PKG: no
+      AUTOREMOVE: "yes"
+      PROJECT: PortareOS
+      DEVICE: SM8550
+      ARCH: aarch64
+      DISABLE_COLORS: yes
+      CCACHE_COMPILERCHECK: content
+      CCACHE_COMPRESS: 1
+      CCACHE_COMPRESSLEVEL: 6
+      CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,include_file_ctime
+    steps:
+      - name: Maximize build space
+        uses: justinthelaw/maximize-github-runner-space@v0.9.0
+        with:
+          skip-components: docker-engine
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Work out names
+        id: names
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          echo "owner_lc=${OWNER,,}" >> "$GITHUB_OUTPUT"
+          echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Retrieve ccache
+        run: |
+          URL="https://github.com/${{ github.repository_owner }}/${{ vars.CACHE_REPO || 'distribution-cache' }}/releases/download/ccache/ccache-aarch64-${{ env.DEVICE }}.tar"
+          .github/scripts/retrieve-ccache.sh "$URL" "aarch64-base"
+
+      - name: Restore the toolchain
+        env:
+          CACHE_REPO: ${{ github.repository_owner }}/${{ vars.CACHE_REPO || 'distribution-cache' }}
+        run: |
+          .github/scripts/build-state.sh restore-root \
+            build.${PROJECT}-${DEVICE}.${ARCH} \
+            state-aarch64-${DEVICE}-toolchain \
+            --ignore-recipes
+          # restore-root never fails a build; here a missing toolchain means a
+          # multi-hour cold build inside a job meant to take minutes, so stop.
+          if ! ls build.${PROJECT}-${DEVICE}.${ARCH}/toolchain/bin/*-gcc >/dev/null 2>&1; then
+            echo "::error::No saved toolchain to build on. It may be mid-upload by a running build; try again when that finishes, or run a full build first."
+            exit 1
+          fi
+
+      - name: Fetch the base update tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE: ${{ inputs.base }}
+        run: |
+          if [ -z "${BASE}" ]; then
+            for t in $(gh release list --repo "${GITHUB_REPOSITORY}" --limit 30 --json tagName --jq '.[].tagName'); do
+              if gh release view "${t}" --repo "${GITHUB_REPOSITORY}" --json assets --jq '.assets[].name' | grep -q '\.tar$'; then
+                BASE="${t}"
+                break
+              fi
+            done
+          fi
+          [ -n "${BASE}" ] || { echo "::error::No release with an update tarball"; exit 1; }
+          mkdir -p base
+          gh release download "${BASE}" --repo "${GITHUB_REPOSITORY}" --pattern '*.tar' --pattern '*.tar.sha256' --dir base
+          (cd base && sha256sum -c *.tar.sha256)
+          echo "BASE_TAG=${BASE}" >> "$GITHUB_ENV"
+
+      - name: Build the kernel
+        run: |
+          ./scripts/get_env > .env
+          { docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:${PWD} -w ${PWD} \
+              "ghcr.io/${{ steps.names.outputs.owner_lc }}/portareos-build:latest" \
+              bash -c "./scripts/build_mt linux && .github/scripts/kernel-update.sh export kernel-export"; \
+            echo $? > docker_exit_code; } | tee output.log | grep -E --color=never --line-buffered "^GET|^UNPACK|^BUILD|^INSTALL|^kernel-update" || true
+          exit "$(<docker_exit_code)"
+
+      - name: Archive output.logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: output.logs-${{ env.DEVICE }}-kernel
+          path: |
+            output.log
+            ./build.${{ env.PROJECT }}-${{ env.DEVICE }}.${{ env.ARCH }}/.threads/logs/
+
+      - name: Swap the kernel into the base
+        run: |
+          sudo apt-get install -y -qq squashfs-tools >/dev/null
+          .github/scripts/kernel-update.sh repack base/*.tar kernel-export out "kernel-${{ steps.names.outputs.short }}"
+
+      - name: Verify nothing else changed
+        run: .github/scripts/kernel-update.sh verify base/*.tar out/*.tar
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: kernel-update-${{ steps.names.outputs.short }}
+          path: out/
+          compression-level: 0
+          retention-days: 14
+
+      - name: Summary
+        run: |
+          T="$(ls out/*.tar)"
+          {
+            echo "### Kernel-only update"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| branch | \`${GITHUB_REF_NAME}\` |"
+            echo "| commit | \`${GITHUB_SHA::7}\` |"
+            echo "| base | \`${BASE_TAG}\` |"
+            echo "| kernel | \`$(cat kernel-export/MODVER)\` |"
+            echo "| tarball | \`$(basename "${T}")\` |"
+            echo
+            echo "Download the **kernel-update-${GITHUB_SHA::7}** artifact, unzip it, then:"
+            echo
+            echo '```'
+            echo "scp $(basename "${T}") root@<device>:/storage/.update/ && ssh root@<device> reboot"
+            echo '```'
+            echo
+            echo "Everything except the kernel and its in-tree modules is exactly \`${BASE_TAG}\`."
+          } >> "$GITHUB_STEP_SUMMARY"
