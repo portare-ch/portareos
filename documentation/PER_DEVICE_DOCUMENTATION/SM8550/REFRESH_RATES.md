@@ -60,14 +60,27 @@ lane, and `modetest -c` lists it; RetroArch selects it by rate and logs
 `one present a frame, 16.639 ms apart`, with no DSI or PHY errors in
 dmesg. That answers the bit-clock question this mode was a test of.
 
-Still unverified, and both need BFI on, which it was not for that test:
-whether the wide blanking actually fixes the missed-flip band, which is
-what E3's frametime harness with BFI is for - the band is visible by
-eye, a few times a minute - and the panel's own measured rate. The
-vblank counter in `/sys/kernel/debug/dri/0/crtc-0/status` only advances
-while the vblank IRQ is enabled, so it cannot be sampled over wall
-clock; that measurement needs the `DRM_IOCTL_WAIT_VBLANK` program
-described above.
+The panel also keeps the rate it is given. Measured with `vblank-rate`
+on the default mode, whose pixel clock the DSI PLL synthesises as
+156239991 Hz against the 156240000 asked for: **119.88005 Hz over 20 s
+and 119.88009 over 60, -0.50 and -0.17 ppm** from the 119.880113 those
+timings work out to. This is a video-mode panel, so the DPU drives the
+timing and the rate is the pixel clock over `htotal x vtotal`; the
+measurement says the chain delivers that.
+
+**Measure against `CLOCK_MONOTONIC_RAW`, not `CLOCK_MONOTONIC`.** DRM
+timestamps vblanks with `ktime_get()`, which NTP slews; the pixel clock
+is not slewed, so on a device running timesyncd the slew is measured as
+if it were panel error. Here that was +68 ppm drifting to +70, and the
+slew was separately seen swinging between -114 and -142 ppm between
+runs - orders of magnitude more than the mode errors this table is cut
+to. `vblank-rate` samples both clocks and reports both rates.
+
+Still unverified, and it needs BFI on, which it was not for any of the
+above: whether the wide blanking actually fixes the missed-flip band,
+which is what E3's frametime harness with BFI is for - the band is
+visible by eye, a few times a minute. The 120.197628 mode's own rate has
+not been measured either; that needs a SNES game running to select it.
 
 ## Pacing: how a frame lands on a frame
 
@@ -90,7 +103,7 @@ The dropped-frame count was about ten in every run, all in the first seconds, wh
 
 With the core paced by the panel, audio rate control only absorbs the residual between the mode and the panel's crystal, a few parts per million, rather than the difference between the audio and video clocks. Where the mode is not exactly twice the core's rate, the arcade boards for instance, the skew is larger and rate control bends the pitch accordingly, as on any other device.
 
-To see it working: the log has `Timed presents: swap interval 2, one present a frame, 16.683 ms apart.` when the path is in effect. A hardware-rendered core that creates its own Vulkan device has to enable `VK_GOOGLE_display_timing` for this, because RetroArch cannot add it afterwards. Flycast ignored the list it was given until its patch 002, and ran on the repeated presents. A core that still does gets `VK_GOOGLE_display_timing: not enabled on the device, presents are not timed.` in the log and falls back. RetroArch's statistics overlay (`statistics_show`) reports the core's frame rate, the loop deviation and the audio buffer's underruns. `/sys/kernel/debug/dri/0/crtc-0/status` counts vblanks, and a program waiting on `DRM_IOCTL_WAIT_VBLANK` on `/dev/dri/card0` measures the panel's real rate without DRM master: 119.653 Hz on the PlayStation mode, so the mode is what it says. A capture of the PipeWire sink (`pw-record --target <sink> -P '{ stream.capture.sink = true }'`) shows audio gaps as runs of zero samples.
+To see it working: the log has `Timed presents: swap interval 2, one present a frame, 16.683 ms apart.` when the path is in effect. A hardware-rendered core that creates its own Vulkan device has to enable `VK_GOOGLE_display_timing` for this, because RetroArch cannot add it afterwards. Flycast ignored the list it was given until its patch 002, and ran on the repeated presents. A core that still does gets `VK_GOOGLE_display_timing: not enabled on the device, presents are not timed.` in the log and falls back. RetroArch's statistics overlay (`statistics_show`) reports the core's frame rate, the loop deviation and the audio buffer's underruns. `vblank-rate` measures the panel's real rate without DRM master, from a queued DRM vblank event; `/sys/kernel/debug/dri/0/crtc-0/status` also counts vblanks but its counter only advances while the vblank IRQ is enabled, so it cannot be sampled against wall clock - an idle panel reads about 27 Hz on a 120 Hz mode. A capture of the PipeWire sink (`pw-record --target <sink> -P '{ stream.capture.sink = true }'`) shows audio gaps as runs of zero samples.
 
 ## Systems
 
