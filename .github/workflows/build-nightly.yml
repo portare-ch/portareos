@@ -431,8 +431,18 @@ jobs:
             fi
           } > release-notes.md
 
+          # --target, or gh tags the default branch's tip at the moment the
+          # release is created rather than the commit this was built from.
+          # A build takes an hour or two and next moves in the meantime, so
+          # every tag pointed at whatever landed while the build ran - the
+          # head the *next* build would use. Two things went wrong with that:
+          # the tag misidentified what is in the release, and the changelog
+          # below diffs PREV..GITHUB_SHA, where PREV was a tag already
+          # pointing at GITHUB_SHA, so the range came out empty and the notes
+          # said "Nothing new" for a build that carried a kernel change.
           gh release create "${TAG}" "${FILES[@]}" \
             --repo "${GITHUB_REPOSITORY}" \
+            --target "${GITHUB_SHA}" \
             --title "${TAG}" \
             --notes-file release-notes.md \
             ${PRERELEASE}
