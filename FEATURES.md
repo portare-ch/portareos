@@ -60,7 +60,7 @@ inventory, with a test for every row, is in
 ## Not in the image
 
 No compositor, no EmulationStation, no artwork scraping, no media centre, no file
-manager, no Qt, no PulseAudio. The image is about 540 MB compressed.
+manager, no Qt, no PulseAudio. The image is about 470 MB compressed.
 
 ## What would help most
 

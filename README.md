@@ -188,7 +188,7 @@ scanlines, because a DVD was made for a CRT. Position is saved on quit.
 
 ### Lightweight
 
-* The image is about 540 MB compressed.
+* The image is about 470 MB compressed.
 * PipeWire and nothing else. PulseAudio is banned, and a check in CI fails the
   build if it comes back. The graph's minimum quantum is 256 frames, 5.3 ms.
 * No EmulationStation, no sway, no artwork scraping, no media centre, no file
