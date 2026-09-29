@@ -31,5 +31,9 @@ makeinstall_target() {
 
     python3 ${PKG_DIR}/sources/tplg-playback-rates.py \
       ${INSTALL}/$(get_full_firmware_dir)/qcom/sm8550/AYN-Odin2-tplg.bin
+
+    # Runs second: its IN_SHA256 is the file the script above produces.
+    python3 ${PKG_DIR}/sources/tplg-pull-mode.py \
+      ${INSTALL}/$(get_full_firmware_dir)/qcom/sm8550/AYN-Odin2-tplg.bin
   fi
 }
