@@ -1,0 +1,112 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] ASoC: qdsp6: q6apm-dai: 10 ms periods at every rate
+
+q6apm-dai constrains the period and buffer to a step of 480 frames, with
+the comment "setup 10ms latency to accommodate DSP restrictions". 480
+frames is 10 ms only at 48 kHz. At 44.1 kHz it is 10.9 ms and at 32 kHz
+it is 15 ms.
+
+On this board the period is more than a transfer size. The topology
+(AYN-Odin2-tplg.bin) uses WR_SHARED_MEM_EP rather than SH_MEM_PULL_MODE,
+so the pointer advances a whole period at a time:
+
+	ptr = q6apm_get_hw_pointer(prtd->graph, substream->stream) *
+	      runtime->period_size;
+
+and the device is SNDRV_PCM_INFO_BATCH, for which PipeWire keeps one
+extra period queued on top of its quantum (recalc_headroom() in
+spa/plugins/alsa/alsa-pcm.c). So the period sets both the extra latency
+and the jitter of every stream. Snes9x plays at 32 kHz, and paid 15 ms
+of each where a 48 kHz stream pays 10.
+
+Replace the fixed step with a rule that steps by 10 ms of frames at the
+stream's own rate, rounded up to whole 32-frame blocks: 480 at 48 kHz as
+before, 448 at 44.1 kHz, 320 at 32 kHz. Every period is still at least
+10 ms and a multiple of 32 frames, both of which 480 already was, so the
+DSP sees nothing shorter or less aligned than it does at 48 kHz today.
+
+The rule does nothing until the rate is a single value, so a client that
+sets the rate before the period (PipeWire does) gets the right step, and
+a request below the step is refined up to it exactly as with 480.
+diff --git a/sound/soc/qcom/qdsp6/q6apm-dai.c b/sound/soc/qcom/qdsp6/q6apm-dai.c
+index 82a5f78..04d28a4 100644
+--- a/sound/soc/qcom/qdsp6/q6apm-dai.c
++++ b/sound/soc/qcom/qdsp6/q6apm-dai.c
+@@ -383,6 +383,49 @@ static int q6apm_dai_trigger(struct snd_soc_component *component,
+ 	return ret;
+ }
+ 
++/*
++ * The DSP is handed whole periods of at least 10 ms. Upstream expresses that
++ * as a step of 480 frames, which is 10 ms only at 48 kHz: 10.9 ms at 44.1 kHz
++ * and 15 ms at 32 kHz. On a batch device the period is also the granularity
++ * of the hardware pointer and the headroom PipeWire keeps queued on top of its
++ * quantum, so the fixed step made every stream below 48 kHz slower and more
++ * jittery than one at 48 kHz: by 5 ms of each at 32 kHz.
++ *
++ * Step by 10 ms of frames at the stream's own rate instead, rounded up to
++ * whole 32-frame blocks: 480 at 48 kHz as before, 320 at 32 kHz, 448 at
++ * 44.1 kHz. Every period stays at least 10 ms and a multiple of 32 frames,
++ * both of which 480 already was.
++ */
++#define Q6APM_PERIOD_MIN_MS	10
++#define Q6APM_PERIOD_ALIGN	32
++
++static int q6apm_dai_rule_period_step(struct snd_pcm_hw_params *params,
++				      struct snd_pcm_hw_rule *rule)
++{
++	const struct snd_interval *rate =
++		hw_param_interval_c(params, SNDRV_PCM_HW_PARAM_RATE);
++	struct snd_interval *size = hw_param_interval(params, rule->var);
++	unsigned int step, min, max;
++	struct snd_interval t;
++
++	/* Until the rate is a single value there is no frame length to step by. */
++	if (!snd_interval_single(rate))
++		return 0;
++
++	step = roundup(DIV_ROUND_UP(snd_interval_value(rate) * Q6APM_PERIOD_MIN_MS,
++				    1000), Q6APM_PERIOD_ALIGN);
++
++	min = size->min + (size->openmin ? 1 : 0);
++	max = size->max - (size->openmax ? 1 : 0);
++
++	snd_interval_any(&t);
++	t.min = roundup(min, step);
++	t.max = rounddown(max, step);
++	t.integer = 1;
++
++	return snd_interval_refine(size, &t);
++}
++
+ static int q6apm_dai_open(struct snd_soc_component *component,
+ 			  struct snd_pcm_substream *substream)
+ {
+@@ -436,16 +479,22 @@ static int q6apm_dai_open(struct snd_soc_component *component,
+ 		}
+ 	}
+ 
+-	/* setup 10ms latency to accommodate DSP restrictions */
+-	ret = snd_pcm_hw_constraint_step(runtime, 0, SNDRV_PCM_HW_PARAM_PERIOD_SIZE, 480);
++	/* whole periods of at least 10 ms at the stream's own rate, see above */
++	ret = snd_pcm_hw_rule_add(runtime, 0, SNDRV_PCM_HW_PARAM_PERIOD_SIZE,
++				  q6apm_dai_rule_period_step, NULL,
++				  SNDRV_PCM_HW_PARAM_PERIOD_SIZE,
++				  SNDRV_PCM_HW_PARAM_RATE, -1);
+ 	if (ret < 0) {
+-		dev_err(dev, "constraint for period bytes step ret = %d\n", ret);
++		dev_err(dev, "constraint for period size step ret = %d\n", ret);
+ 		goto err;
+ 	}
+ 
+-	ret = snd_pcm_hw_constraint_step(runtime, 0, SNDRV_PCM_HW_PARAM_BUFFER_SIZE, 480);
++	ret = snd_pcm_hw_rule_add(runtime, 0, SNDRV_PCM_HW_PARAM_BUFFER_SIZE,
++				  q6apm_dai_rule_period_step, NULL,
++				  SNDRV_PCM_HW_PARAM_BUFFER_SIZE,
++				  SNDRV_PCM_HW_PARAM_RATE, -1);
+ 	if (ret < 0) {
+-		dev_err(dev, "constraint for buffer bytes step ret = %d\n", ret);
++		dev_err(dev, "constraint for buffer size step ret = %d\n", ret);
+ 		goto err;
+ 	}
+ 
