@@ -52,7 +52,7 @@
 #   build-state.sh snapshot     <build-dir>                     # prints the digest
 #   build-state.sh restore      <build-dir> <asset-base> <digest>
 #   build-state.sh save         <build-dir> <asset-base> <digest>
-#   build-state.sh restore-root <build-dir> <asset-base>
+#   build-state.sh restore-root <build-dir> <asset-base> [--ignore-recipes]
 #   build-state.sh save-root    <build-dir> <asset-base> {<path>... | -T <file>}
 #
 # Environment:
@@ -339,7 +339,7 @@ recipe_digest() {
 }
 
 cmd_restore_root() {
-  local build_dir="$1" asset="$2"
+  local build_dir="$1" asset="$2" ignore_recipes="${3:-}"
   local have have_root want
 
   if ! fetch_parts "${asset}"; then
@@ -365,14 +365,29 @@ cmd_restore_root() {
   fi
 
   if [ "${have}" != "${want}" ]; then
-    rm -f state.tar
-    echo "build-state: recipes changed since this state was saved - building cold."
-    echo "  saved against ${have}"
-    echo "  now           ${want}"
-    return 0
+    # --ignore-recipes is for the kernel-only workflow, which exists precisely
+    # because a kernel patch moves the toolchain stage's digest (glibc builds
+    # against linux:host) without changing anything the toolchain is made of.
+    # Restoring anyway is not blind: every package whose own recipe moved still
+    # rebuilds, because its stamp no longer matches. What it accepts is that
+    # packages built on top of a moved one are not rebuilt with it, which is
+    # the whole point for glibc and a device-tree patch. Only the caller knows
+    # that is safe, so only the caller can ask for it.
+    if [ "${ignore_recipes}" = "--ignore-recipes" ]; then
+      echo "build-state: recipes changed since this state was saved - restoring anyway (--ignore-recipes)."
+      echo "  saved against ${have}"
+      echo "  now           ${want}"
+    else
+      rm -f state.tar
+      echo "build-state: recipes changed since this state was saved - building cold."
+      echo "  saved against ${have}"
+      echo "  now           ${want}"
+      return 0
+    fi
+  else
+    echo "build-state: recipes unchanged - restoring ${asset}."
   fi
 
-  echo "build-state: recipes unchanged - restoring ${asset}."
   tar --zstd -xf state.tar || echo "build-state: extract failed - building cold."
   # The full extract puts the two metadata files back into the checkout; they
   # have served their purpose and save-root writes them fresh.
