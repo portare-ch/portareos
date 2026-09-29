@@ -6,10 +6,10 @@ version: 2
 kind: CapabilityMap
 
 # Name for the device event map
-name: AYANEO MCU Mapping (Xbox mode)
+name: Retroid Pocket Nova MCU Mapping
 
 # Unique identifier of the capability mapping
-id: ayaneo_mcu_xbox
+id: nova_mcu
 
 # List of mapped events
 mapping:
@@ -37,7 +37,7 @@ mapping:
     source_events:
       - evdev:
           event_type: KEY
-          event_code: BTN_WEST
+          event_code: BTN_NORTH
           value_type: button
     target_event:
       gamepad:
@@ -47,7 +47,7 @@ mapping:
     source_events:
       - evdev:
           event_type: KEY
-          event_code: BTN_NORTH
+          event_code: BTN_WEST
           value_type: button
     target_event:
       gamepad:
@@ -87,16 +87,25 @@ mapping:
     source_events:
       - evdev:
           event_type: KEY
-          event_code: BTN5
+          event_code: BTN_BACK
           value_type: button
     target_event:
       keyboard: KeyF1
+
+  - name: Home Key
+    source_events:
+      - evdev:
+          event_type: KEY
+          event_code: KEY_F24
+          value_type: button
+    target_event:
+      keyboard: KeyHome
 
   - name: Right Trigger
     source_events:
       - evdev:
           event_type: ABS
-          event_code: ABS_GAS
+          event_code: ABS_RZ
           value_type: trigger
     target_event:
       gamepad:
@@ -107,7 +116,7 @@ mapping:
     source_events:
       - evdev:
           event_type: ABS
-          event_code: ABS_BRAKE
+          event_code: ABS_Z
           value_type: trigger
     target_event:
       gamepad:
@@ -142,7 +151,7 @@ mapping:
           value_type: button
     target_event:
       gamepad:
-        button: RightPaddle1
+        button: RightPaddle2
 
   - name: Left Paddle
     source_events:
@@ -152,7 +161,7 @@ mapping:
           value_type: button
     target_event:
       gamepad:
-        button: LeftPaddle1
+        button: LeftPaddle2
 
   - name: Right Stick
     source_events:
@@ -207,10 +216,9 @@ mapping:
   - name: Dpad Left
     source_events:
       - evdev:
-          event_type: ABS
-          event_code: ABS_HAT0X
+          event_type: KEY
+          event_code: BTN_DPAD_LEFT
           value_type: button
-          axis_direction: negative
     target_event:
       gamepad:
         button: DPadLeft
@@ -218,10 +226,9 @@ mapping:
   - name: Dpad Right
     source_events:
       - evdev:
-          event_type: ABS
-          event_code: ABS_HAT0X
+          event_type: KEY
+          event_code: BTN_DPAD_RIGHT
           value_type: button
-          axis_direction: positive
     target_event:
       gamepad:
         button: DPadRight
@@ -229,10 +236,9 @@ mapping:
   - name: Dpad Down
     source_events:
       - evdev:
-          event_type: ABS
-          event_code: ABS_HAT0Y
+          event_type: KEY
+          event_code: BTN_DPAD_DOWN
           value_type: button
-          axis_direction: positive
     target_event:
       gamepad:
         button: DPadDown
@@ -240,10 +246,9 @@ mapping:
   - name: Dpad Up
     source_events:
       - evdev:
-          event_type: ABS
-          event_code: ABS_HAT0Y
+          event_type: KEY
+          event_code: BTN_DPAD_UP
           value_type: button
-          axis_direction: negative
     target_event:
       gamepad:
         button: DPadUp
