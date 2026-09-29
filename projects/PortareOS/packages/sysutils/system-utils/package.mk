@@ -9,6 +9,10 @@ PKG_URL=""
 PKG_LONGDESC="Hardware button support scripts."
 PKG_TOOLCHAIN="manual"
 
+make_target() {
+  make -C ${PKG_BUILD}/portsense
+}
+
 makeinstall_target() {
 
   mkdir -p ${INSTALL}/usr/lib/autostart/common
@@ -19,7 +23,7 @@ makeinstall_target() {
   cp ${PKG_DIR}/sources/scripts/headphone_sense ${INSTALL}/usr/bin
   cp ${PKG_DIR}/sources/scripts/output_monitor ${INSTALL}/usr/bin
   cp ${PKG_DIR}/sources/scripts/hdmi_sense ${INSTALL}/usr/bin
-  cp ${PKG_DIR}/sources/scripts/input_sense ${INSTALL}/usr/bin
+  cp ${PKG_BUILD}/portsense/portsense ${INSTALL}/usr/bin
   cp ${PKG_DIR}/sources/scripts/ledcontrol ${INSTALL}/usr/bin
   cp ${PKG_DIR}/sources/scripts/analog_sticks_ledcontrol ${INSTALL}/usr/bin
   cp ${PKG_DIR}/sources/scripts/battery_led_status ${INSTALL}/usr/bin
