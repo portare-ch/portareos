@@ -120,7 +120,7 @@ ES_CONFIG="/storage/.emulationstation/es_settings.cfg"
 VERBOSE=false
 LOG_DIRECTORY="/var/log"
 LOG_FILE="exec.log"
-RUN_SHELL="/usr/bin/bash"
+RUN_SHELL="/bin/bash"
 RETROARCH_TEMP_CONFIG="/storage/.config/retroarch/retroarch.cfg"
 RETROARCH_APPEND_CONFIG="/tmp/.retroarch.cfg"
 NETWORK_PLAY="No"
@@ -528,6 +528,17 @@ then
     set_refresh_rate "${DISPLAY_MODE}"
   fi
 fi
+
+### The backlight, if the emulator left it off. PORTAMP turns it off for
+### its screen-off and back on as it quits, but not if it is killed in the
+### dark - and the launcher blanks through the CRTC, not the backlight,
+### so it would come back to a black panel. Boot never sets less than 5.
+for BL in /sys/class/backlight/*/brightness; do
+  if [ "$(cat "${BL}" 2>/dev/null)" = "0" ]; then
+    /usr/lib/autostart/common/006-display >/dev/null 2>&1
+    break
+  fi
+done
 
 ### Restore cooling profile.
 if [ "${DEVICE_HAS_FAN}" = "true" ]

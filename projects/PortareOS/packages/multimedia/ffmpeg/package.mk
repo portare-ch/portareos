@@ -8,12 +8,14 @@ PKG_SITE="https://ffmpeg.org"
 PKG_DEPENDS_TARGET="toolchain zlib bzip2 openssl speex"
 PKG_LONGDESC="FFmpeg is a complete, cross-platform solution to record, convert and stream audio and video."
 
-PKG_VERSION="7.1.1"
-PKG_SHA256="733984395e0dbbe5c046abda2dc49a5544e7e0e1e2366bba849222ae9e3a03b1"
+PKG_VERSION="9.0.2"
+PKG_SHA256="8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e"
 PKG_URL="http://ffmpeg.org/releases/ffmpeg-${PKG_VERSION}.tar.xz"
-PKG_PATCH_DIRS="libreelec"
-
-PKG_PATCH_DIRS+=" v4l2-request v4l2-drmprime v4l2-m2m-flush"
+# LibreELEC's patch sets are gone. They were for Kodi: a libdav1d
+# get_format hook, v4l2m2m frames as DRM PRIME, the v4l2-request hwaccel
+# (configured off here) and a Rockchip deinterlacer. mpv decodes through
+# v4l2m2m-copy and needs none of them. Their v4l2m2m flush restarted both
+# queues, which stalls iris; ffmpeg-002 replaces it.
 
 post_unpack() {
   # Fix FFmpeg version
@@ -29,42 +31,12 @@ get_graphicdrivers
 
 PKG_FFMPEG_HWACCEL="--enable-hwaccels"
 
-case ${DEVICE} in
-  RK3588*)
-    V4L2_SUPPORT=no
-  ;;
-  *)
-    case ${DEVICE} in
-      RK*)
-        PKG_PATCH_DIRS+=" vf-deinterlace-v4l2m2m"
-      ;;
-    esac
-  ;;
-esac
-
 if [ "${V4L2_SUPPORT}" = "yes" ]; then
   PKG_DEPENDS_TARGET+=" libdrm"
   PKG_NEED_UNPACK+=" $(get_pkg_directory libdrm)"
   PKG_FFMPEG_V4L2="--enable-v4l2_m2m --enable-libdrm"
-
-  case ${DEVICE} in
-    PC|RK*|S922X)
-      PKG_V4L2_REQUEST="yes"
-    ;;
-    *)
-      PKG_V4L2_REQUEST="no"
-    ;;
-  esac
-
-  if [ "${PKG_V4L2_REQUEST}" = "yes" ]; then
-    PKG_DEPENDS_TARGET+=" systemd"
-    PKG_NEED_UNPACK+=" $(get_pkg_directory systemd)"
-    PKG_FFMPEG_V4L2+=" --enable-libudev --enable-v4l2-request"
-  else
-    PKG_FFMPEG_V4L2+=" --disable-libudev --disable-v4l2-request"
-  fi
 else
-  PKG_FFMPEG_V4L2="--disable-v4l2_m2m --disable-libudev --disable-v4l2-request"
+  PKG_FFMPEG_V4L2="--disable-v4l2_m2m"
 fi
 
 # VA-API is an x86 thing; the libva package went with the Intel and NVIDIA
@@ -151,7 +123,6 @@ configure_target() {
               --enable-avcodec \
               --enable-avformat \
               --enable-swscale \
-              --enable-postproc \
               --enable-avfilter \
               --disable-devices \
               --enable-pthreads \

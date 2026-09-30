@@ -184,7 +184,6 @@ local phase, shown = 0, nil
 -- here, so the launcher's CRTC off is not ours to use: the backlight goes
 -- to 0, as power-handler does before a suspend. The music plays on.
 local SETTINGS = "/storage/.config/system/configs/system.cfg"
-local FLAG = "/run/portamp-blank"      -- start_portamp.sh restores after a kill
 
 local function blank_after()
     local m
@@ -213,6 +212,15 @@ local function writeto(p, v)
     if f then f:write(tostring(v)); f:close() end
 end
 
+-- In the dark the analyser drops to a frame a second: 17% of a little core
+-- instead of 67%. start_portamp.sh puts a select filter in the video chain
+-- for it, retuned in place - adding and removing a filter rebuilds the
+-- chain, which cut 46 to 104 ms of audio on a wake. select takes its
+-- expression at runtime through our FFmpeg patch ffmpeg-001.
+local function analyser_rate(expr)
+    mp.commandv("vf-command", "portamp-rate", "expr", expr)
+end
+
 local function blank()
     if dark then return end
     dark = {}
@@ -224,7 +232,7 @@ local function blank()
             writeto(p, 0)
         end
     end
-    writeto(FLAG, "")
+    analyser_rate("isnan(prev_selected_t)+gte(t-prev_selected_t,1)")
 end
 
 -- Puts back what blank() took, unless something set a brightness meanwhile.
@@ -234,7 +242,6 @@ local function restore()
         if readnum(p) == 0 then writeto(p, v) end
     end
     dark = nil
-    os.remove(FLAG)
 end
 
 local function draw()
@@ -338,11 +345,9 @@ local function draw()
     end
 end
 
--- The analyser keeps running in the dark. Throttling it to 1 fps saved
--- 13 points of a core, but taking the throttle off again rebuilt the video
--- chain, and on a wake after a while dark that cut 70 ms of audio.
 local function wake()
     restore()
+    analyser_rate("1")
     shown = nil
     draw()
 end
