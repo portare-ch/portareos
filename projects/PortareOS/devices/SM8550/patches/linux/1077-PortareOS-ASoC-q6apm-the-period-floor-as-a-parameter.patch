@@ -1,0 +1,91 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] ASoC: q6apm-dai: the period floor as a parameter
+
+1073 replaced upstream's fixed 480-frame step with 10 ms of frames at
+the stream's own rate, and said so plainly: "Every period is still at
+least 10 ms and a multiple of 32 frames, both of which 480 already was,
+so the DSP sees nothing shorter or less aligned than it does at 48 kHz
+today."
+
+That was the safe choice, and it means the DSP's real limit has never
+been tested. Upstream's only word on it is the comment it deleted -
+"setup 10ms latency to accommodate DSP restrictions" - with no
+restriction named and no reference. Both numbers are ours, and 320
+frames at 32 kHz is a consequence of them, not of the hardware.
+
+They gate everything above: PipeWire's quantum cannot be smaller than
+what the driver will hand the DSP, so the 8 ms audio setting sits on
+top of this and not on anything measured. Before asking whether
+PipeWire is the wrong thing in the path, the floor under it has to be
+known.
+
+So: parameters, defaulting to the current values, so nothing changes
+until somebody sets one.
+
+    period_min_ms   10   the floor in milliseconds
+    period_align    32   frames the period is rounded up to
+
+The rule runs from hw_params, so a new value takes effect on the next
+PCM open - no unbind, no reload, no reboot. Set it, restart the stream,
+measure.
+
+What to expect, so the result can be wrong: if the DSP takes 2 or 3 ms
+periods then the floor under the whole audio path is far lower than
+anything here assumed. If it refuses below 10, upstream's comment was
+right, 8 ms is close to the hardware, and the question is closed. A
+value the DSP dislikes should surface as xruns or a failed prepare
+rather than silence, but that is a prediction and not a promise, so
+sweep downwards and keep pcm-flags and pw-top in view.
+
+--- a/sound/soc/qcom/qdsp6/q6apm-dai.c
++++ b/sound/soc/qcom/qdsp6/q6apm-dai.c
+@@ -396,9 +396,25 @@ static int q6apm_dai_trigger(struct snd_soc_component *component,
+  * whole 32-frame blocks: 480 at 48 kHz as before, 320 at 32 kHz, 448 at
+  * 44.1 kHz. Every period stays at least 10 ms and a multiple of 32 frames,
+  * both of which 480 already was.
++ *
++ * Both numbers are this fork's, not the DSP's. Upstream said only "setup 10ms
++ * latency to accommodate DSP restrictions" and named no restriction, so what
++ * the DSP will actually take below 10 ms has never been established - and it
++ * is the floor under everything above, since PipeWire cannot run a quantum
++ * smaller than the period the driver hands over. Hence parameters rather than
++ * constants: the rule reads them from hw_params, so a new value applies on the
++ * next PCM open.
+  */
+-#define Q6APM_PERIOD_MIN_MS	10
+-#define Q6APM_PERIOD_ALIGN	32
++static unsigned int period_min_ms = 10;
++static unsigned int period_align = 32;
++
++module_param(period_min_ms, uint, 0644);
++MODULE_PARM_DESC(period_min_ms,
++	"period floor in ms handed to the DSP (default 10, upstream's implied value)");
++
++module_param(period_align, uint, 0644);
++MODULE_PARM_DESC(period_align,
++	"frames the period is rounded up to (default 32)");
+ 
+ static int q6apm_dai_rule_period_step(struct snd_pcm_hw_params *params,
+ 				      struct snd_pcm_hw_rule *rule)
+@@ -406,14 +427,20 @@ static int q6apm_dai_rule_period_step(struct snd_pcm_hw_params *params,
+ 	struct snd_interval *size = hw_param_interval(params, rule->var);
+ 	unsigned int step, min, max;
+ 	struct snd_interval t;
++	unsigned int ms = period_min_ms, align = period_align;
+ 
+ 	/* Until the rate is a single value there is no frame length to step by. */
+ 	if (!snd_interval_single(rate))
+ 		return 0;
+ 
+-	step = roundup(DIV_ROUND_UP(snd_interval_value(rate) * Q6APM_PERIOD_MIN_MS,
+-				    1000), Q6APM_PERIOD_ALIGN);
++	/* A zero from either would divide by nothing or round to nothing. */
++	if (!ms)
++		ms = 1;
++	if (!align)
++		align = 1;
++
++	step = roundup(DIV_ROUND_UP(snd_interval_value(rate) * ms, 1000), align);
+ 
+ 	min = size->min + (size->openmin ? 1 : 0);
+ 	max = size->max - (size->openmax ? 1 : 0);
