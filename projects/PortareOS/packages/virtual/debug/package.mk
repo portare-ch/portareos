@@ -17,5 +17,7 @@ PKG_LONGDESC="What a problem on the device gets debugged with: gdb and strace"
 # rate, which REFRESH_RATES.md's procedure for adding a mode needs and
 # nothing else on the image can do. pcm-flags reads a PCM's info flags and
 # period steps straight from the driver; SNDRV_PCM_INFO_BATCH decides how
-# much PipeWire queues ahead and no /proc file prints it.
-PKG_DEPENDS_TARGET="toolchain gdb strace vblank-rate pcm-flags"
+# much PipeWire queues ahead and no /proc file prints it. tear-test counts
+# torn frames from the DPU's per-frame CRC, which is the only way to tell a
+# tear the DPU produced from one the panel did.
+PKG_DEPENDS_TARGET="toolchain gdb strace vblank-rate pcm-flags tear-test"
