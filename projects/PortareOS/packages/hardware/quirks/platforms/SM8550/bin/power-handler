@@ -23,6 +23,8 @@ verbose) DEBUG=true ;;
 esac
 
 BLANK_FLAG="/run/power-blank-active.flag"
+# PORTAMP's mpv, when it is playing; see start_portamp.sh.
+PORTAMP_SOCK="/run/portamp.sock"
 
 # Blanking and the "is a display attached" question both come from
 # external-display. It blanks internal panels only: a DPMS off on an active DP output makes
@@ -111,6 +113,17 @@ case "$1" in
       ${DEBUG} && log $0 "Waking from blank."
       rm -f "${BLANK_FLAG}"
       external_display unblank
+      exit 0
+    fi
+
+    # Music is no reason to suspend. While PORTAMP plays the key only
+    # switches the screen, and portamp.lua keeps that state: it went dark
+    # there, it wakes there. A socket left by a killed mpv refuses the
+    # connection and the key suspends as it always has.
+    if [ -S "${PORTAMP_SOCK}" ] &&
+       echo '{"command":["script-message","power-button"]}' |
+       socat -t1 - "UNIX-CONNECT:${PORTAMP_SOCK}" >/dev/null 2>&1; then
+      ${DEBUG} && log $0 "PORTAMP playing, switching its screen instead of suspending."
       exit 0
     fi
 

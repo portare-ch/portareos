@@ -39,6 +39,8 @@ VIS="$(cat /usr/config/mpv/portamp-filter.txt)"
 # launcher, as the film player does - looping restarted a single track
 # forever. force-window because there is no video track to open a window.
 # osd-level 0: portamp.lua owns the screen and draws the time itself.
+# The socket is how power-handler finds a playing PORTAMP and hands it the
+# power key, which then switches the screen instead of suspending.
 # The analyser is a 360x100 video at portamp.lua's VIS, (64,212): the
 # margins start the video area there and the alignment puts it in the
 # corner. 64.4 and 212.4 pixels, so it lands on 64 and 212 whether mpv
@@ -54,7 +56,7 @@ VIS="$(cat /usr/config/mpv/portamp-filter.txt)"
   --script=/usr/config/mpv/portamp.lua \
   --ao=pipewire \
   --input-gamepad=yes --input-conf=/usr/config/mpv/portamp-input.conf \
-  --osd-level=0 \
+  --osd-level=0 --input-ipc-server=/run/portamp.sock \
   "${1}"
 RC=$?
 
