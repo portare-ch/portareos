@@ -74,6 +74,27 @@ make_target() {
   curl -L https://nixos.org/nix/install | sh -s -- --no-daemon
   . "${HOME}/.nix-profile/etc/profile.d/nix.sh"
 
+  # FEX's Data/nix/LibraryForwarding/shell.nix opens with
+  #
+  #   { pkgs ? import <nixpkgs> { } }:
+  #
+  # so the i686 and x86_64 cross toolchains it builds the thunks with come
+  # from whatever <nixpkgs> resolves to. A fresh install points that at an
+  # unstable channel, which makes this recipe's output depend on the day it
+  # runs. Pin it.
+  #
+  # nixos-25.11 is pinned rather than a channel because unstable moved
+  # default-gcc-version to 16, and the thunks are compiled by clang against
+  # that GCC's libstdc++: GCC 16's <limits> defines
+  # numeric_limits<__float128>::signaling_NaN() as
+  #
+  #   __builtin_bit_cast(__float128, __builtin_nansf128(""))
+  #
+  # and on i686 clang's __builtin_nansf128 gives a 12-byte long double where
+  # __float128 is 16, so the cast is rejected and ThunkLibs fails to build.
+  # 25.11 is on GCC 14, which predates that definition.
+  export NIX_PATH="nixpkgs=https://github.com/NixOS/nixpkgs/archive/b6018f87da91d19d0ab4cf979885689b469cdd41.tar.gz"
+
   mkdir -p "${PKG_BUILD}/.${TARGET_NAME}"
   cd "${PKG_BUILD}/.${TARGET_NAME}"
 
