@@ -38,7 +38,8 @@ EOF
 }
 
 add_system_doc() {
-  echo -n "|${SYSTEM_MANUFACTURER}|${SYSTEM_FULLNAME} (${SYSTEM_NAME})|${SYSTEM_RELEASE}|\`$(basename ${SYSTEM_PATH})\`|${SYSTEM_EXTENSION}|" >>${DOCTMP}/${1}:system.tmp
+  # A lone / means folders play too; written out, it reads as a typo.
+  echo -n "|${SYSTEM_MANUFACTURER}|${SYSTEM_FULLNAME} (${SYSTEM_NAME})|${SYSTEM_RELEASE}|\`$(basename ${SYSTEM_PATH})\`|${SYSTEM_EXTENSION/% \// folders}|" >>${DOCTMP}/${1}:system.tmp
 }
 
 add_emu_doc() {

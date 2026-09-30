@@ -4,7 +4,8 @@
 
 # PORTAMP. Music, on the same mpv and the same Vulkan display path as the
 # film player - a track has no picture, so the picture is a spectrum
-# analyser and portamp.lua draws a player around it on the OSD.
+# analyser and portamp.lua draws a Linamp face and the playlist around it
+# on the OSD.
 #
 # This replaced gmu, which was a second audio stack (SDL2, mpg123, vorbis,
 # flac, opus) for the one job mpv already does through ffmpeg. Nothing new
@@ -32,14 +33,17 @@ fi
 # mangles it.
 VIS="$(cat /usr/config/mpv/portamp-filter.txt)"
 
-# A folder becomes the playlist, so picking one track plays the album from
-# there. force-window because there is no video track to open a window.
+# A track opens its folder as the playlist, starting from that track, and
+# a folder picked in the launcher plays whole; directory-mode=ignore keeps
+# it to that folder's own files. It plays once and PORTAMP returns to the
+# launcher, as the film player does - looping restarted a single track
+# forever. force-window because there is no video track to open a window.
 # osd-level 0: portamp.lua owns the screen and draws the time itself.
 exec /usr/bin/mpv --no-config \
   ${VK} --vulkan-display-mode=$((10#${MODE})) \
   --force-window=yes \
+  --autocreate-playlist=filter --directory-filter-types=audio --directory-mode=ignore \
   --keep-open=no \
-  --loop-playlist=inf \
   --lavfi-complex="${VIS}" \
   --video-unscaled=yes \
   --script=/usr/config/mpv/portamp.lua \
