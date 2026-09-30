@@ -1,16 +1,18 @@
 -- PORTAMP: a Linamp face - Winamp's main window as a radio display -
 -- with the playlist below, drawn on the OSD as ASS.
 --
--- The analyser bars are not drawn here: they are the video, a showfreqs
--- chain that portamp-filter.txt pads to the whole panel with the bars at
--- VIS. The OSD sits on top of the video, so every opaque shape here is
--- clipped around VIS with \iclip - paint over it and the bars vanish.
+-- The analyser bars are not drawn here: they are the video, a 360x100
+-- showfreqs chain that start_portamp.sh places at VIS with mpv's
+-- alignment and margins. The OSD sits on top of the video, so every
+-- opaque shape here is clipped around VIS with \iclip - paint over it
+-- and the bars vanish.
 
 local mp = require 'mp'
 
 local W, H = 1280, 960
 
--- Must match the pad offsets and size in portamp-filter.txt.
+-- Must match the size in portamp-filter.txt and the margins in
+-- start_portamp.sh.
 local VIS = { x = 64, y = 212, w = 360, h = 100 }
 
 -- RRGGBB here; ASS wants BBGGRR.
@@ -87,9 +89,11 @@ local function digit(x, y, w, h, t, ch)
         f = vseg(t / 2 + g, m - g, t / 2, t), b = vseg(t / 2 + g, m - g, w - t / 2, t),
         e = vseg(m + g, h - t / 2 - g, t / 2, t), c = vseg(m + g, h - t / 2 - g, w - t / 2, t),
     }
+    -- In a fixed order: pairs() would not give one, and the string has to
+    -- come out the same each tick for draw() to see that nothing changed.
     local on, off = {}, {}
-    for s, path in pairs(p) do
-        if lit:find(s, 1, true) then on[#on + 1] = path else off[#off + 1] = path end
+    for s in ("abcdefg"):gmatch(".") do
+        if lit:find(s, 1, true) then on[#on + 1] = p[s] else off[#off + 1] = p[s] end
     end
     return shape(x, y, UNLIT, table.concat(off, " "))
         .. (#on > 0 and shape(x, y, GREEN, table.concat(on, " ")) or "")
@@ -172,7 +176,7 @@ local function sync_playlist()
     probe_next()
 end
 
-local phase = 0
+local phase, shown = 0, nil
 
 local function draw()
     local pos    = mp.get_property_number("time-pos", 0) or 0
@@ -262,8 +266,14 @@ local function draw()
         add(rrect(W - 64, ty, 10, th, 4, DIMTXT))
     end
 
-    ov.data = table.concat(a)
-    ov:update()
+    -- Most ticks change nothing - the time moves once a second, the title
+    -- every third tick - and each update is a libass render and an upload.
+    local data = table.concat(a)
+    if data ~= shown then
+        shown = data
+        ov.data = data
+        ov:update()
+    end
 end
 
 mp.add_periodic_timer(0.1, draw)
