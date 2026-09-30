@@ -1,0 +1,93 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] input: rsinput: the MCU scan fields as parameters
+
+The params command carries two big-endian 32-bit fields, 0x28 and
+0x07, neither of which the driver explained. Reading the MCU's own
+firmware out of the stock Android install settles both: the handler
+logs them itself as
+
+    E:%s(%d) debounce %d frame_rate %d
+
+and they are a joystick deadband and the delay between scans.
+
+debounce, 40, is a deadband in raw ADC counts, not a time. Every read
+site compares |sample - previous| against it and keeps the old value
+below the threshold. At the +-1024 range this device's DT sets, 40
+counts is about 2% of half travel.
+
+frame_rate, 7, is a wait at the end of each scan pass, in SysTick
+ticks. SysTick reloads at SystemCoreClock/10000 - 1, so a tick is
+100 us and the vendor value is 0.7 ms. Below 1 the wait is skipped
+entirely. That is 8% of the measured 9.0 ms period; the rest is
+bit-banged I2C to the two Hall sensors, ten register reads a pass,
+with no I2C peripheral involved at all.
+
+Both default to the vendor values. frame_rate=0 is the experiment
+worth running: it should take the median report interval from 9.0 ms
+to about 8.3 ms and no further. If it moves by that much, the tick
+unit and the scan model are confirmed; if it does not move, the
+reading is wrong and nothing further should be built on it. #447.
+
+Parameters rather than constants because the meaning of both fields
+is inferred from firmware nobody documented, and because a pad that
+misbehaves is recovered with rsinput.frame_rate=7 on the cmdline
+rather than a reflash.
+
+--- a/drivers/input/joystick/rsinput.c
++++ b/drivers/input/joystick/rsinput.c
+@@ -55,6 +55,31 @@
+ static int axis_righty_max=0x580;
+ static int axis_righty_deadzone=0x0;
+ static int axis_righty_antideadzone=0x0;
++
++/*
++ * The two fields of the MCU params command, named by the MCU
++ * firmware's own log line: "debounce %d frame_rate %d".
++ *
++ * stick_deadband is in raw ADC counts. The MCU keeps the previous
++ * sample unless |new - old| exceeds it, so it is hysteresis on the
++ * axis, not a time. 40 is the vendor value, about 2% of half travel
++ * at +-1024.
++ *
++ * frame_rate is the wait at the end of each scan pass, in 100 us
++ * SysTick ticks, and the MCU skips it entirely below 1. The vendor's
++ * 7 is 0.7 ms of the 9.0 ms measured period; the remainder is
++ * bit-banged I2C to the Hall sensors and is not reachable from here.
++ */
++static int stick_deadband = 40;
++static int frame_rate = 7;
++
++module_param(stick_deadband,int,0660);
++MODULE_PARM_DESC(stick_deadband,
++    "MCU joystick deadband in ADC counts (vendor default 40)");
++
++module_param(frame_rate,int,0660);
++MODULE_PARM_DESC(frame_rate,
++    "MCU scan delay in 100us ticks, 0 disables (vendor default 7)");
+ 
+ module_param(update_params,int,0660);
+ 
+@@ -238,10 +270,18 @@
+ static int rsinput_init_commands(struct rsinput_driver *drv) {
+     static const uint8_t version_request[] = {DATA_COMMOD_VERSION};
+-    static const uint8_t mcu_params[] = {
+-        DATA_COMMOD_SET_PAR,
+-        0x01,
+-        0x00, 0x00, 0x00, 0x28,
+-        0x00, 0x00, 0x00, 0x07
+-    };
++    /* Built per call, not static: both fields come from module
++     * parameters that are writable at runtime. */
++    const uint8_t mcu_params[] = {
++        DATA_COMMOD_SET_PAR,
++        0x01,
++        (stick_deadband >> 24) & 0xff,
++        (stick_deadband >> 16) & 0xff,
++        (stick_deadband >>  8) & 0xff,
++         stick_deadband        & 0xff,
++        (frame_rate >> 24) & 0xff,
++        (frame_rate >> 16) & 0xff,
++        (frame_rate >>  8) & 0xff,
++         frame_rate        & 0xff
++    };
+     unsigned long timeout = msecs_to_jiffies(MCU_VERSION_ACK_TIMEOUT_MS);
