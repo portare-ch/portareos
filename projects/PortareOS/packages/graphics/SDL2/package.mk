@@ -18,9 +18,6 @@
 # gles are all built by the SDL3 recipe, which already enables the same
 # set this recipe used to. sdl2-compat itself has no backends and needs
 # only SDL3's headers to build; it dlopens libSDL3.so.0 at runtime.
-#
-# This recipe is pinned in .upstream-ignore. Without that the next
-# upstream import quietly restores real SDL2 and the swap goes with it.
 
 PKG_NAME="SDL2"
 PKG_VERSION="2.32.72"
