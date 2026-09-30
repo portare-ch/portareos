@@ -1,10 +1,10 @@
 # AGENTS.md - Rules for AI coding assistants working in this repository
 
 PortareOS is a personal fork of ROCKNIX for one device, the Retroid Pocket
-Nova (SM8550). It has diverged from upstream deliberately and does not merge
-from it; upstream package updates come in selectively, through
-`tools/import-upstream-packages`. Rules inherited from upstream that assume a
-shared multi-device tree do not apply here.
+Nova (SM8550). It has diverged from upstream deliberately and no longer
+tracks it: no merge, no import, and every recipe in the tree is ours to
+maintain. Rules inherited from upstream that assume a shared multi-device
+tree do not apply here.
 
 ---
 
@@ -52,13 +52,15 @@ this tree.
   `projects/PortareOS/devices/SM8550/packages` (device-specific).
 * **DO** remove dead upstream packages from the top-level `packages/` tree.
   Reducing the maintenance surface of the fork is the point; upstream's rule
-  against touching that tree does not apply to a fork that owns it.
+  against touching that tree does not apply to a fork that owns it. A global
+  recipe that a project recipe shadows never builds, and there are about a
+  hundred of them - #443.
 * **DO** isolate device-specific runtime behaviour in quirk files.
-* **DO** take upstream package updates with `tools/import-upstream-packages`,
-  not by rebasing or cherry-picking. It maps their paths onto ours, skips
-  packages we have removed, and imports content verbatim so the ROCKNIX
-  copyright headers and `PKG_URL`/`PKG_SITE` lines survive. Conflicts are
-  where we renamed something they also changed, and want a human.
+* **DO** bump a package by hand: read what upstream released, set
+  `PKG_VERSION` and `PKG_SHA256`, build it. Nothing imports upstream's
+  recipes any more, so a version left behind stays behind until someone
+  moves it. Keep the ROCKNIX copyright headers and the `PKG_URL`/`PKG_SITE`
+  lines as they are.
 
 ## 5. Kernel
 
@@ -83,10 +85,9 @@ this tree.
   fork of `ROCKNIX/distribution`, so the web UI offers ROCKNIX as the base
   and it has to be changed by hand every time; `gh repo set-default
   portare-ch/portareos` is set, and `gh` then targets this repository.
-* **DO NOT** remove the `upstream` remote to stop that. It is where
-  `tools/import-upstream-packages` reads from (`--to` defaults to
-  `upstream/next`), and it is not what picks the base repository. Leaving
-  the fork network on GitHub is what would, and it is permanent and takes
-  the issues and pull requests with it - the numbers this tree cites for
-  why things are the way they are, #211 and #217 among them. It was
-  considered and declined.
+* **DO NOT** remove the fork network on GitHub to stop that. It is what
+  picks the base repository, and unforking is permanent and takes the
+  issues and pull requests with it - the numbers this tree cites for why
+  things are the way they are, #211 and #217 among them. It was considered
+  and declined. The `upstream` remote is a different thing, and now an
+  unused one; nothing reads it since the import tool went.

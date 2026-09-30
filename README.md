@@ -120,7 +120,8 @@ sway and EmulationStation are gone from the image.
 
 One tool for the job, and the best one wins. Where ROCKNIX shipped several
 emulators for a platform, one was picked and the rest dropped, together with
-the settings nobody had tuned for them.
+the settings nobody had tuned for them. What was dropped, and why, is in
+[REMOVED_PACKAGES.md](documentation/REMOVED_PACKAGES.md).
 
 | System | Emulator |
 | --- | --- |
@@ -308,7 +309,8 @@ Yes, 100% and I plan to keep it that way.
 PortareOS began as a fork of [ROCKNIX](https://github.com/ROCKNIX/distribution),
 itself a fork of [JELOS](https://github.com/JustEnoughLinuxOS/distribution),
 and much of the engineering underneath is theirs. It no longer tracks ROCKNIX:
-there is no merge from upstream, and upstream packages come in one at a time.
+there is no merge and no import from upstream, and every package in the tree
+is maintained here.
 Please do not raise PortareOS problems with the ROCKNIX maintainers; for the
 upstream project, go to [rocknix.org](https://rocknix.org).
 
