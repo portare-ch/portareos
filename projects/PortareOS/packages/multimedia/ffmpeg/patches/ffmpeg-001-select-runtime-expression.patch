@@ -1,0 +1,93 @@
+From: portare-ch <hello@portare.org>
+Subject: [PATCH] avfilter/f_select: change the expression at runtime
+
+select and aselect take their expression once, at init. A player that
+wants to pass fewer frames for a while - PortAMP renders its analyser at
+one frame a second while the screen is off - had to take the filter out
+and put it back, and mpv rebuilds its whole chain for that, which is an
+audible gap. Accept expr/e as a command instead.
+
+The new expression is parsed before the old one is freed, so a bad one
+changes nothing. Scene detection is refused: the pixel formats it needs
+were settled when the graph was configured.
+---
+--- a/libavfilter/f_select.c
++++ b/libavfilter/f_select.c
+@@ -30,6 +30,7 @@
+ #include "libavutil/fifo.h"
+ #include "libavutil/imgutils.h"
+ #include "libavutil/internal.h"
++#include "libavutil/mem.h"
+ #include "libavutil/opt.h"
+ #include "libavutil/pixdesc.h"
+ #include "avfilter.h"
+@@ -172,8 +173,8 @@
+ #define OFFSET(x) offsetof(SelectContext, x)
+ #define DEFINE_OPTIONS(filt_name, FLAGS)                            \
+ static const AVOption filt_name##_options[] = {                     \
+-    { "expr", "set an expression to use for selecting frames", OFFSET(expr_str), AV_OPT_TYPE_STRING, { .str = "1" }, .flags=FLAGS }, \
+-    { "e",    "set an expression to use for selecting frames", OFFSET(expr_str), AV_OPT_TYPE_STRING, { .str = "1" }, .flags=FLAGS }, \
++    { "expr", "set an expression to use for selecting frames", OFFSET(expr_str), AV_OPT_TYPE_STRING, { .str = "1" }, .flags=FLAGS|AV_OPT_FLAG_RUNTIME_PARAM }, \
++    { "e",    "set an expression to use for selecting frames", OFFSET(expr_str), AV_OPT_TYPE_STRING, { .str = "1" }, .flags=FLAGS|AV_OPT_FLAG_RUNTIME_PARAM }, \
+     { "outputs", "set the number of outputs", OFFSET(nb_outputs), AV_OPT_TYPE_INT, {.i64 = 1}, 1, INT_MAX, .flags=FLAGS }, \
+     { "n",       "set the number of outputs", OFFSET(nb_outputs), AV_OPT_TYPE_INT, {.i64 = 1}, 1, INT_MAX, .flags=FLAGS }, \
+     { NULL }                                                            \
+@@ -456,6 +457,42 @@
+     return FFERROR_NOT_READY;
+ }
+ 
++static int process_command(AVFilterContext *ctx, const char *cmd, const char *args,
++                           char *res, int res_len, int flags)
++{
++    SelectContext *select = ctx->priv;
++    AVExpr *expr = NULL;
++    char *expr_str;
++    int ret;
++
++    if (strcmp(cmd, "expr") && strcmp(cmd, "e"))
++        return AVERROR(ENOSYS);
++
++    /* Scene detection needs the pixel formats query_formats() picks for it,
++     * and those were settled when the graph was configured. */
++    if (!select->do_scene_detect && strstr(args, "scene")) {
++        av_log(ctx, AV_LOG_ERROR, "Cannot switch to scene detection at runtime\n");
++        return AVERROR(EINVAL);
++    }
++
++    /* Parsed before the old one goes, so a bad expression changes nothing. */
++    if ((ret = av_expr_parse(&expr, args, var_names,
++                             NULL, NULL, NULL, NULL, 0, ctx)) < 0) {
++        av_log(ctx, AV_LOG_ERROR, "Error while parsing expression '%s'\n", args);
++        return ret;
++    }
++    if (!(expr_str = av_strdup(args))) {
++        av_expr_free(expr);
++        return AVERROR(ENOMEM);
++    }
++
++    av_expr_free(select->expr);
++    select->expr = expr;
++    av_free(select->expr_str);
++    select->expr_str = expr_str;
++    return 0;
++}
++
+ static av_cold void uninit(AVFilterContext *ctx)
+ {
+     SelectContext *select = ctx->priv;
+@@ -505,6 +542,7 @@
+     .init        = aselect_init,
+     .uninit      = uninit,
+     .activate      = activate,
++    .process_command = process_command,
+     .priv_size   = sizeof(SelectContext),
+     FILTER_INPUTS(avfilter_af_aselect_inputs),
+ };
+@@ -561,6 +599,7 @@
+     .init          = select_init,
+     .uninit        = uninit,
+     .activate      = activate,
++    .process_command = process_command,
+     .priv_size     = sizeof(SelectContext),
+     FILTER_INPUTS(avfilter_vf_select_inputs),
+     FILTER_QUERY_FUNC2(query_formats),

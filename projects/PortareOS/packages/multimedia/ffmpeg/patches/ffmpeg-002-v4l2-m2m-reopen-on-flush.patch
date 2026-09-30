@@ -1,0 +1,47 @@
+From: portare-ch <hello@portare.org>
+Subject: [PATCH] avcodec/v4l2_m2m_dec: reopen the decoder on flush
+
+Without a flush callback a seek leaves the stateful decoder running on
+from where it was. On Qualcomm's iris every other way of restarting it
+stalls or is refused, so a flush closes the device and opens it again.
+---
+--- a/libavcodec/v4l2_m2m_dec.c
++++ b/libavcodec/v4l2_m2m_dec.c
+@@ -213,6 +213,29 @@
+     }
+ 
+     return v4l2_prepare_decoder(s);
++}
++
++static av_cold int v4l2_decode_close(AVCodecContext *avctx);
++
++/*
++ * A seek. The V4L2 stateful decoder interface calls for STREAMOFF and
++ * STREAMON on the OUTPUT queue, and Qualcomm's iris answers that with one
++ * frame flagged as an error and then nothing more; restarting both queues
++ * ends the same way, and a V4L2_DEC_CMD_START is refused with EBUSY. With
++ * no flush at all the decoder carries on from before the seek. What works
++ * is what opening the decoder does, so do that: close the device and set it
++ * up again. Frames already handed out keep the old context alive until they
++ * are released, and the bitstream filter is flushed with the codec, so the
++ * parameter sets come again ahead of the next keyframe.
++ */
++static void v4l2_decode_flush(AVCodecContext *avctx)
++{
++    int ret;
++
++    v4l2_decode_close(avctx);
++    ret = v4l2_decode_init(avctx);
++    if (ret < 0)
++        av_log(avctx, AV_LOG_ERROR, "Reopening the decoder after a flush failed: %d\n", ret);
+ }
+ 
+ static av_cold int v4l2_decode_close(AVCodecContext *avctx)
+@@ -250,6 +273,7 @@
+         .init           = v4l2_decode_init, \
+         FF_CODEC_RECEIVE_FRAME_CB(v4l2_receive_frame), \
+         .close          = v4l2_decode_close, \
++        .flush          = v4l2_decode_flush, \
+         .bsfs           = bsf_name, \
+         .p.capabilities = AV_CODEC_CAP_HARDWARE | AV_CODEC_CAP_DELAY | AV_CODEC_CAP_AVOID_PROBING, \
+         .caps_internal  = FF_CODEC_CAP_NOT_INIT_THREADSAFE | \

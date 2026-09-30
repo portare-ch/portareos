@@ -45,7 +45,17 @@ VIS="$(cat /usr/config/mpv/portamp-filter.txt)"
 # margins start the video area there and the alignment puts it in the
 # corner. 64.4 and 212.4 pixels, so it lands on 64 and 212 whether mpv
 # rounds or truncates - one off shows a line of black at the edge.
-/usr/bin/mpv --no-config \
+# portamp-rate is the select filter portamp.lua slows to a frame a second
+# in the dark.
+#
+# Music is a light load, so it runs on the three little cores. FFmpeg
+# sizes its filter threads from the CPUs it may use, and each filter in
+# the analyser graph is held to one: at 360x100, splitting a frame across
+# threads cost more than it saved. The built-in scripts are off; the
+# playlist, the time and the controls are portamp.lua's. Together that
+# took mpv from 51 threads to 19, all on the little cores.
+exec ${SLOW_CORES} /usr/bin/mpv --no-config \
+  --vf=@portamp-rate:lavfi=[select=1]:o=[threads=1] \
   ${VK} --vulkan-display-mode=$((10#${MODE})) \
   --force-window=yes \
   --autocreate-playlist=filter --directory-filter-types=audio --directory-mode=ignore \
@@ -57,15 +67,7 @@ VIS="$(cat /usr/config/mpv/portamp-filter.txt)"
   --ao=pipewire \
   --input-gamepad=yes --input-conf=/usr/config/mpv/portamp-input.conf \
   --osd-level=0 --input-ipc-server=/run/portamp.sock \
+  --osc=no --ytdl=no --load-stats-overlay=no --load-console=no \
+  --load-select=no --load-positioning=no --load-context-menu=no \
+  --load-commands=no --load-auto-profiles=no --input-terminal=no \
   "${1}"
-RC=$?
-
-# portamp.lua puts the backlight back when mpv quits, the end of a playlist
-# in the dark included. This is for when it cannot - mpv killed or crashed
-# with the panel dark - so the launcher never comes back to black: the
-# brightness goes back the way boot sets it.
-if [ -e /run/portamp-blank ]; then
-  rm -f /run/portamp-blank
-  /usr/lib/autostart/common/006-display >/dev/null 2>&1
-fi
-exit ${RC}
