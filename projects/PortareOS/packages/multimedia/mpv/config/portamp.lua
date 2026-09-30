@@ -8,6 +8,7 @@
 -- and the bars vanish.
 
 local mp = require 'mp'
+local utils = require 'mp.utils'
 
 local W, H = 1280, 960
 
@@ -178,7 +179,70 @@ end
 
 local phase, shown = 0, nil
 
+-- Screen off, as the launcher does it: display.blankminutes (5, 10 or 15)
+-- untouched and the panel goes dark. It is OLED, and mpv holds DRM master
+-- here, so the launcher's CRTC off is not ours to use: the backlight goes
+-- to 0, as power-handler does before a suspend. The music plays on.
+local SETTINGS = "/storage/.config/system/configs/system.cfg"
+local FLAG = "/run/portamp-blank"      -- start_portamp.sh restores after a kill
+
+local function blank_after()
+    local m
+    local f = io.open(SETTINGS)
+    if f then
+        for line in f:lines() do
+            m = tonumber(line:match("^display%.blankminutes=(%d+)")) or m
+        end
+        f:close()
+    end
+    return ((m == 5 or m == 10 or m == 15) and m or 5) * 60
+end
+
+local IDLE, last_input, dark = blank_after(), mp.get_time(), nil
+
+local function readnum(p)
+    local f = io.open(p)
+    if not f then return nil end
+    local v = tonumber(f:read("*l"))
+    f:close()
+    return v
+end
+
+local function writeto(p, v)
+    local f = io.open(p, "w")
+    if f then f:write(tostring(v)); f:close() end
+end
+
+local function blank()
+    if dark then return end
+    dark = {}
+    for _, name in ipairs(utils.readdir("/sys/class/backlight") or {}) do
+        local p = "/sys/class/backlight/" .. name .. "/brightness"
+        local v = readnum(p)
+        if v and v > 0 then
+            dark[p] = v
+            writeto(p, 0)
+        end
+    end
+    writeto(FLAG, "")
+    -- Nobody is looking: the analyser at one frame a second, not 25.
+    mp.commandv("vf", "add", "@portamp-dark:fps=1")
+end
+
+-- Puts back what blank() took, unless something set a brightness meanwhile.
+local function restore()
+    if not dark then return end
+    for p, v in pairs(dark) do
+        if readnum(p) == 0 then writeto(p, v) end
+    end
+    dark = nil
+    os.remove(FLAG)
+end
+
 local function draw()
+    if not dark and mp.get_time() - last_input > IDLE then blank() end
+    if dark then return end
+
     local pos    = mp.get_property_number("time-pos", 0) or 0
     local dur    = mp.get_property_number("duration", 0) or 0
     local paused = mp.get_property_bool("pause", false)
@@ -275,6 +339,50 @@ local function draw()
         ov:update()
     end
 end
+
+local function wake()
+    restore()
+    mp.commandv("vf", "remove", "@portamp-dark")
+    shown = nil
+    draw()
+end
+
+-- Every button comes here through portamp-input.conf. In the dark a press
+-- only wakes the panel, as in the launcher, and a key held from that press
+-- does not repeat into a seek.
+local swallowed = {}
+local function bind(name, fn, repeatable)
+    mp.add_key_binding(nil, name, function(t)
+        last_input = mp.get_time()
+        if t.event == "up" then
+            swallowed[name] = nil
+        elseif t.event == "repeat" then
+            -- A complex binding gets every repeat; only the seeks want them.
+            -- Held, next ran 53 times in 1.5 s and off the end of the album.
+            if repeatable and not swallowed[name] then fn() end
+        elseif dark then
+            swallowed[name] = true
+            wake()
+        else
+            fn()
+        end
+    end, { complex = true, repeatable = repeatable })
+end
+
+bind("pause",    function() mp.command("cycle pause") end)
+bind("quit",     function() mp.command("quit") end)
+bind("progress", function() mp.command("show-progress") end)
+bind("wake",     function() end)
+bind("forward",  function() mp.command("seek 10") end, true)
+bind("back",     function() mp.command("seek -10") end, true)
+bind("prev",     function() mp.command("playlist-prev") end)
+bind("next",     function() mp.command("playlist-next") end)
+
+-- For anything that wants the panel dark now; also how this is tested.
+mp.register_script_message("blank", blank)
+-- The playlist can end in the dark, and the launcher must not come back
+-- to a black panel.
+mp.register_event("shutdown", restore)
 
 mp.add_periodic_timer(0.1, draw)
 mp.register_event("file-loaded", function() sync_playlist(); draw() end)
