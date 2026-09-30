@@ -52,9 +52,20 @@ hours meant the light/dark cadence never had to be re-established.
 and the gate opened, it still flickers, and a rolling line remains at every
 swapchain depth tried, including three images. So neither number was
 earning its cost, and the cost was DSI bit clock: **1050.7 MHz a lane
-against 949.1**, 11.8% over the proven rate against 1.0%. That 11.8% is
-the likeliest cause of the tearing seen on snes9x and on no mode running at
-the standard clock.
+against 949.1**, 11.8% over the proven rate against 1.0%.
+
+The 11.8% was not buying anything measurable. `tear-test` counts torn frames
+from the DPU's per-frame CRC and finds none on that mode - none over 1200
+frames of its own flips, none over 1200 of Super Mario World with RetroArch
+driving, and zero dropped frames in either - with the detector shown to work
+by repainting the visible buffer mid-scanout, which produced 205 torn frames
+out of 580. msm's `dsi_err_worker` stayed silent throughout.
+
+What is seen on a left-to-right scroll is not a tear. Each SNES frame is held
+for two refreshes, 16.6 ms, and a sample-and-hold panel smears a tracked
+moving edge across the distance it travels in that time. Black frame
+insertion is the usual answer and does not work here; a faster pixel clock is
+not an answer at all.
 
 The exactness still depends on both cores reporting the console clock.
 Nestopia computes it. Snes9x rounded the master clock to 21477272 and came

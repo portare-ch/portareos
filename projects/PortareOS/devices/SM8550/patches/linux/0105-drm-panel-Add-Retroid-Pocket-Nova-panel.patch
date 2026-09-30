@@ -283,8 +283,14 @@ index 000000000000..1c8ed849edbf
 +		 *   1050.7MHz a lane at vtotal 1116, +11.8% on the proven 939.9
 +		 *    949.1MHz a lane here,            +1.0%
 +		 *
-+		 * That 11.8% is the likeliest cause of the tearing seen on snes9x
-+		 * and not on any mode at the standard clock.
++		 * The 11.8% is not paying for anything measurable either way.
++		 * Nothing torn reaches the DSI on this mode - the DPU's
++		 * per-frame CRC counts none over 1200 frames of synthetic flips
++		 * and none over 1200 of a real game, with the detector shown to
++		 * work by tearing on purpose - and the host's DSI error worker
++		 * stays silent. What is seen on a left-to-right scroll in Super
++		 * Mario World is the panel holding each frame, not two frames at
++		 * once, and no pixel clock changes that.
 +		 *
 +		 * 45 lines of vertical blanking, 372.5us, against the 41 lines and
 +		 * 341.7us every other mode here carries. Nothing needs more.
