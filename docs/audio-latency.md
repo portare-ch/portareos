@@ -96,19 +96,107 @@ Lowering it did change what the shipping 8 ms setting asks for, 128 frames to
 At 64 the PCM leaves RUNNING and `spa.alsa: snd_pcm_avail after recover:
 Broken pipe` repeats a few hundred times a second, `pw-top` shows the sink at
 `QUANT 0 RATE 0`, and nothing comes out until the quantum is raised. It
-recovers the moment it is. Anything below 8 ms therefore needs two things,
-and only one of them is out of reach: the upstream clamp lifts with a
-setting, and a sink that survives the quantum that would follow does not
-exist here. The quantum floor and the hardware's floor are the same 128
-frames - `pcm-floor` sweeping the DSP directly counted its first underruns
-at 64 - so there is nothing left to take on this path without a sink that
-runs below what the DSP sustains.
+recovers the moment it is.
 
-**Still open:** power, since pull mode has the DSP publish its position
-continuously and nothing has looked at idle wakeups or suspend; the systems
-other than SNES and PlayStation; and whether 8 ms is safe to ship as the
-default, which needs the quirk in `020-set_audio_latency` changed and a
-migration beside it.
+### The floor is not 128 frames, and it is a time
+
+The table above jumps from 128 to 64, and this document concluded from it
+that 128 was the floor. It was only the first power of two that held.
+`clock.force-quantum` is exempt from PipeWire's power-of-two rounding -
+`context.c:1756` applies `flp2()` only `if (... && !force_quantum)` - so
+everything in between could be run, and none of it had been. Swept on
+2026-09-30, 60 s a value, with `pw-top`'s ERR on the sink and the PCM's
+state and `delay` read every 2 ms:
+
+| 32 kHz, Snes9x | | sink ERR | PCM | delay min / mean / p99 |
+|---|---|---|---|---|
+| 128 | 4.00 ms | 0 | RUNNING | 4.00 / 6.49 / 9.00 ms |
+| 120 | 3.75 ms | 0 | RUNNING | 2.75 / 5.82 / 8.00 ms |
+| 112 | 3.50 ms | 0 | RUNNING | 3.00 / 5.60 / 7.50 ms |
+| 104 | 3.25 ms | 0 | RUNNING | 2.50 / 5.03 / 7.00 ms |
+| **96** | **3.00 ms** | **0** | RUNNING | **3.00 / 4.91 / 6.00 ms** |
+| 88 | 2.75 ms | 0 | RUNNING | 0.75 / 3.68 / 5.50 ms |
+| 80 | 2.50 ms | 14 | XRUN, SETUP | 0.00 / 3.85 / 11.50 ms |
+| 72 | 2.25 ms | 17 | XRUN, SETUP | 0.00 / 3.63 / 10.75 ms |
+| 64 | 2.00 ms | - | **stopped** | - |
+
+96 then ran just under ten minutes under play: no sink or RetroArch error,
+no xrun in the journal.
+
+| 48 kHz | | ARMSX2 | RetroArch, Dolphin |
+|---|---|---|---|
+| 256 | 5.33 ms | | clean, delay mean 7.43 ms |
+| 144 | 3.00 ms | clean, mean 4.64, min 3.00 | clean, mean 4.68, min 2.00 |
+| 132 | 2.75 ms | clean, min 1.75 | clean, min 1.25 |
+| 128 | 2.67 ms | clean, min 1.33 | **1 sink error**, SETUP |
+| 120 | 2.50 ms | clean, min 1.00 | |
+| 112 | 2.33 ms | clean, min 1.00 | |
+| 104 | 2.17 ms | clean, min 0.67 | |
+| 96 | 2.00 ms | **stopped** | |
+
+The sink stops at 2.0 ms at both rates: 64 frames at 32 kHz, 96 at 48,
+the failure above each time. A floor counted in frames is a different
+floor at every rate, and a flat 96 would take every 48 kHz core down the
+moment the graph let it. Nor is recovery certain: forced to 48 kHz with 96
+still set, the sink stayed stopped when the quantum was raised to 160, and
+came back only when both were cleared.
+
+Above 2 ms the client decides. ARMSX2, standalone through the ALSA plugin,
+held down to 2.17 ms. With RetroArch in the graph it went at 2.5 ms at
+32 kHz and once at 2.67 ms at 48 - the Dolphin rows ran partly with the
+core hung (#463), so under less load than a game. 2.75 ms is the lowest
+clean with RetroArch at both rates, and 3 ms is a quarter of a millisecond
+over it. What 3 ms takes off the PCM's mean delay: 6.49 to 4.91 ms at
+32 kHz, and 7.43 to 4.68 at 48 with the same Dolphin session, where the
+graph runs 256 today.
+
+### Why the setting cannot reach it
+
+Three floors, all policy and none hardware:
+
+1. RetroArch asks for at least 128 frames at any rate - 4 ms at 32 kHz,
+   2.67 at 48, the second already below where RetroArch glitched.
+2. `default.clock.min-quantum` is 256 at 48 kHz, rate-scaled to 170 at 32
+   and 235 at 44.1, and a request below it is raised to it.
+3. `flp2()` then rounds the request down to a power of two: 170 to 128, and
+   96 to **64, which stops the sink**. `default.clock.power-of-two-quantum`
+   is read at startup (`settings.c:222`) and is not in the settings
+   metadata.
+
+So a 3 ms quantum is three changes that only work together: RetroArch's
+floor as 3 ms of frames, `min-quantum = 144` (3 ms at 48 kHz, scaled to 96
+and 132), and power-of-two off. One alone is inert, or as #433 was,
+harmful. Written, not yet run as a request end to end; 44.1 kHz not swept.
+
+RetroArch sizes its ring from the quantum it asked for, not the one it got.
+At 48 kHz that is 384 frames in front of a 256-frame quantum today, one and
+a half quanta. Dolphin did not underrun on it, but a 48 kHz core on the
+threaded pipeline has not been measured.
+
+### Found on the way
+
+- **GameCube has had no sound since #431.** Dolphin renders through its own
+  audio callback and hands the driver whatever it mixed in one write, and
+  `pwire_write()` drops a write longer than its ring. At 8 ms every Dolphin
+  batch is: 4524 `Buffer too small` lines and 13796 periods of silence in one
+  SoulCalibur II session. Written in pieces instead, the sound comes back
+  with no underrun. A crackle is left that nothing here explains, and a
+  hang that is Dolphin's own; both are in #463.
+- **`pw-top`'s QUANT on a follower is its request, not the running quantum.**
+  The driver's line prints the clock; a follower's prints
+  `measurement.latency`. RetroArch reads 128 whatever the graph runs.
+- **The threaded pipeline was dismissed on its own comment**, "slack for the
+  producer's burst and the consumer's period to slip past each other, not
+  latency". The code sets the pipe's target at one video frame of audio -
+  "never under one publish", `audio_driver_pipe_target_frames()` - and rate
+  control holds the fill against it. If it holds what the code says, it is
+  the largest term left, around 16 ms at 60 fps, and nothing here has
+  measured it.
+
+**Still open:** the pipe above; the three changes as one, run as a request
+and soaked; 44.1 kHz; why RetroArch fails at a quantum ARMSX2 holds;
+power, since pull mode has the DSP publish its position continuously and
+nothing has looked at idle wakeups or suspend.
 
 ## How it was reasoned about first
 
