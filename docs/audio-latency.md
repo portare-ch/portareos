@@ -41,14 +41,32 @@ tester's camera method: **8 to 15 frames at 240 fps, averaging 13** - 33 to
 63 ms against the original 42 to 79, with the floor already below Android's
 best of 10 frames. The absolute figure has not been re-measured since.
 
-**Why 8 and not less:** RetroArch's driver asks for a quantum of a quarter
-of the setting and floored that at 128 frames, and holds the ring to at least
-two quanta. At 32 kHz the ring wants 256 frames at 8 ms and two 128-frame
-quanta is the same 256, so a lower setting was raised straight back - the
-driver logs `(raised to the minimum)` when it does. Both floors are 64 now,
-RetroArch patch 0017 and `default.clock.min-quantum`, which have to move
-together because either one alone still pins the quantum at 128. That makes 4
-a setting that means something; the default is still 8 until it is tested.
+**Why 8 and not less:** there are two floors and they are not the same one.
+RetroArch's PipeWire driver asks for a quantum of a quarter of the setting and
+floors it at 128 frames, holding the ring to at least two quanta. Separately,
+and earlier, RetroArch clamps the setting itself: `Latency setting of 4 ms is
+below the 8 ms floor; using 8 ms`. That check is upstream's, it is not in any
+patch of ours, and it runs before the driver is reached - so lowering the
+quantum floor cannot make 4 mean anything.
+
+Lowering it did change what the shipping 8 ms setting asks for, 128 frames to
+64, and 64 frames at 32 kHz stops this device's sink. Measured with
+`clock.force-quantum` on the graph while a game played:
+
+| forced quantum | PCM state | xruns in 8 s |
+|---|---|---|
+| 1024 | RUNNING | 0 |
+| 512 | RUNNING | 0 |
+| 256 | RUNNING | 0 |
+| 128 | RUNNING | 0 |
+| 64 | **SETUP** | no audio |
+
+At 64 the PCM leaves RUNNING and `spa.alsa: snd_pcm_avail after recover:
+Broken pipe` repeats a few hundred times a second, `pw-top` shows the sink at
+`QUANT 0 RATE 0`, and nothing comes out until the quantum is raised. It
+recovers the moment it is. Anything below 8 ms therefore needs two things
+neither of which is in hand: the upstream clamp lifted, and a sink that
+survives the quantum that would follow.
 
 **Still open:** power, since pull mode has the DSP publish its position
 continuously and nothing has looked at idle wakeups or suspend; the systems
