@@ -3,6 +3,11 @@ firequalizer = gain = '1.4884e8 * f*f*f / (f*f + 424.36) / (f*f + 1.4884e8) / sq
 showfreqs    = size = 20x100 : mode = bar : ascale = log : fscale = log : win_size = 2048 : win_func = hann : averaging = 2 : colors = white|white,
 scale        = 360:100 : flags = neighbor,
 format       = gbrp,
-geq          = r = 'if(gt(g(X,Y),64)*lt(mod(X,18),15)*lt(mod(Y,5),4), 180-150*Y/H, 11+14*eq(mod(X,6),3)*eq(mod(Y,5),2))' : g = 'if(gt(g(X,Y),64)*lt(mod(X,18),15)*lt(mod(Y,5),4), 255-90*Y/H, 15+30*eq(mod(X,6),3)*eq(mod(Y,5),2))' : b = 'if(gt(g(X,Y),64)*lt(mod(X,18),15)*lt(mod(Y,5),4), 70-50*Y/H, 11+14*eq(mod(X,6),3)*eq(mod(Y,5),2))',
-pad          = 1280:960:64:212:0x0B0F0B,
-setsar       = 1 [vo]
+lutrgb       = r = 'gt(val,64)*255' : g = 'gt(val,64)*255' : b = 'gt(val,64)*255' [bars];
+color        = c = black : s = 360x100 : r = 1 : d = 1,
+format       = gbrp,
+geq          = r = 'if(lt(mod(X,18),15)*lt(mod(Y,5),4), 180-150*Y/H, 11+14*eq(mod(X,6),3)*eq(mod(Y,5),2))' : g = 'if(lt(mod(X,18),15)*lt(mod(Y,5),4), 255-90*Y/H, 15+30*eq(mod(X,6),3)*eq(mod(Y,5),2))' : b = 'if(lt(mod(X,18),15)*lt(mod(Y,5),4), 70-50*Y/H, 11+14*eq(mod(X,6),3)*eq(mod(Y,5),2))' [lit];
+color        = c = black : s = 360x100 : r = 1 : d = 1,
+format       = gbrp,
+geq          = r = '11+14*eq(mod(X,6),3)*eq(mod(Y,5),2)' : g = '15+30*eq(mod(X,6),3)*eq(mod(Y,5),2)' : b = '11+14*eq(mod(X,6),3)*eq(mod(Y,5),2)' [dark];
+[dark][lit][bars] maskedmerge [vo]

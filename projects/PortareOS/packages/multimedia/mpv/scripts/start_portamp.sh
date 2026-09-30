@@ -39,13 +39,18 @@ VIS="$(cat /usr/config/mpv/portamp-filter.txt)"
 # launcher, as the film player does - looping restarted a single track
 # forever. force-window because there is no video track to open a window.
 # osd-level 0: portamp.lua owns the screen and draws the time itself.
+# The analyser is a 360x100 video at portamp.lua's VIS, (64,212): the
+# margins start the video area there and the alignment puts it in the
+# corner. 64.4 and 212.4 pixels, so it lands on 64 and 212 whether mpv
+# rounds or truncates - one off shows a line of black at the edge.
 exec /usr/bin/mpv --no-config \
   ${VK} --vulkan-display-mode=$((10#${MODE})) \
   --force-window=yes \
   --autocreate-playlist=filter --directory-filter-types=audio --directory-mode=ignore \
   --keep-open=no \
   --lavfi-complex="${VIS}" \
-  --video-unscaled=yes \
+  --video-unscaled=yes --video-align-x=-1 --video-align-y=-1 \
+  --video-margin-ratio-left=0.0503125 --video-margin-ratio-top=0.22125 \
   --script=/usr/config/mpv/portamp.lua \
   --ao=pipewire \
   --input-gamepad=yes --input-conf=/usr/config/mpv/portamp-input.conf \
