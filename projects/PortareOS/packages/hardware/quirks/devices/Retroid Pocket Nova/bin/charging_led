@@ -28,9 +28,28 @@ sticks() {
 }
 
 restore() {
+  local cfg
   case "$(get_setting led.color)" in
-    rgb) /usr/bin/analog_sticks_ledcontrol $(get_setting analogsticks.led) ;;
-    *)   sticks 0 "0 0 0" ;;
+    battery)
+      # batteryledstatus owns the sticks in this mode. Leave them alone,
+      # or they go dark until its next round, up to fifteen seconds.
+      ;;
+    rgb)
+      # analog_sticks_ledcontrol takes seven values, brightness and an rgb
+      # triplet per stick, and prints usage for anything else. Handing it an
+      # unset or short analogsticks.led left the sticks on the charging
+      # colour for good, which looks exactly like the LED ignoring the
+      # charger. Check the count and fall back to off.
+      cfg="$(get_setting analogsticks.led)"
+      if [ "$(echo ${cfg} | wc -w)" = "7" ]; then
+        /usr/bin/analog_sticks_ledcontrol ${cfg}
+      else
+        sticks 0 "0 0 0"
+      fi
+      ;;
+    *)
+      sticks 0 "0 0 0"
+      ;;
   esac
 }
 
@@ -50,7 +69,12 @@ while [ ! -e "${STATUS}" ]; do
   WAITED=$((WAITED + 1))
 done
 
-STATE="idle"
+# Start as if charging, so the first round through the loop asserts the
+# idle state instead of waiting for a charge cycle. Restoring only on the
+# charging -> idle edge left the sticks on the charging colour after a
+# boot, a resume or a service restart with the charger already out, until
+# someone plugged it in and pulled it again.
+STATE="charging"
 while true; do
   WANT=0
   if [ "$(get_setting led.charging)" != "0" ] && \
