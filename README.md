@@ -21,7 +21,7 @@ expected. **Nova only, NTSC focused; PAL modes and other devices are not planned
 ## Status
 
 PortareOS is in an early phase of development. For the sake of science,
-things will break along the way.
+things may break along the way.
 
 | System | Emulator | Status |
 | --- | --- | --- |
