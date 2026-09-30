@@ -23,6 +23,17 @@ something is executed.
   report success on what it just missed.
 * **DO** clean up after verifying. Running `py_compile` to check a script left
   a `__pycache__` directory that broke the install.
+* **DO** compile-check target C in a Linux container, with Apple's
+  `container` - the build host is macOS and the tree's C is Linux-only, so
+  a header typo or a wrong struct field is otherwise found by CI an hour
+  later:
+
+      container run --rm --volume "$PWD/sources:/src" --workdir /src \
+        docker.io/library/debian:stable-slim \
+        sh -c 'apt-get -qq update && apt-get -qq install -y gcc make \
+          pkg-config <the -dev packages> && make'
+
+  Delete the binary afterwards; `sources/` is what the build copies.
 
 ## 2. Reading a build failure
 
