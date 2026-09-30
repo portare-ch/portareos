@@ -2,7 +2,7 @@
 # Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="ppsspp-lr"
-PKG_VERSION="fa50bb1976065c4f8b1b47af227d367fe9771555" # v1.20.4
+PKG_VERSION="3bcd93d594c48cde0b56c8933150bdb75a9f19f3" # v1.20.4
 PKG_LICENSE="GPL-2.0-or-later"
 PKG_SITE="https://github.com/hrydgard/ppsspp"
 PKG_URL="${PKG_SITE}.git"
