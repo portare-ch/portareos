@@ -14,6 +14,12 @@
 // link or in the panel controller, and a clean count next to a tear somebody
 // can see localises the fault to there and nowhere else.
 //
+// --watch takes no buffers and no DRM master, so it runs while a game is on
+// screen. It cannot classify frames - live content differs every frame - but
+// it reports dropped frames from the sequence, and the run-length structure
+// of the CRCs, which says whether each frame is being shown the expected
+// number of times.
+//
 // Two ways to tear on purpose, so the detector can be shown to detect.
 // --async flips without waiting for vblank, which is the standard mechanism
 // and which msm refuses. --tear-live needs nothing from the driver: it paints
@@ -174,7 +180,9 @@ static void usage(const char *me)
 		"  --stripes  stripe height in lines, 0 = split in half (default 0)\n"
 		"  --async    flip without waiting for vblank, to tear on purpose\n"
 		"  --tear-live  repaint the visible buffer mid-scanout, which tears\n"
-		"               without needing anything from the driver\n",
+		"               without needing anything from the driver\n"
+		"  --watch    watch the CRCs of whatever is already on screen; needs\n"
+		"             no DRM master, so it runs during a game\n",
 		me);
 }
 
@@ -182,7 +190,7 @@ int main(int argc, char **argv)
 {
 	int card = 0, frames = 1200, stripes = 0;
 	double want_rate = 0;
-	bool async = false, live = false;
+	bool async = false, live = false, watch = false;
 	char path[64];
 	int fd, crcfd;
 	drmModeRes *res = NULL;
@@ -208,6 +216,8 @@ int main(int argc, char **argv)
 			async = true;
 		else if (!strcmp(argv[i], "--tear-live"))
 			live = true;
+		else if (!strcmp(argv[i], "--watch"))
+			watch = true;
 		else if (!strcmp(argv[i], "--help") || !strcmp(argv[i], "-h")) {
 			usage(argv[0]);
 			return 0;
@@ -239,6 +249,71 @@ int main(int argc, char **argv)
 	if (!conn) {
 		fprintf(stderr, "no connected connector with modes\n");
 		return 1;
+	}
+
+	if (watch) {
+		unsigned long runs[5] = { 0 }, run = 0, seen = 0;
+		char prev[MAX_CRC_LINE] = "";
+		uint32_t active = 0;
+
+		for (int i = 0; i < res->count_crtcs && !active; i++) {
+			drmModeCrtc *c = drmModeGetCrtc(fd, res->crtcs[i]);
+
+			if (c && c->mode_valid)
+				active = c->crtc_id;
+			if (c)
+				drmModeFreeCrtc(c);
+		}
+		if (!active) {
+			fprintf(stderr, "no CRTC is driving anything\n");
+			return 1;
+		}
+		crcfd = open_crc(card, active);
+		if (crcfd < 0) {
+			fprintf(stderr, "CRC capture: %s\n", strerror(-crcfd));
+			return 1;
+		}
+		printf("watching CRTC %u for %d frames\n\n", active, frames);
+
+		while ((int)seen < frames) {
+			struct pollfd pc = { crcfd, POLLIN, 0 };
+			unsigned long seq;
+			char key[MAX_CRC_LINE];
+
+			if (poll(&pc, 1, 2000) <= 0) {
+				fprintf(stderr, "no CRC in 2s; is the display on?\n");
+				break;
+			}
+			if (read_crc(crcfd, &seq, key, sizeof(key)))
+				continue;
+			if (seen && seq != last_seq + 1)
+				gaps++;
+			if (!seen)
+				first_seq = seq;
+			last_seq = seq;
+			seen++;
+
+			if (run && strcmp(key, prev)) {
+				runs[run > 4 ? 4 : run - 1]++;
+				run = 0;
+			}
+			run++;
+			snprintf(prev, sizeof(prev), "%s", key);
+		}
+		if (run)
+			runs[run > 4 ? 4 : run - 1]++;
+
+		printf("  frames seen        %lu   (seq %#lx..%#lx)\n", seen, first_seq, last_seq);
+		printf("  sequence gaps      %lu   <- a frame the CRC reader missed\n", gaps);
+		printf("\n  how many refreshes each frame stayed on screen:\n");
+		for (int i = 0; i < 5; i++)
+			printf("    %s%-2d %lu\n", i == 4 ? ">=" : "  ", i + 1, runs[i]);
+		printf("\n  A core at half the panel rate should sit almost entirely\n"
+		       "  on 2. Runs of 1 are a frame shown once - a new frame every\n"
+		       "  refresh, or a torn one. Longer runs are the game repeating\n"
+		       "  a frame, which a static scene or a menu does.\n");
+		close(crcfd);
+		return 0;
 	}
 
 	for (int i = 0; i < conn->count_modes; i++) {
