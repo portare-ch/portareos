@@ -17,6 +17,32 @@ The console modes use the same 1302 × 1001 total timings and change only the pi
 | 119.199541 Hz | 155353 kHz | `neocd` |
 | 120.000000 Hz | 156240 kHz, vtotal 1000 | gamescope, for Steam |
 
+### Why video mode, when the vendor uses command mode
+
+The stock Android device tree drives this panel in command mode, with a
+hardware TE pin. This driver uses video mode, and that is deliberate.
+
+A CRT has no memory: the host drives H and V sync and the beam paints what
+arrives, when it arrives. Video-mode DSI is the same contract - the DPU owns
+the timing, the panel holds no framebuffer, pixels stream. Command mode is
+the other arrangement: the panel keeps its own GRAM, refreshes itself at its
+own rate, and the host writes into it when TE allows.
+
+Every mode in the table above exists because of that difference. The timings
+are ours to choose, so each console gets a panel mode at exactly twice its
+frame rate; in command mode the panel self-refreshes at a rate it decides and
+there is no modeline to cut. The strategy does not survive the switch.
+
+It is also worse on both things this device is tuned for. TE gating puts a
+variable wait between a finished frame and the panel showing it, where video
+mode scans out whatever was latched at vblank. And writing into a buffer that
+is being scanned out is the one arrangement that tears for real, which
+`tear-test` shows does not happen here at all.
+
+What command mode buys is panel self-refresh while nothing moves, which is a
+power saving on a static screen and the opposite of this workload. Considered
+and declined.
+
 ### Why the SNES mode is not on the default totals
 
 Every other mode here keeps 1302 x 1001 and changes only the pixel clock.
