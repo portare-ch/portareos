@@ -1,0 +1,69 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] input: rsinput: survive an unbind with the MCU streaming
+
+Unbinding and rebinding serial1-0 while the pad is reporting oopses
+the kernel:
+
+  Unable to handle kernel NULL pointer dereference at 0000000000000028
+  pc : input_event+0xc/0x70
+  lr : rsinput_rx+0x3bc/0x858
+  x0 : 0000000000000000
+  Workqueue: ttyHS-qcom_geni_uart flush_to_ldisc
+
+with "input: AYN Odin2 Gamepad as .../input/input37" interleaved in the
+trace: the receive path was handling MCU data while probe was still
+registering the input device. Afterwards the handshake times out three
+times and the UART reports "failed to push data (0 < 23)" until a
+reboot.
+
+Two windows let it happen, and both are needed to close it.
+
+rsinput_remove() closes the port but leaves drvdata pointing at memory
+devm is about to free. serdev keeps a bound device's ops across an
+unbind - they are a static struct - so the next serdev_device_open()
+hands the stream straight back to the old callback. rsinput_rx()'s
+"if (!drv)" cannot catch that: the pointer is stale, not NULL. Clear
+drvdata once the port is closed.
+
+The other window is in probe. drvdata is set before the input device is
+allocated, so between those two points drv is valid and drv->input is
+NULL - which is exactly the NULL that reached input_event(). Widen the
+guard to cover it.
+
+Found by using unbind and rebind to re-send the MCU parameters command,
+which only goes out from probe, while sweeping the frame_rate parameter
+1019 added. That is a debugging technique rather than something a user
+does, but the same shape reaches the suspend and resume path, where the
+MCU is quiesced and re-initialised with the port already open.
+
+--- a/drivers/input/joystick/rsinput.c
++++ b/drivers/input/joystick/rsinput.c
+@@ -499,7 +499,11 @@ static void rsinput_process_data(struct rsinput_driver *drv, const uint8_t *data
+ static size_t rsinput_rx(struct serdev_device *serdev, const u8 *data, size_t count) {
+     struct rsinput_driver *drv = serdev_device_get_drvdata(serdev);
+ 
+-    if (!drv || !data || count == 0) {
++    /*
++     * drv->input is NULL between probe setting drvdata and registering the
++     * device, and the MCU is already streaming by then on a rebind.
++     */
++    if (!drv || !drv->input || !data || count == 0) {
+         dev_warn_ratelimited(&serdev->dev, "Invalid RX data\n");
+         goto error;
+     }
+@@ -608,7 +613,16 @@ static void rsinput_remove(struct serdev_device *serdev) {
+     struct rsinput_driver *drv = serdev_device_get_drvdata(serdev);
+ 
+     serdev_device_close(serdev);
++    /*
++     * The receive callback finds the driver through drvdata on every byte,
++     * and serdev keeps this device's ops across an unbind. Leaving drvdata
++     * pointing at what devm is about to free means the next open hands the
++     * MCU's stream to a freed structure, which is not a NULL the callback
++     * can test for. Clear it now the port is shut, while the local drv is
++     * still good for the teardown below.
++     */
++    serdev_device_set_drvdata(serdev, NULL);
+     input_unregister_device(drv->input);
+     if (drv->enable_gpio)
+         gpiod_set_value_cansleep(drv->enable_gpio, 0);
