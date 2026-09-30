@@ -20,7 +20,7 @@ The console modes use the same 1302 × 1001 total timings and change only the pi
 ### Why one mode has a taller vertical total
 
 Every mode here carries 27 lines of vertical back porch except the SNES
-one, which carries 67. Black frame insertion flips on every refresh
+one, which carries 142. Black frame insertion flips on every refresh
 rather than every second one, so it meets the vertical blanking deadline
 twice as often, and the DPU starts fetching the next frame inside that
 window. At 27 lines the window is 340.8us and, measured on snes9x with
@@ -40,12 +40,22 @@ low, which would leave this mode +0.037 ppm against it - exact for the
 NES and a near miss for the SNES it is named after - so PortareOS
 patches it (`001-exact-ntsc-rate.patch`).
 
-The cost is DSI bit clock, 1047.9MHz a lane against 939.9, up 11.5%, and
-that is the part of this that is a test rather than a calculation. The
-PHY on this SoC goes far higher; whether the panel controller takes it
-is what the first boot answers. If it does not, the same mode at vtotal
-1042 is -1.2ppm with 654.7us for 4.1% more clock, and 1001 is where it
-started.
+The cost is DSI bit clock, 1047.9MHz a lane against 939.9, up 11.5%.
+That was a test when the mode was added and it has passed: the panel
+takes it, and measurement since has found nothing it costs. `tear-test`
+counts no torn frame from the DPU's per-frame CRC on this mode - none
+over 1200 frames of synthetic flips, none over 1200 of Super Mario
+World with RetroArch driving, no dropped frames in either - with the
+detector shown to work by repainting the visible buffer mid-scanout,
+which produced 205 torn frames out of 580. msm's `dsi_err_worker` stays
+silent throughout, so the link is not complaining either.
+
+Dropping to 1306 x 1005 at 157763kHz would return the bit clock to
+949.1MHz, 1.0% over the proven rate, for +0.048ppm and a frame of drift
+every 48 hours instead of 823. It is not done, because nothing measures
+the high clock costing anything and the accuracy is measured: the trade
+is a real regression against a hypothetical saving. What would settle it
+is a power measurement of the two modes under the same load.
 
 vtotal has to be even either way. The ideal clock is about 156497.31Hz
 per line, so an even vtotal lands near a whole kHz and an odd one near
@@ -78,14 +88,78 @@ slew was separately seen swinging between -114 and -142 ppm between
 runs - orders of magnitude more than the mode errors this table is cut
 to. `vblank-rate` samples both clocks and reports both rates.
 
-**The band is still there with BFI on**, on this mode, and the test is not
-yet a fair one. `setsettings` gives BFI a swap interval of 1 so a frame
-reaches the display on every refresh, and the timed-present path was gated
-on an interval above 1, so BFI fell back to the repeated presents that
-patch exists to replace: visibly slowed, frames arriving a refresh late.
-A flip that late inverts the light/dark alternation whatever the blanking
-window is, and this mode widened a 340 us one. #427 opens the gate; until
-it is built, nothing here tests what the 156 lines are for.
+**BFI was tested fairly afterwards and does not work here.** The first
+attempt was not a fair test: `setsettings` gives BFI a swap interval of 1 so a
+frame reaches the display on every refresh, and the timed-present path was
+gated on an interval above 1, so BFI fell back to the repeated presents that
+patch exists to replace - visibly slowed, frames arriving a refresh late. #427
+opened the gate. With it open, and on the wide-blanking mode cut for it, BFI
+still flickers and a line still rolls down the panel; more swapchain images
+help but do not remove it, at two or at three.
+
+Measured on the same session, in flips per second against the 120.198 the mode
+produces: **101.764** with the CRT shader on, **120.075** with it off,
+**120.195** with three swapchain images. So the band is GPU throughput and
+swapchain depth, not blanking - a frame that is not ready inverts the
+light/dark alternation however wide the window is. The 156 lines are not
+earning their bit clock, and are kept only because nothing measures them
+costing anything either.
+
+### What the stock Android install says about this panel
+
+The device still has its Android partitions, and the panel's qualified
+configuration is in `dtbo_a`, on the node named `il97680a amoled panel
+without DSC`. None of this was known here:
+
+- **The panel is an AMOLED.** Pixel response is microseconds, so there is no
+  transition smear on a moving edge. What softens a left-to-right scroll is
+  persistence: each SNES frame is held for two refreshes, 16.6 ms, and a
+  tracked edge smears by however far it travels in that time. Black frame
+  insertion is the remedy, and it does not work here - so the softness on a
+  scrolling game is the display being sample-and-hold, and nothing in software
+  reaches it.
+- **Its own timings are 1302 x 998**, at 60 and 120 Hz - the same htotal this
+  driver uses, three lines *less* vertical back porch than our 1001.
+- **The init sequence already matches the vendor's**, command for command and
+  byte for byte, for the first fourteen: the same register pages, the same
+  `0x0d 0x75 0x00 0x00` brightness, the same 120 ms and 20 ms waits, and the
+  same reset pulse once the active-low flag is accounted for.
+
+The vendor sends three more after the display is on - page `0x22`, register
+`0xe1 = 0x01`, back to page `0x00` - which this driver does not. Whoever
+transcribed the other fourteen exactly had those in front of them and stopped,
+so the omission is more likely a decision than an oversight, and the reasoning
+did not survive: the driver reached this tree with the ROCKNIX rename. What
+`0xe1` does is undocumented, and a register written once after display-on in a
+vendor page is the shape of a compensation setting. That is the argument
+against sending it speculatively rather than for it - getting it wrong degrades
+the image subtly and attributes itself to nothing.
+
+### Why video mode, when the vendor uses command mode
+
+That node drives the panel in command mode, with a hardware TE pin. This
+driver uses video mode, and that is deliberate.
+
+A CRT has no memory: the host drives H and V sync and the beam paints what
+arrives, when it arrives. Video-mode DSI is the same contract - the DPU owns
+the timing, the panel holds no framebuffer, pixels stream. Command mode is the
+other arrangement: the panel keeps its own GRAM, refreshes itself at its own
+rate, and the host writes into it when TE allows.
+
+Every mode in the table above exists because of that difference. The timings
+are ours to choose, so each console gets a panel mode at exactly twice its
+frame rate; in command mode the panel self-refreshes at a rate it decides and
+there is no modeline to cut. The strategy does not survive the switch.
+
+It is also worse on both things this device is tuned for. TE gating puts a
+variable wait between a finished frame and the panel showing it, where video
+mode scans out whatever was latched at vblank. And writing into a buffer that
+is being scanned out is the one arrangement that tears for real, which
+`tear-test` shows does not happen here at all.
+
+What command mode buys is panel self-refresh while nothing moves, a power
+saving on a static screen and the opposite of this workload. Considered and
+declined.
 
 ## Pacing: how a frame lands on a frame
 

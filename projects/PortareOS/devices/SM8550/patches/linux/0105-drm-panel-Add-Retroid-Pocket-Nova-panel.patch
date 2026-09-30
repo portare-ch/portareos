@@ -279,11 +279,14 @@ index 000000000000..1c8ed849edbf
 +		 * rather than being re-established every couple of hours.
 +		 *
 +		 * The cost is DSI bit clock: 1047.9MHz a lane against 939.9, up
-+		 * 11.5%. That is the part of this that is a test rather than a
-+		 * calculation - the PHY on this SoC goes far higher, and whether
-+		 * the panel controller takes it is what the first boot answers.
-+		 * If it does not, the same mode at vtotal 1042 is -1.2ppm and
-+		 * 654.7us for 4.1% more clock, and 1001 is where it started.
++		 * 11.5%. That was a test when this mode was added and it has
++		 * passed - the panel takes it, and nothing since measures it
++		 * costing anything. tear-test counts no torn frame from the
++		 * DPU's per-frame CRC here, over synthetic flips or over a real
++		 * game, and dsi_err_worker stays silent. 1306 x 1005 at
++		 * 157763kHz would give the clock back for +0.048ppm and a frame
++		 * of drift every 48 hours instead of 823; it is not done because
++		 * the accuracy is measured and the saving is not.
 +		 *
 +		 * vtotal has to be even. The ideal clock is about 156497.31Hz per
 +		 * line, so an even vtotal lands near a whole kHz and an odd one
