@@ -62,22 +62,30 @@ preserve settings the user deliberately changed.
 
 ## MCU and input latency
 
-The rsinput driver exposes the MCU's scan delay and stick deadband, but
-changing a parameter is not evidence of lower button-to-screen latency.
+The gamepad MCU now reports every 5 ms (200 Hz), versus the vendor's
+9 ms (111 Hz). `rsinput.frame_rate=3` sets the scan delay from boot, with
+a driver fix that makes command-line parameters safe before registration.
+Probe and resume send the setting; UART measurements confirmed 200 Hz
+across two suspend/resume cycles
+([#466](https://github.com/portare-ch/portareos/pull/466)). At 250 Hz, about
+19% of reports never reached evdev; the cause is not yet investigated.
+Values 0 and 1 stopped the pad. Faster reporting is not yet evidence of
+lower button-to-screen latency.
 
-- Measure the existing MCU report cadence and button-to-screen latency.
+- Compare button-to-screen latency at the vendor setting and at 200 Hz.
   Establish a repeatable input trigger and camera measurement
   ([#13](https://github.com/portare-ch/portareos/issues/13)).
-- Sweep scan-delay values and measure report timing, jitter, lost inputs and
-  end-to-end latency. Check buttons and analog sticks separately.
+- Trace the lost reports at 250 Hz before considering a faster default.
+  Measure report jitter, lost inputs and end-to-end latency; check buttons
+  and analog sticks separately.
 - Check the rest of the path through rsinput, InputPlumber and the emulator
   to identify where additional delay is introduced.
-- Repeat the winning configuration after suspend/resume and under load;
-  check power cost and stick noise before changing defaults.
+- Extend the 200 Hz tests under load and through repeated suspend/resume;
+  measure power cost and stick noise before further tuning.
 
 **Complete when:** a measured configuration improves input latency without
 lost inputs, noisy controls or resume regressions, and the baseline and
-results are published. Retain the baseline if the experiment finds no gain.
+results are published. Keep the vendor setting as the comparison baseline.
 
 ## Audio latency
 

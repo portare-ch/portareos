@@ -229,10 +229,12 @@ SDR104, and the GPU can drop to 124.8 MHz for menus and films.
 Charging mitigation reduces current as the battery warms; device verification
 is pending. See [known issues](BUGS.md).
 
-Input latency work extends to the **gamepad MCU firmware and scan loop**.
-Higher effective polling rates are being tested through exposed scan parameters;
-the earlier attempted 400 Hz change did not improve measured reporting and
-was reverted. This remains experimental.
+The **gamepad MCU reports every 5 ms (200 Hz)**, down from the vendor's
+9 ms (111 Hz). `rsinput.frame_rate=3` sets the scan delay from boot and
+restores it on resume; UART measurements confirmed 200 Hz across two
+suspend/resume cycles ([#466](https://github.com/portare-ch/portareos/pull/466)).
+At 250 Hz, about 19% of reports failed to reach evdev, so 200 Hz is the
+default. Button-to-screen latency still needs measurement.
 
 Several kernel patches came from
 [pocknix-os](https://github.com/shuuri-labs/pocknix-os); their authorship is

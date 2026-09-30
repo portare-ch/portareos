@@ -1,0 +1,78 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] input: rsinput: scan parameters on the kernel command line
+
+1079's setter walks the bound devices with driver_for_each_device(),
+which dereferences the driver's private data. A built-in driver's
+parameters on the command line are set from parse_args() in
+start_kernel(), before any driver is registered and so before that data
+exists: rsinput.frame_rate=3 on the command line would oops the boot.
+
+Re-send only once the driver is registered. Probe sends the parameters
+anyway, so a value from the command line still reaches the MCU, first
+frame onwards.
+
+The setter now returns the iterator's result, which also clears the
+build's warn_unused_result warning on that call.
+---
+ drivers/input/joystick/rsinput.c | 35 +++++++++++++++++++++++++++++++----
+ 1 file changed, 31 insertions(+), 4 deletions(-)
+
+--- a/drivers/input/joystick/rsinput.c
++++ b/drivers/input/joystick/rsinput.c
+@@ -299,6 +299,16 @@
+ 
+     return 0;
+ }
++
++/*
++ * Set once the driver is registered. A built-in driver's parameters given on
++ * the kernel command line are set from parse_args() in start_kernel(), before
++ * any driver is registered, and driver_for_each_device() dereferences the
++ * driver's private data, which does not exist until then - rsinput.frame_rate
++ * on the command line would oops the boot. Probe sends the parameters itself,
++ * so a value set before registration still reaches the MCU.
++ */
++static bool rsinput_registered;
+ 
+ /*
+  * A module variable holding the bound driver would be the same stale-pointer
+@@ -313,9 +323,11 @@
+     if (error)
+         return error;
+ 
+-    driver_for_each_device(&rsinput_driver.driver, NULL, NULL,
+-                           rsinput_resend_params);
+-    return 0;
++    if (!READ_ONCE(rsinput_registered))
++        return 0;
++
++    return driver_for_each_device(&rsinput_driver.driver, NULL, NULL,
++                                  rsinput_resend_params);
+ }
+ 
+ static const struct kernel_param_ops rsinput_param_ops = {
+@@ -871,8 +883,23 @@
+     },
+ };
+ 
+-module_serdev_device_driver(rsinput_driver);
++static int __init rsinput_init(void)
++{
++    int error = serdev_device_driver_register(&rsinput_driver);
+ 
++    if (!error)
++        WRITE_ONCE(rsinput_registered, true);
++    return error;
++}
++module_init(rsinput_init);
++
++static void __exit rsinput_exit(void)
++{
++    WRITE_ONCE(rsinput_registered, false);
++    serdev_device_driver_unregister(&rsinput_driver);
++}
++module_exit(rsinput_exit);
++
+ MODULE_LICENSE("GPL");
+ MODULE_DESCRIPTION("RSInput Gamepad Driver");
+ MODULE_AUTHOR("Teguh Sobirin <teguh@sobir.in>");

@@ -28,7 +28,10 @@
     KERNEL_MAKE_EXTRACMD=" $(get_kernel_make_extracmd)"
 
   # Kernel cmdline
-    EXTRA_CMDLINE="quiet rootwait console=tty0 allow_mismatched_32bit_el0 fw_devlink.strict=1 pcie_ports=compat irqaffinity=0-2 cgroup.memory=nokmem,nosocket nosoftlockup usbcore.interrupt_interval_override=045e:028e:2 ufshcd_core.uic_cmd_timeout=3000 mem_sleep_default=s2idle cpuidle.governor=teo"
+  # rsinput.frame_rate=3: the pad reports every 5 ms instead of the
+  # vendor's 9 (#447). Safe here only with patch 1080, whose setter waits
+  # for the driver to register.
+    EXTRA_CMDLINE="quiet rootwait console=tty0 allow_mismatched_32bit_el0 fw_devlink.strict=1 pcie_ports=compat irqaffinity=0-2 cgroup.memory=nokmem,nosocket nosoftlockup usbcore.interrupt_interval_override=045e:028e:2 ufshcd_core.uic_cmd_timeout=3000 mem_sleep_default=s2idle cpuidle.governor=teo rsinput.frame_rate=3"
 
   # Bootloader to use (syslinux / u-boot)
     BOOTLOADER="qcom-abl"
