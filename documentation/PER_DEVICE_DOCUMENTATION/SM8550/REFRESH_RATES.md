@@ -17,6 +17,34 @@ The console modes use the same 1302 × 1001 total timings and change only the pi
 | 119.199541 Hz | 155353 kHz | `neocd` |
 | 120.000000 Hz | 156240 kHz, vtotal 1000 | gamescope, for Steam |
 
+### What the stock Android install says about this panel
+
+The device still has its Android partitions, and the panel's qualified
+configuration is in `dtbo_a`, on the node named `il97680a amoled panel
+without DSC`. Worth recording, because none of it was known here:
+
+- **The panel is an AMOLED.** Pixel response is microseconds, so there is no
+  transition smear on a moving edge. What softens a left-to-right scroll is
+  persistence: each SNES frame is held for two refreshes, 16.6 ms, and a
+  tracked edge smears by however far it travels in that time. Black frame
+  insertion is the remedy, and it does not work on this device.
+- **Its own timings are 1302 x 998**, at 60 and 120 Hz - the same htotal this
+  driver uses, three lines *less* vertical back porch than our 1001.
+- **The panel driver's init sequence matches the vendor's**, command for
+  command and byte for byte, for the first fourteen: the same register pages,
+  the same `0x0d 0x75 0x00 0x00` brightness, the same 120 ms and 20 ms waits,
+  and the same reset pulse once the active-low flag is accounted for.
+
+The vendor sends three more after the display is on - page `0x22`, register
+`0xe1 = 0x01`, back to page `0x00` - which this driver does not. Whoever
+transcribed the other fourteen exactly had those in front of them and stopped,
+so the omission is more likely a decision than an oversight, and the reasoning
+did not survive: the driver reached this tree with the ROCKNIX rename. What
+`0xe1` does is undocumented, and a register written once after display-on in a
+vendor page is the shape of a compensation setting - which is the argument
+against sending it speculatively, not for it. Getting that wrong degrades the
+image subtly and attributes itself to nothing.
+
 ### Why video mode, when the vendor uses command mode
 
 The stock Android device tree drives this panel in command mode, with a
