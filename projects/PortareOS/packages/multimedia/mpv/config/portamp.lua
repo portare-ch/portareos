@@ -225,8 +225,6 @@ local function blank()
         end
     end
     writeto(FLAG, "")
-    -- Nobody is looking: the analyser at one frame a second, not 25.
-    mp.commandv("vf", "add", "@portamp-dark:fps=1")
 end
 
 -- Puts back what blank() took, unless something set a brightness meanwhile.
@@ -340,9 +338,11 @@ local function draw()
     end
 end
 
+-- The analyser keeps running in the dark. Throttling it to 1 fps saved
+-- 13 points of a core, but taking the throttle off again rebuilt the video
+-- chain, and on a wake after a while dark that cut 70 ms of audio.
 local function wake()
     restore()
-    mp.commandv("vf", "remove", "@portamp-dark")
     shown = nil
     draw()
 end
@@ -380,6 +380,12 @@ bind("next",     function() mp.command("playlist-next") end)
 
 -- For anything that wants the panel dark now; also how this is tested.
 mp.register_script_message("blank", blank)
+-- power-handler hands the power key here while PORTAMP plays: music is no
+-- reason to suspend, so the key only switches the screen off and on.
+mp.register_script_message("power-button", function()
+    last_input = mp.get_time()
+    if dark then wake() else blank() end
+end)
 -- The playlist can end in the dark, and the launcher must not come back
 -- to a black panel.
 mp.register_event("shutdown", restore)
