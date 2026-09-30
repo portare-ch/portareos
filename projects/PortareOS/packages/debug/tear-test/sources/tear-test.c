@@ -253,6 +253,7 @@ int main(int argc, char **argv)
 
 	if (watch) {
 		unsigned long runs[5] = { 0 }, run = 0, seen = 0;
+		bool first_run = true;
 		char prev[MAX_CRC_LINE] = "";
 		uint32_t active = 0;
 
@@ -294,18 +295,23 @@ int main(int argc, char **argv)
 			seen++;
 
 			if (run && strcmp(key, prev)) {
-				runs[run > 4 ? 4 : run - 1]++;
+				// Skip the first run: it began before the
+				// capture did, so its length is an artifact.
+				if (!first_run)
+					runs[run > 4 ? 4 : run - 1]++;
+				first_run = false;
 				run = 0;
 			}
 			run++;
 			snprintf(prev, sizeof(prev), "%s", key);
 		}
-		if (run)
-			runs[run > 4 ? 4 : run - 1]++;
+		// The last run is cut short by the capture ending, so it is
+		// dropped for the same reason as the first.
 
 		printf("  frames seen        %lu   (seq %#lx..%#lx)\n", seen, first_seq, last_seq);
 		printf("  sequence gaps      %lu   <- a frame the CRC reader missed\n", gaps);
-		printf("\n  how many refreshes each frame stayed on screen:\n");
+		printf("\n  how many refreshes each frame stayed on screen\n"
+		       "  (the first and last are dropped, cut by the window):\n");
 		for (int i = 0; i < 5; i++)
 			printf("    %s%-2d %lu\n", i == 4 ? ">=" : "  ", i + 1, runs[i]);
 		printf("\n  A core at half the panel rate should sit almost entirely\n"
