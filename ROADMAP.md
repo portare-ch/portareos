@@ -165,21 +165,32 @@ Those are estimates of installed space, not promised compressed-image savings.
 its affected runtime checks. Publish the resulting image size; do not trade
 working emulators, Bluetooth or required tools for a smaller headline number.
 
-## Evaluate ARMSX2 through libretro
+## ARMSX2 through libretro
 
-The current PS2 package uses ARMSX2's standalone SDL frontend. Evaluate a
-libretro replacement for shared input, audio, presentation and settings
-integration; switching is conditional on the result.
+PS2 runs ARMSX2's libretro core in RetroArch; the standalone SDL frontend
+is gone. BIOS images in `bios/armsx2` are copied to `bios/pcsx2/bios` on
+update, and the memory cards stay in the `ps2` folder.
 
-- Establish whether a usable ARM64 libretro implementation exists and what
-  work it would take to build and maintain it here.
-- Compare it with the standalone build on the same games: compatibility,
+- Get back what the standalone had. The first Nova test (Time Crisis II,
+  upstream's generic CI build of the core) ran slower and with more
+  visible glitches. Leads, from the two configurations side by side:
+  - Texture barriers: the standalone forced them off
+    (`OverrideTextureBarriers = 0`); the core's automatic turns them on,
+    and a barrier is expensive on a tiler.
+  - Pacing: the standalone timed itself to the panel's vsync. The core
+    keeps PCSX2's own 59.94 Hz limiter and also parks the GS thread until
+    each `retro_run` takes its frame - two clocks.
+  - `VsyncQueueSize` 2 instead of 0: up to two frames queued ahead.
+
+  None of these is a core option; the core keeps them in
+  `<system>/pcsx2/inis/armsx2-libretro.ini`. Measure each on its own.
+- Compare it with what the standalone did on the same games: compatibility,
   speed, frame pacing, input/audio latency, controls and save behavior.
-- Check feature coverage and migration of existing saves and settings.
+- RetroAchievements: the core exposes no memory to RetroArch, so PS2 has
+  none. The standalone had them built in.
 
-**Complete when:** there is a documented keep-or-switch decision backed by
-Nova tests. If switching wins, ship and regression-test the replacement,
-migrate user data and remove the superseded package. Retain one PS2 emulator.
+**Complete when:** the core matches the standalone's Nova results, or each
+gap has an issue.
 
 ## Fix external display support
 

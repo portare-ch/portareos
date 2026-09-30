@@ -39,28 +39,26 @@ case "${DEVICE}" in
     LIBRETRO_CORES+=" dolphin-lr"
     ;;
   SM6115)
-    PKG_EMUS+=" armsx2-sa"
-    LIBRETRO_CORES+=" dolphin-lr"
+    LIBRETRO_CORES+=" armsx2-lr dolphin-lr"
     ;;
   SM8250)
-    PKG_EMUS+=" xemu-sa steam armsx2-sa"
-    LIBRETRO_CORES+=" dolphin-lr"
+    PKG_EMUS+=" xemu-sa steam"
+    LIBRETRO_CORES+=" armsx2-lr dolphin-lr"
     ;;
   SM8550)
-    PKG_EMUS+=" xemu-sa steam armsx2-sa"
-    LIBRETRO_CORES+=" dolphin-lr"
+    PKG_EMUS+=" xemu-sa steam"
+    LIBRETRO_CORES+=" armsx2-lr dolphin-lr"
     ;;
   SM8650|SM8750)
-    PKG_EMUS+=" xemu-sa steam armsx2-sa"
-    LIBRETRO_CORES+=" dolphin-lr"
+    PKG_EMUS+=" xemu-sa steam"
+    LIBRETRO_CORES+=" armsx2-lr dolphin-lr"
     ;;
   S922X)
-    PKG_EMUS+=" armsx2-sa"
-    LIBRETRO_CORES+=" dolphin-lr"
+    LIBRETRO_CORES+=" armsx2-lr dolphin-lr"
     ;;
   AMD64)
-    PKG_EMUS+=" xemu-sa armsx2-sa"
-    LIBRETRO_CORES+=" dolphin-lr"
+    PKG_EMUS+=" xemu-sa"
+    LIBRETRO_CORES+=" armsx2-lr dolphin-lr"
 esac
 
 # Split building emulators into 2 stages, needed to fit the jobs into the 6 hour GH runner time limit.
@@ -332,8 +330,7 @@ makeinstall_target() {
   # The RK boards carried aethersx2 and nothing else, so they lose PS2 with it.
   case ${DEVICE} in
   AMD64|S922X|SM6115|SM8250|SM8550|SM8650|SM8750)
-    add_emu_core ps2 armsx2 armsx2-sa true
-    install_script "Start ARMSX2.sh"
+    add_emu_core ps2 retroarch armsx2 true
     add_es_system ps2
     ;;
   esac

@@ -22,6 +22,7 @@ trimmed out of the image, with sizes.
 |---|---|
 | `uae4arm-lr` | Amiga core we do not use; puae covers it. |
 | `aethersx2-sa` | EOL PS2 appimage. armsx2 is the only PS2 emulator this fork ships. |
+| `armsx2-sa` | ARMSX2's SDL frontend. Its libretro core, `armsx2-lr`, replaced it, so PS2 runs in RetroArch like every other system. |
 | `cemu-sa` | Wii U emulator with no usable 4:3 mode on a 4:3 panel. Removed, and the wiiu system with it. |
 | `drastic-sa` | A closed-source Nintendo DS binary. |
 | `daedalusx64-sa` | A 32-bit-only N64 emulator we never built. |

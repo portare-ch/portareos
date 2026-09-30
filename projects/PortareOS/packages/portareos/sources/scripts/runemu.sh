@@ -46,18 +46,11 @@ KMSMODE=$(get_setting "kmsmode" "${PLATFORM}" "${BASEROMNAME}")
 ### Keyed on the emulator rather than the platform: the standalone
 ### emulators have their own display handling and several of them do
 ### want a compositor.
-###
-### ArmSX2 joins it: its SDL frontend has no window at all and takes the
-### panel through VK_KHR_display, whatever the renderer setting says - see
-### start_armsx2.sh.
 case "${EMULATOR}" in
-  retroarch|armsx2)
+  retroarch)
     [ -z "${KMSMODE}" ] && KMSMODE=1
     ;;
 esac
-
-### start_armsx2.sh needs to know which display path it is on.
-export KMSMODE
 
 ### This used to re-exec into a scope of its own, because taking the
 ### display meant stopping the front-end, and stopping the front-end killed

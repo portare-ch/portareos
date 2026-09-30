@@ -118,9 +118,6 @@ Each program takes the panel itself:
 * **The launcher** owns the panel through KMS with a CPU-written dumb buffer:
   no GPU rendering, just text on black.
 * **RetroArch** renders with Vulkan straight to the display (`VK_KHR_display`).
-* **ARMSX2** does the same through our patch: its renderer already had a
-  direct-display path, but no frontend reached it. Qt runs offscreen while
-  the renderer takes the panel.
 * **mpv** plays films through Vulkan directly to the display, so a movie
   follows the same path as a game.
 * **xemu and PortMaster** use SDL's KMS driver. They need no desktop to
