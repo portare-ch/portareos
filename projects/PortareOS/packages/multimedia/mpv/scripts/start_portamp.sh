@@ -43,7 +43,7 @@ VIS="$(cat /usr/config/mpv/portamp-filter.txt)"
 # margins start the video area there and the alignment puts it in the
 # corner. 64.4 and 212.4 pixels, so it lands on 64 and 212 whether mpv
 # rounds or truncates - one off shows a line of black at the edge.
-exec /usr/bin/mpv --no-config \
+/usr/bin/mpv --no-config \
   ${VK} --vulkan-display-mode=$((10#${MODE})) \
   --force-window=yes \
   --autocreate-playlist=filter --directory-filter-types=audio --directory-mode=ignore \
@@ -56,3 +56,14 @@ exec /usr/bin/mpv --no-config \
   --input-gamepad=yes --input-conf=/usr/config/mpv/portamp-input.conf \
   --osd-level=0 \
   "${1}"
+RC=$?
+
+# portamp.lua puts the backlight back when mpv quits, the end of a playlist
+# in the dark included. This is for when it cannot - mpv killed or crashed
+# with the panel dark - so the launcher never comes back to black: the
+# brightness goes back the way boot sets it.
+if [ -e /run/portamp-blank ]; then
+  rm -f /run/portamp-blank
+  /usr/lib/autostart/common/006-display >/dev/null 2>&1
+fi
+exit ${RC}
