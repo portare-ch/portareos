@@ -8,7 +8,7 @@ PKG_NAME="glslang"
 # When updating glslang pkg_version please update to the known_good spirv-tools & spirv-headers pkg_version/s.
 PKG_VERSION="16.6.0"
 PKG_SHA256="9c09b901149c729df745057dafa815278aaa101b84d2b6e14f16a42de52f97f2"
-PKG_LICENSE="Apache-2.0"
+PKG_LICENSE="BSD-3-Clause AND BSD-2-Clause AND MIT AND Apache-2.0"
 PKG_SITE="https://github.com/KhronosGroup/glslang"
 PKG_URL="https://github.com/KhronosGroup/glslang/archive/${PKG_VERSION}.tar.gz"
 PKG_DEPENDS_HOST="toolchain:host Python3:host"
@@ -26,7 +26,7 @@ PKG_CMAKE_OPTS_COMMON="-DBUILD_EXTERNAL=ON \
                        -Wno-dev"
 
 post_unpack() {
-  # Enables SPIR-V optimzer capability needed for ENABLE_OPT CMake build option
+  # Enables SPIR-V optimizer capability needed for ENABLE_OPT CMake build option
   mkdir -p ${PKG_BUILD}/External/spirv-tools
     tar --strip-components=1 \
       -xf "${SOURCES}/spirv-tools/spirv-tools-$(get_pkg_version spirv-tools).tar.gz" \
