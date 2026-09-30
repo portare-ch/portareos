@@ -23,17 +23,16 @@ expected. **Nova only, NTSC focused; PAL modes and other devices are not planned
 * **Hardware follows the console.** Custom panel modes and switchable audio
   clocks match the original systems instead of forcing every game into
   60 Hz and 48 kHz.
-* **Reworked kernel audio path.** DSP pull mode, sample-accurate position
-  reporting and the ALSA batch flag removed: less buffering and jitter.
-* **Measured responsiveness.** A community tester reports latency variation
-  down to one frame, better than Android, and button-to-screen latency about
-  one frame lower. Audio latency remains somewhat higher
-* **Purpose-built system apps.** Direct-KMS portarelauncher, portnet Wi-Fi,
-  portsense input handling, a lightweight Bluetooth agent and PORTAMP.
-* **Under 500 MB compressed.** One emulator per system, optimized configs,
-  shaders and scaling, without a desktop or artwork scraping.
-* **Measurement tools and hardware experiments.** Tearing detection, PCM
-  testing, MCU scan-rate tuning and ongoing black frame insertion work.
+* **Less buffering, measured responsiveness.** Kernel audio changes reduce
+  buffering and jitter; community testing reports steadier frame delivery
+  and lower button-to-screen latency than Android. Audio latency remains
+  somewhat higher.
+* **Purpose-built system apps.** A direct-KMS launcher and small services
+  handle networking, input and Bluetooth without a desktop.
+* **Under 500 MB compressed.** One emulator per system, with configs,
+  shaders and scaling tuned for this panel.
+* **Measure, then change.** Panel timing, tearing and audio test tools guide
+  the work, including experiments with the gamepad MCU and black frame insertion.
 
 Everything that does not serve that is an anti-feature and comes out.
 
@@ -42,12 +41,16 @@ Everything that does not serve that is an anti-feature and comes out.
 Most distributions drive the panel at 60 or 120 Hz and the audio at 48 kHz,
 and resample everything to fit. PortareOS changes the hardware to fit the
 console instead.
+
 ### Panel modes matched to the console
 
-The Nova has no variable refresh rate. Its panel driver instead provides a
-mode per console family at twice the console's frame rate. RetroArch selects
-the matching mode and presents each frame once, two refreshes apart, paced
-by the panel. See [refresh rates](documentation/PER_DEVICE_DOCUMENTATION/SM8550/REFRESH_RATES.md)
+The Nova has no variable refresh rate, so the panel driver carries one mode
+per console family, at twice the console's frame rate. RetroArch asks for
+the matching mode when a game starts, presents each frame once, timed to
+the vblank two refreshes after the last, and the core is paced by the panel:
+a frame lands on a frame, at the console's rate. The game keeps its own
+timing instead of periodically dropping or repeating a frame to fit 60 Hz.
+See [refresh rates](documentation/PER_DEVICE_DOCUMENTATION/SM8550/REFRESH_RATES.md)
 for the implementation and measurements.
 
 | Panel mode | Console | Frame rate |
@@ -99,20 +102,30 @@ actual limit. See [audio latency](docs/audio-latency.md) for measurements.
 
 ### KMS, no compositor
 
-The launcher draws text on black through a CPU-written KMS buffer.
-RetroArch, ARMSX2 and mpv render through Vulkan directly to the display;
-xemu and PortMaster use SDL's KMS driver. **Steam is the exception:**
-it uses gamescope on the DRM backend.
+Each program takes the panel itself:
 
-There is no desktop compositor or EmulationStation in the image. ARMSX2's
-direct-display path uses our patch, with Qt offscreen.
+* **The launcher** owns the panel through KMS with a CPU-written dumb buffer:
+  no GPU rendering, just text on black.
+* **RetroArch** renders with Vulkan straight to the display (`VK_KHR_display`).
+* **ARMSX2** does the same through our patch: its renderer already had a
+  direct-display path, but no frontend reached it. Qt runs offscreen while
+  the renderer takes the panel.
+* **mpv** plays films through Vulkan directly to the display, so a movie
+  follows the same path as a game.
+* **xemu and PortMaster** use SDL's KMS driver. They need no desktop to
+  give them a window.
+* **Steam** is the exception: it uses gamescope on the DRM backend.
+
+There is no desktop compositor or EmulationStation in the image. Each
+program controls presentation without another compositor's frame queue
+between it and the panel.
 
 ### One emulator per system
 
-One tool for the job, and the best one wins.
+One tool for the job, and the best one wins. Alternatives are removed
+together with the settings nobody had tuned for them. See
+[removed packages](documentation/REMOVED_PACKAGES.md) for what went and why.
 
-Alternatives and
-their untuned settings are removed; see [removed packages](documentation/REMOVED_PACKAGES.md).
 | System | Emulator |
 | --- | --- |
 | Arcade, Neo Geo | FBNeo |
@@ -159,7 +172,7 @@ mpv uses hardware H.264/HEVC decoding and direct Vulkan display output.
 SD 4:3 rips with missing aspect flags regain their shape and get scanlines.
 Playback position is saved on quit.
 
-### Lightweight and responsive
+### Lightweight
 
 The compressed image is now **under 500 MB**. Audio uses PipeWire, with a minimum
 quantum of 256 frames (5.3 ms at 48 kHz). There is no artwork scraping,
@@ -167,14 +180,19 @@ media centre or file manager. Duplicate tools and wrappers are removed;
 [the package inventory](documentation/PACKAGE_INVENTORY.md) records about
 250 MB removed and roughly 130 MB still targeted.
 
+### Latency
+
 Latency takes priority after correctness: a 1000 Hz kernel tick, selectable
 preemption, teo idle governor, schedutil with the chip's energy model,
 swapchain sizes tuned per core, no threaded video, and automatic frame delay in
 RetroArch. Panel timing was measured to better than one part per million
 against the SoC clock. **Black frame insertion is work in progress.**
 
-Kernel, Mesa, PipeWire and RetroArch are kept current; a daily workflow opens
-pull requests for emulator updates.
+A community tester reports latency variation down to one frame, better
+than Android, and button-to-screen latency about one frame lower. These
+measurements describe the tested setup; the audio setting above is a
+separate measure.
+
 ### Our system services and test tools
 
 * **portarelauncher:** consoles, games and settings drawn directly through
@@ -190,7 +208,6 @@ pull requests for emulator updates.
   **pcm-flags** reads driver flags and period constraints; **pcm-floor** streams
   at accepted periods and counts underruns. These join gdb and strace in
   unofficial debug builds.
-
 
 ### Device integration
 
@@ -224,6 +241,9 @@ aspect ratio and scanlines for standard definition.
 
 <img src="documentation/images/launcher.jpg" width="640" alt="The launcher: a list of systems with game counts, and the volume, brightness, battery and time in the header">
 
+**The launcher.** Text on black, drawn by the CPU into a KMS buffer. Systems
+with games, the counts, and the four numbers that matter in the header.
+
 ## The rules
 
 * **One device.** Every other device tree has been deleted, not switched off.
@@ -237,7 +257,6 @@ aspect ratio and scanlines for standard definition.
 * **Anti-features come out.** If it is not needed for a smooth game, it is
   not in the image.
 
-**The launcher.** Text on black, drawn by the CPU into a KMS buffer. 
 ## Everyday use
 
 [portarelauncher](https://github.com/portare-ch/portarelauncher) provides
@@ -264,16 +283,15 @@ boot partition label, so an in-place update over ROCKNIX will not find it.
 Subsequent PortareOS updates work through the launcher.
 
 PAL fixes are welcome if they preserve NTSC behaviour. The minimal interface
-and one-emulator policy are deliberate choices. 16:9 Systems (except PSP) are not supported.
+and one-emulator policy are deliberate choices. 16:9 systems (except PSP) are not supported.
 
 Read [BUGS.md](BUGS.md) for observed problems and changes awaiting device
 testing, including suspend battery drain and color profiles.
 [ROADMAP.md](ROADMAP.md) covers upcoming work: black frame insertion,
 suspend power, the SNES core choice and further footprint reductions.
-BFI targets CRT-like motion clarity by inserting black refreshes. Timed
-presents and wider vertical blanking are implemented, but rolling bands and
-cadence stability remain difficult problems. The work continues; BFI is off
-by default.
+BFI aims for CRT-like motion clarity by inserting black refreshes. It is
+experimental and off by default; rolling bands and cadence stability remain
+unresolved.
 
 ## Building
 
@@ -282,7 +300,9 @@ make docker-SM8550
 ```
 
 Images are written to `target/`. The build wants a container runtime, roughly
-100 GB of disk and several hours the first time through. The **Build** workflow supports incremental builds.
+100 GB of disk and several hours the first time through. The **Build**
+workflow supports incremental builds. Kernel, Mesa, PipeWire and RetroArch
+are kept current; a daily workflow opens pull requests for emulator updates.
 
 ## A note about AI
 
