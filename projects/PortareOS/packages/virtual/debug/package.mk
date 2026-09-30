@@ -19,5 +19,7 @@ PKG_LONGDESC="What a problem on the device gets debugged with: gdb and strace"
 # period steps straight from the driver; SNDRV_PCM_INFO_BATCH decides how
 # much PipeWire queues ahead and no /proc file prints it. tear-test counts
 # torn frames from the DPU's per-frame CRC, which is the only way to tell a
-# tear the DPU produced from one the panel did.
-PKG_DEPENDS_TARGET="toolchain gdb strace vblank-rate pcm-flags tear-test"
+# tear the DPU produced from one the panel did. pcm-floor streams at each
+# period the driver accepts and counts underruns, which is what says whether
+# an advertised period is a floor or just an offer.
+PKG_DEPENDS_TARGET="toolchain gdb strace vblank-rate pcm-flags tear-test pcm-floor"
