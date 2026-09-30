@@ -18,6 +18,17 @@ Write the card, copy your games across, and play: one emulator per system,
 with configs, scaling and shaders tuned for this device. Tweaking is not
 expected. **Nova only, NTSC focused; PAL modes and other devices are not planned.**
 
+## Status
+
+PortareOS is in an early phase of development. For the sake of science,
+things may break along the way.
+
+| System | Emulator | Status |
+| --- | --- | --- |
+| Super Nintendo | Snes9x | ✅ Tested, full speed |
+| PlayStation | SwanStation | ✅ Tested |
+| GameCube | Dolphin (libretro) | ❌ Currently broken: hangs, no sound ([#463](https://github.com/portare-ch/portareos/issues/463)) |
+
 ## Concepts
 
 * **Hardware follows the console.** Custom panel modes and switchable audio
