@@ -34,7 +34,21 @@ restore() {
   esac
 }
 
-[ -e "${STATUS}" ] || exit 0
+# The battery arrives about two seconds after this service starts: measured
+# on a cold boot at 08:45:58.4 for the service against 08:46:00.4 for
+# /sys/class/power_supply/battery. This used to be a one-shot check that
+# exited 0, and systemd does not restart a clean exit, so the service was
+# dead for the session and the sticks kept whatever led.color had set,
+# charging or not. Wait for it.
+WAITED=0
+while [ ! -e "${STATUS}" ]; do
+  if [ "${WAITED}" -ge 60 ]; then
+    echo "no battery at ${STATUS} after ${WAITED}s, giving up" >&2
+    exit 0
+  fi
+  sleep 1
+  WAITED=$((WAITED + 1))
+done
 
 STATE="idle"
 while true; do

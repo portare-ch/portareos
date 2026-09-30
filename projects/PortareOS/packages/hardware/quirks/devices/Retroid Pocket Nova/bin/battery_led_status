@@ -70,7 +70,12 @@ while true
   do
   BAT_LED_STATE=$(get_setting led.color)
   if [ ! ${BAT_LED_STATE} == "battery" ]; then
-    break
+    # Not this script's mode. Keep looping rather than exiting: a clean
+    # exit is not restarted, so switching led.color to battery did nothing
+    # until the next reboot. PREV_BATCAP is reset so re-entering the mode
+    # repaints instead of trusting a stale colour.
+    PREV_BATCAP="null"
+    sleep 15
   else
     CAP=$(cat /sys/class/power_supply/battery/capacity)
     STAT=$(cat /sys/class/power_supply/battery/status)
