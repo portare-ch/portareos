@@ -1,0 +1,48 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] drm/panel: il97680a: the three commands the vendor ends with
+
+The stock Android install is still on the device, so the panel's
+qualified init sequence could be read rather than guessed at. It is in
+dtbo_a, as qcom,mdss-dsi-on-command on the node named
+"il97680a amoled panel without DSC", and this driver already matches
+its first fourteen commands byte for byte - the same register pages,
+the same 0x0d 0x75 0x00 0x00 brightness, the same 120ms and 20ms waits.
+
+It ends with three more that this driver does not send, after the
+display is already on:
+
+    ff 5a a5 22      select register page 0x22
+    e1 01            register 0xe1 = 0x01
+    ff 5a a5 00      back to page 0x00
+
+What 0xe1 on page 0x22 does is not documented anywhere available, and
+the panel has worked without it, so this is not a fix for anything
+named. It is sent because the vendor sends it and because being three
+commands short of the sequence the panel is qualified with is not a
+position to defend - a register written after display-on, once, in a
+vendor page, is the shape of a compensation or emission setting, and
+those are exactly the ones whose absence does not announce itself.
+
+Also recorded from that node, since nothing in this tree knew it: the
+panel is an AMOLED, the vendor drives it in command mode with a
+hardware TE pin where this driver uses video mode, and its own two
+timings are 1302 x 998 at 60 and 120Hz - the same htotal this driver
+uses, three fewer lines of vertical back porch.
+
+--- a/drivers/gpu/drm/panel/panel-ilitek-il97680a.c
++++ b/drivers/gpu/drm/panel/panel-ilitek-il97680a.c
+@@ -167,6 +167,15 @@
+ 	mipi_dsi_msleep(&dsi_ctx, 20);
+ 
++	/*
++	 * The vendor's sequence ends here, with the display already on. Read
++	 * from the stock dtbo_a, whose first fourteen commands this function
++	 * already matches exactly.
++	 */
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xff, 0x5a, 0xa5, 0x22);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xe1, 0x01);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xff, 0x5a, 0xa5, 0x00);
++
+ 	return dsi_ctx.accum_err;
+ }
+ 
