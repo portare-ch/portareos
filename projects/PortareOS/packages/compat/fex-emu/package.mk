@@ -80,19 +80,26 @@ make_target() {
   #
   # so the i686 and x86_64 cross toolchains it builds the thunks with come
   # from whatever <nixpkgs> resolves to. A fresh install points that at an
-  # unstable channel, which makes this recipe's output depend on the day it
-  # runs. Pin it.
+  # unstable channel, which makes what this recipe produces depend on the day
+  # it runs. That is the defect; pin it.
   #
-  # nixos-25.11 is pinned rather than a channel because unstable moved
-  # default-gcc-version to 16, and the thunks are compiled by clang against
-  # that GCC's libstdc++: GCC 16's <limits> defines
-  # numeric_limits<__float128>::signaling_NaN() as
+  # The pin is a nixos-25.11 commit rather than a channel because unstable's
+  # current pair does not compile. Build 369 died in ThunkLibs with
   #
-  #   __builtin_bit_cast(__float128, __builtin_nansf128(""))
+  #   limits: error: size of '__builtin_bit_cast' source type 'long double'
+  #   does not match destination type '__float128' (12 vs 16 bytes)
+  #     return __builtin_bit_cast(__float128, __builtin_nansf128(""));
   #
-  # and on i686 clang's __builtin_nansf128 gives a 12-byte long double where
-  # __float128 is 16, so the cast is rejected and ThunkLibs fails to build.
-  # 25.11 is on GCC 14, which predates that definition.
+  # from an i686 libstdc++ 16.2.0. clang always reaches that line: the branch
+  # above it needs __builtin_nansq, which is a GCC builtin, so every libstdc++
+  # from at least 14 onwards falls through to the bit_cast when clang is the
+  # compiler - and the thunks are clang-built.
+  #
+  # Which half regressed has not been isolated. clang 19 compiles that exact
+  # construct for i686 against libstdc++ 14's header, and the failing pair is
+  # newer on both counts. It does not matter for the fix: 25.11's pair is the
+  # one these builds have been using all along, and pinning stops the question
+  # arising again.
   export NIX_PATH="nixpkgs=https://github.com/NixOS/nixpkgs/archive/b6018f87da91d19d0ab4cf979885689b469cdd41.tar.gz"
 
   mkdir -p "${PKG_BUILD}/.${TARGET_NAME}"
