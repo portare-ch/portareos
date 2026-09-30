@@ -49,6 +49,38 @@ below the 8 ms floor; using 8 ms`. That check is upstream's, it is not in any
 patch of ours, and it runs before the driver is reached - so lowering the
 quantum floor cannot make 4 mean anything.
 
+The clamp is liftable and it changes nothing. `audio_latency_floor` is a
+setting, not a constant, and the hard minimum under it is 1: the source says
+the 8 "is a setting now [...] because the reasoning above is about drivers
+mishandling zero rather than about hardware, and an exclusive-mode driver
+that negotiates its period with the device can go below it where the device
+allows." Setting it to 4 and `audiolatency` to 4 was tried on the device.
+The setting reaches the driver - the warning stops - and nothing downstream
+moves, because both of the driver's own floors sit underneath it:
+
+    buf_samples = (uint64_t)latency * rate / 4000;
+    if (buf_samples < 128) buf_samples = 128;
+
+At 32 kHz that is 64 -> 128 for a setting of 8 and 32 -> 128 for a setting
+of 4, and `highwater_mark` is floored at two quanta, so the ring is 2048
+bytes either way. Measured over a minute of Snes9x at each setting, the two
+are the same run:
+
+| | setting 8 | setting 4 |
+|---|---|---|
+| requested quantum | 128 frames, 4 ms | 128 frames, 4 ms |
+| ring | 2048 bytes | 2048 bytes |
+| `pw-top` QUANT / ERR | 128 / 0 | 128 / 0 |
+| ALSA `delay`, mean | 211 frames, 6.60 ms | 210 frames, 6.57 ms |
+| ALSA `delay`, max | 256 frames, 8.00 ms | 256 frames, 8.00 ms |
+
+**So the shipped 8 ms setting already runs a 4 ms quantum.** The number in
+the setting names the ring, and the two-quanta floor overrides it at this
+rate. Anyone reading "8 ms" as the period is reading it wrong, and the
+driver's own init line says so: `8 ms setting: a 2048-byte ring (8 ms, rate
+control holds it about half full) in front of a requested 128-frame quantum
+(4 ms)`.
+
 Lowering it did change what the shipping 8 ms setting asks for, 128 frames to
 64, and 64 frames at 32 kHz stops this device's sink. Measured with
 `clock.force-quantum` on the graph while a game played:
@@ -64,9 +96,13 @@ Lowering it did change what the shipping 8 ms setting asks for, 128 frames to
 At 64 the PCM leaves RUNNING and `spa.alsa: snd_pcm_avail after recover:
 Broken pipe` repeats a few hundred times a second, `pw-top` shows the sink at
 `QUANT 0 RATE 0`, and nothing comes out until the quantum is raised. It
-recovers the moment it is. Anything below 8 ms therefore needs two things
-neither of which is in hand: the upstream clamp lifted, and a sink that
-survives the quantum that would follow.
+recovers the moment it is. Anything below 8 ms therefore needs two things,
+and only one of them is out of reach: the upstream clamp lifts with a
+setting, and a sink that survives the quantum that would follow does not
+exist here. The quantum floor and the hardware's floor are the same 128
+frames - `pcm-floor` sweeping the DSP directly counted its first underruns
+at 64 - so there is nothing left to take on this path without a sink that
+runs below what the DSP sustains.
 
 **Still open:** power, since pull mode has the DSP publish its position
 continuously and nothing has looked at idle wakeups or suspend; the systems
