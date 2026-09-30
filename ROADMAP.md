@@ -1,162 +1,227 @@
 # Roadmap
 
-Intent, not promise. Ordered roughly by how much difference each would make.
 Last revised 30 September 2026.
 
-## The goal
+The goal is a stock Android replacement for the Retroid Pocket Nova: write
+an image, add games and any required BIOS files, and play. Every included
+emulator should work with the built-in controls and ship with settings
+chosen for this device. Low latency, reliable operation and faithful console
+timing are the priorities.
 
-A straight replacement for the stock Android install. Write the card, copy the
-games across, and every emulator is already set up for this handheld. Not
-generic defaults, but per-system settings picked for the Nova. Latency first,
-because that is what Android on this device is worst at, then correctness of
-rates and geometry, then performance and visuals wherever they can be had
-without being paid for in input lag.
+The immediate priority is getting every included emulator running reliably
+and configured properly. Latency experiments must also be tested across
+systems before they become defaults. The work below has a next action and a
+completion criterion; there are no release dates attached.
 
-## Where it stands
+[BUGS.md](BUGS.md) holds observed failures and reproduction details. Hardware
+test results should record the image version, game, settings and logs so
+that a later image can be tested against the same baseline.
 
-What the earlier roadmap listed as planned has largely landed. sway and
-EmulationStation are gone; every program takes the panel through KMS and
-[portarelauncher](https://github.com/portare-ch/portarelauncher) is the
-front-end. The panel runs one mode per console family and RetroArch times each
-frame to its vblank. The audio link follows the stream at 32, 44.1 or 48 kHz
-and RetroArch picks the rate from the core's, per game on the N64. The
-pulse-free audio stack, the color profile, the incremental build and the
-package purge (about 250 MB) are in. Details are in the README and in
-`documentation/`.
+## Every included emulator runs without crashes
 
-Most of it was tested on the device by the person who wrote it, some of it
-only by ear, and the last day's changes not at all yet (see BUGS.md). There
-is still no test rig: a 240 fps camera and a way to trigger a known input.
+The README currently records successful tests for Snes9x and SwanStation,
+and a broken Dolphin path: hangs and no sound
+([#463](https://github.com/portare-ch/portareos/issues/463)). The rest of the
+included systems need an explicit test record, not an assumption that a
+successful build means a working emulator.
 
-## Planned
+- Make a test matrix for every emulator in the
+  [supported systems list](documentation/PER_DEVICE_DOCUMENTATION/SM8550/SUPPORTED_EMULATORS_AND_CORES.md).
+  Cover launch, controls, video, audio, saving, loading, exiting and relaunching.
+- Fix Dolphin's hangs and missing audio. Work through the other emulators
+  with the same matrix, retaining logs and reproducible cases for failures.
+- Test repeated launches, extended play, suspend/resume and return from game
+  guides, including Vulkan cores that lose and recreate their graphics context.
+- Separate game compatibility limits from failures in our build, launcher,
+  configuration or device integration.
 
-### Verify the last day on hardware
+**Complete when:** every included emulator passes the matrix on the Nova,
+with representative games and no crashes, hangs, missing audio or broken
+return to the launcher in those tests. Remaining game-specific limitations
+are documented with reproductions. Passing this matrix is the regression
+baseline for later changes.
 
-Four changes went into `next` on 26 September without a device run: the
-charger current limit and the throttle that drives it (#354, #355),
-RetroArch's automatic output rate (#356), and strace 7.2 (#357). Each has its
-check written down in BUGS.md. Doing them is the first job, before anything
-is built on top.
+## Configure every system for plug-and-play use
 
-### Suspend that costs nothing
+Working emulators still need good defaults. A fresh install should not
+require a trip through RetroArch or a standalone emulator's menus.
 
-Tracked in [#62](https://github.com/portare-ch/portareos/issues/62). The
-device still loses charge overnight. Three hypotheses were tested and were
-wrong; DDR never reaches its 200 MHz floor and the reason is not known. The
-next step has not changed since the last revision of this file: measure
-`current_now` in suspend instead of proxies, then find out which of the CX
-holders (the gamepad's UART, PCIe for Wi-Fi, the display controller) keeps the
-SoC up. Resume is at about 10 s to Wi-Fi association and the split is known;
-the scan is the target.
+- Audit each system's controller mapping, hotkeys, save paths, BIOS handling,
+  aspect ratio, scaling, shader, rendering resolution and performance settings.
+- Choose defaults using actual games on the Nova. Test demanding games as
+  well as easy ones; avoid a visual preset that causes missed frames or audio
+  underruns. Add per-game overrides where a system-wide setting cannot work.
+- Make save/load, exit and game-guide controls consistent where the emulator
+  permits it. Explain missing BIOS files and unsupported formats clearly.
+- Test both a clean installation and an update with existing user settings.
 
-### Black frame insertion
+**Complete when:** games launch with usable controls, correct geometry,
+clean audio and suitable performance without manual emulator configuration.
+Required files and unavoidable exceptions are documented, and updates
+preserve settings the user deliberately changed.
 
-A 120 Hz panel showing 60 Hz content can spend the second refresh on black,
-for CRT-like motion clarity. `video_black_frame_insertion` is 0 today. It
-works on snes9x and looks right; one artefact is in the way.
+## MCU and input latency
 
-Measured, snes9x at the exact 120.1976 mode, swap interval 1, BFI 1:
+The gamepad MCU now reports every 5 ms (200 Hz), versus the vendor's
+9 ms (111 Hz). `rsinput.frame_rate=3` sets the scan delay from boot, with
+a driver fix that makes command-line parameters safe before registration.
+Probe and resume send the setting; UART measurements confirmed 200 Hz
+across two suspend/resume cycles
+([#466](https://github.com/portare-ch/portareos/pull/466)). At 250 Hz, about
+19% of reports never reached evdev; the cause is not yet investigated.
+Values 0 and 1 stopped the pad. Faster reporting is not yet evidence of
+lower button-to-screen latency.
 
-| swapchain images | presents / refreshes in 20 s | rate | flicker |
-|---|---|---|---|
-| 2 | 2231 / 2404 | 111.6 fps | constant |
-| 3 | 2403 / 2404 | 120.2 fps | none seen |
+- Compare button-to-screen latency at the vendor setting and at 200 Hz.
+  Establish a repeatable input trigger and camera measurement
+  ([#13](https://github.com/portare-ch/portareos/issues/13)).
+- Trace the lost reports at 250 Hz before considering a faster default.
+  Measure report jitter, lost inputs and end-to-end latency; check buttons
+  and analog sticks separately.
+- Check the rest of the path through rsinput, InputPlumber and the emulator
+  to identify where additional delay is introduced.
+- Extend the 200 Hz tests under load and through repeated suspend/resume;
+  measure power cost and stick noise before further tuning.
 
-Three images is the whole difference, for the reason ParaLLEl N64 and
-Dolphin need it: the black frame is presented inside the frame call, and
-with two images the acquire blocks until the light frame is off screen,
-halving what the core has. At two images a seventh of the refreshes carry
-no new frame and the strobe breaks; at three it does not.
+**Complete when:** a measured configuration improves input latency without
+lost inputs, noisy controls or resume regressions, and the baseline and
+results are published. Keep the vendor setting as the comparison baseline.
 
-What is left is a black band rolling down the panel, a few times a minute,
-content missing inside it. The mechanism is known: a slipped flip inverts
-the light/dark alternation. Forced onto the wrong mode (119.88, where the
-core must lose a frame every 6.3 s) it appeared every 6 to 8 s, which is
-that prediction.
+## Audio latency
 
-Ruled out, each with a measurement: dropped presents (the present count
-matches the refresh count), DSI tearing (`MIPI_DSI_MODE_VIDEO`, no
-command-mode latch to tear), automatic frame delay (off changed nothing),
-GPU devfreq (flat at 401 MHz, no transitions), and the PLL missing the
-modeline (`dsi0_pll_bit_clk` 937,439,941 Hz against an ideal 937,440,000,
-0.063 ppm, a frame of drift every 73 hours).
+RetroArch currently defaults to 8 ms. That setting is a buffer request, not
+end-to-end latency. Existing measurements and the limits encountered are in
+[the audio latency notes](docs/audio-latency.md).
 
-Two candidates remain. CPU frequency scaling is untested - the run that
-looked like a negative had its governor reset by the launch, so it proved
-nothing, and redoing it costs minutes over SSH. The other is the vertical
-blanking window: 41 lines is 340.8 us to land a flip, BFI meets that
-deadline twice as often as anything else, and three misses in 10,800 is
-the 0.028% that would follow. `bfi-taller-vblank` widens it to 647.3 us
-for 4% more DSI bit clock; unbuilt.
+- Measure end-to-end audio latency and audio/video alignment on the current
+  image, rather than inferring them from the configured buffer size.
+- Test 32, 44.1 and 48 kHz playback across all emulators, including standalone
+  ones, on speakers and wired headphones. Record negotiated buffers, xruns
+  and audible failures during extended play and rate changes between games.
+- Locate the remaining delay before reducing buffers further. Test any
+  driver, DSP or scheduling change against the emulator regression matrix.
+- Measure idle wakeups, power use and suspend/resume with the tuned path.
 
-Brightness loss is real and unmeasured. BFI halves the duty cycle, and
-whatever ships should raise the panel with it.
+**Complete when:** the shipped defaults have measured latency and stable
+playback across the tested systems and wired outputs. Any lower-latency
+change must show an improvement without crackle, dropouts or power/resume
+regressions.
 
-Not for the heavy cores. Dolphin glitched and crashed on Soulcalibur II
-when this was last tried, and the blocking above says why.
+## Low-latency local audio and Bluetooth audio
 
-### The last 130 MB
+Evaluate two audio profiles: a tightly tuned path for speakers and wired
+headphones, and a Bluetooth-compatible path with the buffering and rate
+handling it needs. Compatibility of Bluetooth with the current latency
+tweaks is an open question to test.
 
-From `documentation/PACKAGE_INVENTORY.md`: slang-shaders trimmed to the three
-families in use (~60 MB), Python replaced under the Bluetooth pairing agent
-(34 MB), GStreamer (8 MB), gconv and locales (~25 MB). Tracked in
-[#333](https://github.com/portare-ch/portareos/issues/333).
+- Pair a Bluetooth headset and establish which current settings work and
+  which cause failures. Record routing, codec, rate and buffering.
+- Determine whether separate PipeWire/WirePlumber profiles are sufficient
+  or whether separate service configurations are needed.
+- Switch profiles when the output changes, including connecting and
+  disconnecting a headset during a game. Restore local latency settings
+  when returning to speakers or wired headphones.
+- Test pairing, reconnect, volume control, suspend/resume and failure recovery.
 
-### Panel modes still open
+**Complete when:** local outputs retain their tuned latency, Bluetooth plays
+reliably, and moving between them requires no manual service restart or
+configuration edits. Document Bluetooth's measured latency separately.
 
-[#284](https://github.com/portare-ch/portareos/issues/284) and
-`documentation/PortareOS_Modelines.md`: the 32X, whose core reports a flat
-60 Hz; Dreamcast games in 240p at 59.827 Hz; and arcade boards, which run at
-whatever their board did. Each needs either a core fix or a mode of its own.
+## Black frame insertion
 
-### Move off the 7.2.5 kernel pin
+BFI has worked in Snes9x experiments, but rolling black bands and the
+brightness tradeoff still prevent it from being a finished feature. Timing
+work and panel modes are recorded in
+[refresh rates](documentation/PER_DEVICE_DOCUMENTATION/SM8550/REFRESH_RATES.md).
 
-[#194](https://github.com/portare-ch/portareos/issues/194): 7.2.6 breaks
-the WCN7850's firmware load and Wi-Fi never comes up. The regression is
-upstream, between 7.2.5 and 7.2.6, and needs bisecting before the kernel can
-move.
+- Reproduce and instrument the rolling band on the current image. Test flip
+  deadlines, vertical blanking and CPU scheduling with controlled settings.
+- Compare two- and three-image swapchains for stability and input latency.
+- Measure brightness loss and choose an appropriate brightness adjustment.
+- Test sustained play on each candidate core, including dropped frames,
+  audio stability and transitions back to the launcher. Keep BFI opt-in
+  and restrict it to configurations that pass.
 
-### Measure, then tune
+**Complete when:** supported configurations sustain the light/black cadence
+without rolling bands or missing content, with measured latency and
+brightness behavior. Heavy cores need their own evidence before inclusion.
 
-The gamepad MCU's report cadence is now measured on the UART:
-`rsinput.frame_rate=3` gives 5 ms (200 Hz), versus the vendor's 9 ms
-(111 Hz). It is set on the kernel command line, with a driver fix that makes
-setting scan parameters before registration safe. Probe and resume send
-the setting; two suspend/resume cycles retained 200 Hz
-([#466](https://github.com/portare-ch/portareos/pull/466)). A scan delay of 2
-gave 250 Hz on the wire, but about 19% of reports never reached evdev;
-the cause is not yet investigated. Values 0 and 1 stopped the pad.
+## Reduce the image further
 
-The next input work is to measure button-to-screen latency at the vendor
-setting and at 200 Hz, check buttons and sticks under load, and measure
-power cost and stick noise. Trace the lost reports at 250 Hz before
-considering a faster default.
+Use the [package inventory](documentation/PACKAGE_INVENTORY.md) as the starting
+point ([#333](https://github.com/portare-ch/portareos/issues/333)). It lists
+roughly 100 MB of candidates: unused shader families, Python and GStreamer.
+Those are estimates of installed space, not promised compressed-image savings.
 
-Other performance and latency choices remain reasoned, not measured: the 1000
-Hz tick, teo, schedutil with the energy model, the two-image swapchain, timed
-presents. A camera at 240 fps pointed at the panel and a button wired to a
-GPIO would turn the remaining decisions (frame delay, BFI, thread pinning to
-the Cortex-X3, the `irqaffinity=0-2` and `096-cpuidle` inheritances) into
-numbers. [#13](https://github.com/portare-ch/portareos/issues/13).
+- Measure the current compressed image and installed package sizes.
+- Keep only the shaders in use and their transitive includes; launch every
+  affected preset to check that the trimmed set is complete.
+- Remove Python only after replacing its runtime users, including Bluetooth
+  pairing, and checking the Steam dependency path.
+- Trace GStreamer's users and remove it if the retained features can run
+  without it. Continue removing unused packages and shadowed recipes.
 
-### The launcher
+**Complete when:** each removal has a measured before/after size and passes
+its affected runtime checks. Publish the resulting image size; do not trade
+working emulators, Bluetooth or required tools for a smaller headline number.
 
-Its own repository and its own issues. Open here:
-[#258](https://github.com/portare-ch/portareos/issues/258) page and letter
-jumps, [#259](https://github.com/portare-ch/portareos/issues/259) remember
-the selected game, [#260](https://github.com/portare-ch/portareos/issues/260)
-say when a game exits with an error,
-[#226](https://github.com/portare-ch/portareos/issues/226) M1 and M2 through
-InputPlumber.
+## Evaluate ARMSX2 through libretro
 
-### A game session that is not root
+The current PS2 package uses ARMSX2's standalone SDL frontend. Evaluate a
+libretro replacement for shared input, audio, presentation and settings
+integration; switching is conditional on the result.
 
-[#204](https://github.com/portare-ch/portareos/issues/204). Everything runs
-as root today, as it did upstream. A dedicated user for the emulators is the
-right shape; what it costs is every path that assumes `/storage` is writable
-by whoever asks.
+- Establish whether a usable ARM64 libretro implementation exists and what
+  work it would take to build and maintain it here.
+- Compare it with the standalone build on the same games: compatibility,
+  speed, frame pacing, input/audio latency, controls and save behavior.
+- Check feature coverage and migration of existing saves and settings.
 
-## Not planned
+**Complete when:** there is a documented keep-or-switch decision backed by
+Nova tests. If switching wins, ship and regression-test the replacement,
+migrate user data and remove the superseded package. Retain one PS2 emulator.
 
-Support for any device other than the Retroid Pocket Nova. PAL modes. A
-compositor. More than one emulator per system. See the README's rules.
+## Fix external display support
+
+- Reproduce the current failures with USB-C displays and adapters. Record
+  connector detection, available modes, DRM ownership and emulator logs.
+- Make the launcher and each rendering path select and release the external
+  output correctly, with suitable resolution, refresh rate and aspect ratio.
+- Test connection before boot, connection during use, disconnection during
+  a game and return to the internal panel. Handle unsupported modes cleanly.
+- Verify external audio routing where available and recovery to local audio.
+
+**Complete when:** the launcher and included emulators work on tested external
+outputs, and connection/disconnection recovers without a black screen,
+crash or reboot. Publish tested adapters, displays and remaining limitations.
+
+## Other work to retain
+
+- **Suspend and resume:** measure actual suspend current and overnight drain,
+  identify the remaining power holders, and reduce Wi-Fi reconnect time.
+  Verify repeated sleep/wake cycles with working controls and audio
+  ([#62](https://github.com/portare-ch/portareos/issues/62)).
+- **Implement all remaining panel modes:** inventory the missing modes for
+  supported systems, including 32X, Dreamcast 240p and arcade board rates.
+  Add the modes and any core reporting or mode-selection fixes they need;
+  verify every mode on hardware against the core's output, including switching
+  between games and returning to the launcher
+  ([#284](https://github.com/portare-ch/portareos/issues/284)).
+- **Move off the 7.2.5 kernel pin:** reproduce and isolate the Wi-Fi regression recorded
+  against the 7.2.5 pin before moving it
+  ([#194](https://github.com/portare-ch/portareos/issues/194)).
+- **Launcher:** finish navigation and selection persistence, expose game
+  launch failures, and integrate M1/M2 controls. Coordinate implementation
+  with the portarelauncher repository.
+- **Color profiles:** fix crushed dark greys and verify the result on the
+  panel before recommending a calibrated profile again; see BUGS.md.
+- **A game session that is not root:** move game sessions to a dedicated user
+  and verify access to
+  saves, devices and launcher handover
+  ([#204](https://github.com/portare-ch/portareos/issues/204)).
+
+## Scope
+
+Retroid Pocket Nova only, NTSC focused, one emulator per system and direct
+KMS presentation. Other devices, PAL panel modes and a desktop compositor
+are not planned.
