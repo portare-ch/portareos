@@ -14,10 +14,13 @@
 // link or in the panel controller, and a clean count next to a tear somebody
 // can see localises the fault to there and nowhere else.
 //
-// --async flips without waiting for vblank, to tear on purpose. A run that
-// reports torn frames there and none without it is a detector known to work;
-// if the driver refuses async flips the count still means what it says, but
-// its sensitivity is untested and the tool says so.
+// Two ways to tear on purpose, so the detector can be shown to detect.
+// --async flips without waiting for vblank, which is the standard mechanism
+// and which msm refuses. --tear-live needs nothing from the driver: it paints
+// the pattern into the buffer that is currently being scanned out, half a
+// frame after vblank, so the DPU reads part of one pattern and part of the
+// other. That is what a tear is, so a run of it that reports no torn frames
+// would mean the tool cannot see one.
 
 #include <errno.h>
 #include <fcntl.h>
@@ -84,12 +87,18 @@ static void paint(struct fb *f, uint32_t w, uint32_t h, int stripes, bool invert
 
 // The CRC directory is per CRTC and named by index, not by id, so find the
 // one whose status names the CRTC being driven.
-static int open_crc(int card, uint32_t crtc_id, char *ctl_out, size_t n)
+//
+// Order matters: DRM starts capture when data is opened and then refuses a
+// control write with EBUSY, so the source has to be selected first. A stale
+// reader from an earlier run holds capture open and shows up here as EBUSY
+// on the control write.
+static int open_crc(int card, uint32_t crtc_id)
 {
 	for (int i = 0; i < 8; i++) {
 		char p[256];
 		FILE *s;
 		unsigned id = 0;
+		int c;
 
 		snprintf(p, sizeof(p), "/sys/kernel/debug/dri/%d/crtc-%d/status", card, i);
 		s = fopen(p, "r");
@@ -101,7 +110,22 @@ static int open_crc(int card, uint32_t crtc_id, char *ctl_out, size_t n)
 		if (id != crtc_id)
 			continue;
 
-		snprintf(ctl_out, n, "/sys/kernel/debug/dri/%d/crtc-%d/crc/control", card, i);
+		snprintf(p, sizeof(p), "/sys/kernel/debug/dri/%d/crtc-%d/crc/control", card, i);
+		c = open(p, O_WRONLY);
+		if (c < 0)
+			return -errno;
+		if (write(c, "auto", 4) != 4) {
+			int e = errno;
+
+			close(c);
+			if (e == EBUSY)
+				fprintf(stderr,
+					"CRC capture is already open - another reader "
+					"of\n  %s\nstill holds it\n", p);
+			return -e;
+		}
+		close(c);
+
 		snprintf(p, sizeof(p), "/sys/kernel/debug/dri/%d/crtc-%d/crc/data", card, i);
 		return open(p, O_RDONLY);
 	}
@@ -148,7 +172,9 @@ static void usage(const char *me)
 		"  --rate     pick the mode with this refresh, else the current one\n"
 		"  --frames   how many flips to measure (default 1200, ~10s at 120Hz)\n"
 		"  --stripes  stripe height in lines, 0 = split in half (default 0)\n"
-		"  --async    flip without waiting for vblank, to tear on purpose\n",
+		"  --async    flip without waiting for vblank, to tear on purpose\n"
+		"  --tear-live  repaint the visible buffer mid-scanout, which tears\n"
+		"               without needing anything from the driver\n",
 		me);
 }
 
@@ -156,8 +182,8 @@ int main(int argc, char **argv)
 {
 	int card = 0, frames = 1200, stripes = 0;
 	double want_rate = 0;
-	bool async = false;
-	char path[64], ctl[256];
+	bool async = false, live = false;
+	char path[64];
 	int fd, crcfd;
 	drmModeRes *res = NULL;
 	drmModeConnector *conn = NULL;
@@ -180,6 +206,8 @@ int main(int argc, char **argv)
 			stripes = atoi(argv[++i]);
 		else if (!strcmp(argv[i], "--async"))
 			async = true;
+		else if (!strcmp(argv[i], "--tear-live"))
+			live = true;
 		else if (!strcmp(argv[i], "--help") || !strcmp(argv[i], "-h")) {
 			usage(argv[0]);
 			return 0;
@@ -258,20 +286,12 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	crcfd = open_crc(card, res->crtcs[0], ctl, sizeof(ctl));
+	crcfd = open_crc(card, res->crtcs[0]);
 	if (crcfd < 0) {
-		fprintf(stderr, "no CRC interface for this CRTC: %s\n"
+		fprintf(stderr, "CRC capture for this CRTC: %s\n"
 			"  needs debugfs mounted and CONFIG_DEBUG_FS\n",
 			strerror(-crcfd));
 		return 1;
-	}
-	{
-		int c = open(ctl, O_WRONLY);
-		if (c < 0 || write(c, "auto", 4) != 4) {
-			fprintf(stderr, "enabling CRC capture: %s\n", strerror(errno));
-			return 1;
-		}
-		close(c);
 	}
 
 	// Learn each frame's CRC from the hardware rather than computing it:
@@ -306,64 +326,98 @@ int main(int argc, char **argv)
 	}
 	printf("frame A %s\nframe B %s\n\n", key_a, key_b);
 
+	if (live && drmModeSetCrtc(fd, res->crtcs[0], fb[0].fb_id, 0, 0,
+				   &conn->connector_id, 1, &mode)) {
+		fprintf(stderr, "drmModeSetCrtc: %s\n", strerror(errno));
+		return 1;
+	}
+
 	for (int i = 0; i < frames; i++) {
-		int pending = 1;
 		int which = i & 1;
-		unsigned flags = DRM_MODE_PAGE_FLIP_EVENT |
-				 (async ? DRM_MODE_PAGE_FLIP_ASYNC : 0);
 
-		if (drmModePageFlip(fd, res->crtcs[0], fb[which].fb_id, flags, &pending)) {
-			if (async && errno == EINVAL) {
-				fprintf(stderr,
-					"this driver refuses async page flips, so the "
-					"detector cannot be proven here.\n");
-				return 3;
-			}
-			fprintf(stderr, "page flip: %s\n", strerror(errno));
-			return 1;
-		}
+		if (live) {
+			drmVBlank vb = { .request = { .type = DRM_VBLANK_RELATIVE,
+						      .sequence = 1 } };
 
-		while (pending) {
-			struct pollfd p[2] = { { fd, POLLIN, 0 }, { crcfd, POLLIN, 0 } };
-			if (poll(p, 2, 1000) <= 0)
+			if (drmWaitVBlank(fd, &vb)) {
+				fprintf(stderr, "vblank wait: %s\n", strerror(errno));
 				break;
-			if (p[1].revents & POLLIN) {
-				unsigned long seq;
-				char key[MAX_CRC_LINE];
-
-				if (!read_crc(crcfd, &seq, key, sizeof(key))) {
-					if (counted && seq != last_seq + 1)
-						gaps++;
-					if (!counted)
-						first_seq = seq;
-					last_seq = seq;
-					counted++;
-					if (!strcmp(key, key_a))
-						matched[0]++;
-					else if (!strcmp(key, key_b))
-						matched[1]++;
-					else
-						torn++;
-				}
 			}
-			if (p[0].revents & POLLIN) {
+			// Half a frame in, so the top of the screen is scanned
+			// from one pattern and the rest from the other.
+			usleep((useconds_t)(500000.0 * mode.vtotal * mode.htotal
+					    / (mode.clock * 1000.0)));
+			paint(&fb[0], mode.hdisplay, mode.vdisplay, stripes, which);
+		} else {
+			int pending = 1;
+			unsigned flags = DRM_MODE_PAGE_FLIP_EVENT |
+					 (async ? DRM_MODE_PAGE_FLIP_ASYNC : 0);
+
+			if (drmModePageFlip(fd, res->crtcs[0], fb[which].fb_id,
+					    flags, &pending)) {
+				if (async && errno == EINVAL) {
+					fprintf(stderr,
+						"this driver refuses async page flips; "
+						"use --tear-live instead\n");
+					return 3;
+				}
+				fprintf(stderr, "page flip: %s\n", strerror(errno));
+				return 1;
+			}
+			while (pending) {
+				struct pollfd pf = { fd, POLLIN, 0 };
 				drmEventContext ev = {
 					.version = 2,
 					.page_flip_handler = flip_done,
 				};
+
+				if (poll(&pf, 1, 1000) <= 0)
+					break;
 				drmHandleEvent(fd, &ev);
 			}
 		}
+
+		// Drain whatever the CRC ring has. One entry per read, so keep
+		// going while it says there is more, every frame, or the ring
+		// overruns and the sequence shows a gap.
+		for (;;) {
+			struct pollfd pc = { crcfd, POLLIN, 0 };
+			unsigned long seq;
+			char key[MAX_CRC_LINE];
+
+			if (poll(&pc, 1, 2) <= 0)
+				break;
+			if (read_crc(crcfd, &seq, key, sizeof(key)))
+				break;
+			if (counted && seq != last_seq + 1)
+				gaps++;
+			if (!counted)
+				first_seq = seq;
+			last_seq = seq;
+			counted++;
+			if (!strcmp(key, key_a))
+				matched[0]++;
+			else if (!strcmp(key, key_b))
+				matched[1]++;
+			else
+				torn++;
+		}
 	}
 
-	printf("%s, %d flips\n", async ? "async flips, tearing on purpose"
-					: "one flip a vblank", frames);
+	printf("%s, %d frames\n",
+	       live ? "repainting the visible buffer mid-scanout, tearing on purpose"
+		    : async ? "async flips, tearing on purpose"
+			    : "one flip a vblank", frames);
 	printf("  frames hashed      %lu   (seq %#lx..%#lx)\n", counted, first_seq, last_seq);
 	printf("  matched frame A    %lu\n", matched[0]);
 	printf("  matched frame B    %lu\n", matched[1]);
 	printf("  matched neither    %lu   <- torn, or a frame this tool did not draw\n", torn);
 	printf("  sequence gaps      %lu   <- a frame the CRC reader missed\n", gaps);
-	if (!async && !torn)
+	if (live && !torn)
+		printf("\nNo torn frame was seen even while the visible buffer was\n"
+		       "repainted mid-scanout, so this tool cannot detect a tear\n"
+		       "here and a clean run above means nothing.\n");
+	if (!async && !live && !torn)
 		printf("\nNo torn frame reached the DSI. A tear seen on the panel\n"
 		       "after this is downstream of the DPU: the link or the panel.\n");
 
