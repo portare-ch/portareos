@@ -242,7 +242,7 @@ index 000000000000..1c8ed849edbf
 +	},
 +	{
 +		/*
-+		 * 120.197628Hz, which is 2 x 60.098814 - the NTSC Super
++		 * 120.197634Hz, which is 2 x 60.098814 - the NTSC Super
 +		 * Nintendo: a 21477272.7Hz master clock over 357366 cycles a
 +		 * frame. Nestopia computes that clock exactly. snes9x rounds
 +		 * it to 21477272 and reports 0.034ppm low, which PortareOS
@@ -254,55 +254,50 @@ index 000000000000..1c8ed849edbf
 +		 *                                       every 3.2 seconds
 +		 *   120.197628 / 60.0988 = 2.0000   <- this one
 +		 *
-+		 *   174651000 / (1302 * 1116) = 120.197628
++		 *   157763000 / (1306 * 1005) = 120.197634
 +		 *
-+		 * Exact, to the six figures a whole-kHz pixel clock can express:
-+		 * 0.00ppm, a frame of drift every 823 hours. Every other mode in
-+		 * this table is a near miss of one to two ppm, and this is the
-+		 * only one above 120Hz.
++		 * +0.048ppm, a frame of drift every 48 hours.
 +		 *
-+		 * The back porch is 142 lines rather than the 27 every other mode
-+		 * here carries, and that is the other half of the point. Black
-+		 * frame insertion flips on every refresh instead of every second
-+		 * one, so it meets the vertical blanking deadline twice as often,
-+		 * and the DPU begins fetching the next frame inside that window.
-+		 * At 27 lines the window is 340.8us; measured with BFI on snes9x,
-+		 * about three flips in 10,800 missed it, and a missed flip
-+		 * inverts the light/dark alternation and shows as a black band
-+		 * rolling down the panel.
++		 * No mode can be exact. The rate is 78750000/655171 Hz and 655171
++		 * is 11 x 59561, so htotal * vtotal would have to carry a factor
++		 * of 59561 for the division to come out whole. It cannot, so this
++		 * is a search for the smallest residue a whole-kHz pixel clock
++		 * leaves, not an identity like the 119.88 mode's.
 +		 *
-+		 *    41 lines / 8.31126us a line =  340.8us
-+		 *   156 lines / 7.45489us a line = 1163.0us
++		 * htotal is 1306 rather than the 1302 the rest of this table uses:
++		 * four more lines of horizontal back porch. The horizontal blanking
++		 * only grows, never shrinks, and moving it is what puts the ideal
++		 * clock near a whole kHz. At 1302 the closest landing with a normal
++		 * back porch is vtotal 1001 at 156654kHz, +1.2ppm and a frame every
++		 * 1.9 hours, which is the fallback if 1306 turns out not to please
++		 * the panel.
 +		 *
-+		 * 3.41x the margin, and with no drift the frontend has no
-+		 * correction to make either, so the BFI cadence holds on its own
-+		 * rather than being re-established every couple of hours.
++		 * This mode used to run vtotal 1116 at 174651kHz for +0.003ppm and
++		 * 823 hours, and 156 lines of vertical blanking. Both were for black
++		 * frame insertion: the wide blanking so a BFI flip met the deadline,
++		 * the 823 hours so the cadence never had to be re-established. BFI
++		 * does not work on this device - it flickers with a rolling line
++		 * whatever the swapchain depth - so neither is worth what they cost,
++		 * which was DSI bit clock:
 +		 *
-+		 * The cost is DSI bit clock: 1047.9MHz a lane against 939.9, up
-+		 * 11.5%. That is the part of this that is a test rather than a
-+		 * calculation - the PHY on this SoC goes far higher, and whether
-+		 * the panel controller takes it is what the first boot answers.
-+		 * If it does not, the same mode at vtotal 1042 is -1.2ppm and
-+		 * 654.7us for 4.1% more clock, and 1001 is where it started.
++		 *   1050.7MHz a lane at vtotal 1116, +11.8% on the proven 939.9
++		 *    949.1MHz a lane here,            +1.0%
 +		 *
-+		 * vtotal has to be even. The ideal clock is about 156497.31Hz per
-+		 * line, so an even vtotal lands near a whole kHz and an odd one
-+		 * near the half, which is the worst place to round from: 1041
-+		 * would be +1.8ppm where 1042 is -1.2.
++		 * That 11.8% is the likeliest cause of the tearing seen on snes9x
++		 * and not on any mode at the standard clock.
 +		 *
-+		 * None of this transfers to the 119.88 mode. Its exactness needs
-+		 * htotal * vtotal divisible by 1001 and vtotal supplies the 11
-+		 * and the 13, so it only grows in steps of 143 lines.
++		 * 45 lines of vertical blanking, 372.5us, against the 41 lines and
++		 * 341.7us every other mode here carries. Nothing needs more.
 +		 */
-+		.clock = 174651,
++		.clock = 157763,
 +		.hdisplay = 1280,
 +		.hsync_start = 1280 + 12,
 +		.hsync_end = 1280 + 12 + 2,
-+		.htotal = 1280 + 12 + 2 + 8,
++		.htotal = 1280 + 12 + 2 + 12,
 +		.vdisplay = 960,
 +		.vsync_start = 960 + 12,
 +		.vsync_end = 960 + 12 + 2,
-+		.vtotal = 960 + 12 + 2 + 142,
++		.vtotal = 960 + 12 + 2 + 31,
 +	},
 +	{
 +		/*

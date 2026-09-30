@@ -7,9 +7,9 @@ the rounding leaves the reported rate 0.034 ppm low.
 
 Inaudible on its own. It matters here because the panel mode this core
 selects is cut to twice the rate the core reports, and the mode is a whole
-number of kHz of pixel clock: 174651000 / (1302 x 1116) = 120.197628 Hz.
-Against the rounded clock that mode is +0.037 ppm, a frame of drift every
-63 hours; against the exact one it is +0.003 ppm, a frame every 824 hours.
+number of kHz of pixel clock: 157763000 / (1306 x 1005) = 120.197634 Hz.
+Against the rounded clock that mode is +0.082 ppm, a frame of drift every
+28 hours; against the exact one it is +0.048 ppm, a frame every 48 hours.
 Nestopia computes the NES's identical clock exactly already, which is why
 one mode serves both - and why, before this, the mode was exact for the
 NES and a near miss for the SNES it is named after.
