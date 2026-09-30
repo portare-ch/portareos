@@ -1,0 +1,13 @@
+[Unit]
+Description=Compiled shader cache
+After=systemd-tmpfiles-setup.service
+DefaultDependencies=no
+
+[Mount]
+What=/storage/cache/spirv
+Where=/tmp/cache/spirv
+Type=none
+Options=bind
+
+[Install]
+WantedBy=portareos.target

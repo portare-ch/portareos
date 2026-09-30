@@ -18,6 +18,16 @@ tocon "Rebuilding library cache..."
 rm -f /storage/.cache/ld.so.cache
 ldconfig -X
 
+echo "Drop the compiled shader cache..." >>${LOG}
+### The SPIR-V cache survives a reboot on purpose - recompiling it is what
+### makes the first game after a boot stutter. It must not survive an
+### update. Its filenames are a hash of the shader, not of the compiler,
+### so a new glslang or shaderc produces the same key and the old SPIR-V
+### would be served for the life of the install. Valid SPIR-V, so nothing
+### breaks; it just never picks up a compiler fix. Keep across a boot,
+### drop across an update.
+rm -rf /storage/cache/spirv/* >/dev/null 2>&1
+
 echo "Sync configuration files..." >>${LOG}
 tocon "Re-sync configuration files..."
 ### Sync configurations
