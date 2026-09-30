@@ -2,13 +2,16 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 PortareOS (https://portare.org)
 
-# Yellow thumbsticks while the battery charges, off again when it stops.
-# led.charging=0 in system.cfg switches it off; read every round, so the
-# launcher's switch takes effect within a few seconds, no restart.
+# Yellow thumbsticks while the battery charges, dark when it stops. The
+# sticks are a charging indicator here, not decoration: led.color is not
+# consulted on the way down, so an rgb colour does not come back while
+# this is on. led.charging=0 in system.cfg hands them back, and that is
+# what to set to keep a colour; read every round, so the launcher's switch
+# takes effect within a few seconds, no restart.
 #
-# Stays out of the way of the other LED owners: with led.color=battery the
-# battery service colours the sticks by charge and this does nothing; with
-# led.color=rgb the user's colours come back when charging ends.
+# The one owner it stays out of the way of is led.color=battery, where the
+# battery service colours the sticks by charge and needs them while
+# discharging - that is where the low-battery warning lives.
 
 . /etc/profile
 
@@ -27,19 +30,27 @@ sticks() {
   done 2>/dev/null
 }
 
-restore() {
+# Dark. While this script owns the sticks they are a charging indicator,
+# so led.color is not consulted on the way down. Battery mode is the
+# exception: that service owns them and shows charge while discharging,
+# including the low-battery warning.
+idle() {
+  case "$(get_setting led.color)" in
+    battery) ;;
+    *)       sticks 0 "0 0 0" ;;
+  esac
+}
+
+# led.charging=0: not ours any more. Put back what led.color asks for.
+handback() {
   local cfg
   case "$(get_setting led.color)" in
-    battery)
-      # batteryledstatus owns the sticks in this mode. Leave them alone,
-      # or they go dark until its next round, up to fifteen seconds.
-      ;;
+    battery) ;;
     rgb)
       # analog_sticks_ledcontrol takes seven values, brightness and an rgb
-      # triplet per stick, and prints usage for anything else. Handing it an
-      # unset or short analogsticks.led left the sticks on the charging
-      # colour for good, which looks exactly like the LED ignoring the
-      # charger. Check the count and fall back to off.
+      # triplet per stick, and prints usage for anything else. An unset or
+      # short setting would leave the charging colour sitting there, so
+      # fall back to off.
       cfg="$(get_setting analogsticks.led)"
       if [ "$(echo ${cfg} | wc -w)" = "7" ]; then
         /usr/bin/analog_sticks_ledcontrol ${cfg}
@@ -47,9 +58,7 @@ restore() {
         sticks 0 "0 0 0"
       fi
       ;;
-    *)
-      sticks 0 "0 0 0"
-      ;;
+    *) sticks 0 "0 0 0" ;;
   esac
 }
 
@@ -69,29 +78,24 @@ while [ ! -e "${STATUS}" ]; do
   WAITED=$((WAITED + 1))
 done
 
-# Start as if charging, so the first round through the loop asserts the
-# idle state instead of waiting for a charge cycle. Restoring only on the
-# charging -> idle edge left the sticks on the charging colour after a
-# boot, a resume or a service restart with the charger already out, until
-# someone plugged it in and pulled it again.
-STATE="charging"
+# STATE starts unset rather than idle, so the first round through asserts
+# whichever state applies instead of waiting for a charge cycle. Acting
+# only on the charging -> idle edge left the sticks on the charging colour
+# after a boot, a resume or a service restart with the charger already
+# out, until someone plugged it in and pulled it again.
+STATE="init"
 while true; do
-  WANT=0
-  if [ "$(get_setting led.charging)" != "0" ] && \
-     [ "$(get_setting led.color)" != "battery" ] && \
-     [ "$(cat "${STATUS}" 2>/dev/null)" = "Charging" ]; then
-    WANT=1
-  fi
-
-  if [ "${WANT}" = "1" ]; then
+  if [ "$(get_setting led.charging)" = "0" ]; then
+    [ "${STATE}" = "handed" ] || { handback; STATE="handed"; }
+  elif [ "$(get_setting led.color)" != "battery" ] && \
+       [ "$(cat "${STATUS}" 2>/dev/null)" = "Charging" ]; then
     # Written every round, not only on the change: a resume can hand the
     # sticks back dark, and this is the cheapest way to have them yellow
     # again within seconds.
     sticks 255 "${YELLOW}"
     STATE="charging"
-  elif [ "${STATE}" = "charging" ]; then
-    restore
-    STATE="idle"
+  else
+    [ "${STATE}" = "idle" ] || { idle; STATE="idle"; }
   fi
   sleep 3
 done
