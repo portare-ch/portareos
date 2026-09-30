@@ -189,7 +189,7 @@ scanlines, because a DVD was made for a CRT. Position is saved on quit.
 
 * The image is about 540 MB compressed.
 * PipeWire and nothing else. PulseAudio is banned, and a check in CI fails the
-  build if it comes back. The graph's minimum quantum is 128 frames, 2.7 ms.
+  build if it comes back. The graph's minimum quantum is 256 frames, 5.3 ms.
 * No EmulationStation, no sway, no artwork scraping, no media centre, no file
   manager, no Qt: ARMSX2 runs as its SDL frontend.
 * Wrappers and duplicate tools are removed as they are found. What is in the
