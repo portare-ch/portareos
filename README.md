@@ -2,21 +2,37 @@
 
 # PortareOS
 
-**An opinionated Linux distribution for one device, the Retroid Pocket Nova.**
+**For Retroid Pocket Nova owners who care about every frame and millisecond.**
 
-Home: **[os.portare.org](https://os.portare.org)**
+**[Home and installation guide](https://os.portare.org)** · [Known issues](BUGS.md) · [Roadmap](ROADMAP.md)
 
 > Black coffee without sugar and milk. With the right amount of beans and water.
 
-> ⚠️ **EXCITING BFI WORK ONGOING. PREPARE FOR SMOOTHNESS SOON**
-
 ## What it is
 
-The Nova has a 1280×960 panel at 120 Hz. That is 4:3, the shape of everything
-made before widescreen, and PortareOS exists to make the best possible
-operating system for the best 4:3 handheld on earth. Write the card, copy the
-games across, and every system is already set up for this panel, this gamepad
-and this chip. Tweaking is not expected, and not encouraged.
+PortareOS engineers the whole stack for low latency, consistent frame delivery
+and faithful console timing on the Nova's 1280×960, 120 Hz panel. Kernel, emulators,
+DSP topology, display driver, input path and frontend are all open to change.
+
+Write the card, copy your games across, and play: one emulator per system,
+with configs, scaling and shaders tuned for this device. Tweaking is not
+expected. **Nova only, NTSC focused; PAL modes and other devices are not planned.**
+
+## Concepts
+
+* **Hardware follows the console.** Custom panel modes and switchable audio
+  clocks match the original systems instead of forcing every game into
+  60 Hz and 48 kHz.
+* **Less buffering, measured responsiveness.** Kernel audio changes reduce
+  buffering and jitter; community testing reports steadier frame delivery
+  and lower button-to-screen latency than Android. Audio latency remains
+  somewhat higher.
+* **Purpose-built system apps.** A direct-KMS launcher and small services
+  handle networking, input and Bluetooth without a desktop.
+* **Under 500 MB compressed.** One emulator per system, with configs,
+  shaders and scaling tuned for this panel.
+* **Measure, then change.** Panel timing, tearing and audio test tools guide
+  the work, including experiments with the gamepad MCU and black frame insertion.
 
 Everything that does not serve that is an anti-feature and comes out.
 
@@ -29,16 +45,17 @@ console instead.
 ### Panel modes matched to the console
 
 The Nova has no variable refresh rate, so the panel driver carries one mode
-per console family, at exactly twice the console's frame rate. RetroArch asks
-for the matching mode when a game starts, presents each frame once, timed to
+per console family, at twice the console's frame rate. RetroArch asks for
+the matching mode when a game starts, presents each frame once, timed to
 the vblank two refreshes after the last, and the core is paced by the panel:
-a frame lands on a frame, at the console's rate. How that works, and what
-it took, is in
-[REFRESH_RATES.md](documentation/PER_DEVICE_DOCUMENTATION/SM8550/REFRESH_RATES.md).
+a frame lands on a frame, at the console's rate. The game keeps its own
+timing instead of periodically dropping or repeating a frame to fit 60 Hz.
+See [refresh rates](documentation/PER_DEVICE_DOCUMENTATION/SM8550/REFRESH_RATES.md)
+for the implementation and measurements.
 
 | Panel mode | Console | Frame rate |
 | --- | --- | --- |
-| 119.880 Hz | The 59.94 Hz consoles: Dreamcast, PS2, PSP, GameCube, Xbox; and the default | 59.94 |
+| 119.880 Hz | Dreamcast, PS2, PSP, GameCube, Xbox; default mode | 59.94 |
 | 119.652 Hz | PlayStation, Nintendo 64, Saturn | 59.8261 |
 | 119.455 Hz | Game Boy, Game Boy Color, Game Boy Advance | 59.7275 |
 | 120.198 Hz | Super Nintendo, NES | 60.0988 |
@@ -47,21 +64,15 @@ it took, is in
 | 119.200 Hz | Neo Geo CD | 59.5999 |
 | 120.000 Hz | Steam: PC games capped at 60 or 120 by a timer | 60 |
 
-The rates come from the consoles' own clocks, and the console modes only
-vary the pixel clock; Steam's is the default's clock over one line fewer.
-The panel stays in its 120 Hz class throughout. They are
-the NTSC rates: PortareOS is built for NTSC games and no PAL mode is
-planned. Dynamic
-switching mid-game was evaluated and dropped: SwanStation does not change
-rate the way a real PlayStation does, so there is nothing to follow.
+Console clocks determine these rates. SNES/NES also gets wider vertical
+blanking for BFI experiments. The panel stays in its 120 Hz class.
+SwanStation does not (yet) follow real PlayStation mid-game rate changes.
 
 ### Audio at the console's sample rate
 
-The Nova's audio link runs at 48, 44.1 or 32 kHz, following the stream.
-That took kernel patches (`1052` to `1055`) to unpin the DSP ports and derive
-the I2S bit clock from the stream, an edit to the DSP topology, and a
-RetroArch patch that picks the link rate from whatever the core produces,
-every time the audio device opens:
+The audio link follows the core's output at 48, 44.1 or 32 kHz. Kernel and
+DSP changes let the hardware follow the stream; RetroArch selects the rate
+whenever it opens the audio device.
 
 | Link rate | Consoles |
 | --- | --- |
@@ -69,59 +80,51 @@ every time the audio device opens:
 | 32 kHz | Super Nintendo; N64 games at 32 kHz |
 | 48 kHz | PS2, Xbox, GameCube and Wii, and everything else |
 
-### Audio latency down to the frontend's floor
+N64 rates vary by game: the core reports the programmed rate and the device
+reopens at the matching link rate. Resampling is avoided where hardware can
+carry the rate; the SNES's exact 32040 Hz is unavailable. See
+[audio sample rates](documentation/PER_DEVICE_DOCUMENTATION/SM8550/AUDIO_SAMPLE_RATES.md)
+for hardware limits and emulator output rates.
 
-Two changes to the path between RetroArch and the speakers. The DSP took its
-audio in a fixed 480 frames at a time, which is 10 ms only at 48 kHz and 15 at
-the SNES's 32; it now takes 10 ms of frames at the stream's own rate. And the
-playback graph moved to the AudioReach endpoint that publishes a sample
-accurate position, so the kernel stops calling the device batch and PipeWire
-stops keeping an extra period queued against a pointer that used to move a
-period at a time.
+### Lower audio latency
 
-A community tester with a 240 fps camera had found RetroArch's audio latency
-setting would not go below 32 ms here without crackling, where Android took
-15. It now runs at **8 ms**, which is as low as RetroArch itself allows: a
-sweep downwards never found a breaking point, because the frontend clamps
-first. The DSP has stopped being the limit. `pcm-flags`, in the debug set,
-reads the driver's own flags and period steps rather than inferring them.
+The audio work reaches into the kernel and Qualcomm DSP topology. Playback
+uses **AudioReach shared-memory pull mode**, giving the driver a
+sample-accurate position. The kernel no longer advertises
+`SNDRV_PCM_INFO_BATCH` on this path, so PipeWire stops adding a period of
+batch-device headroom. DSP periods now follow the stream's rate: 10 ms
+instead of 480 frames, which previously meant 15 ms for SNES audio.
 
-The working is in [audio-latency.md](docs/audio-latency.md).
-
-The N64 is per game: each game programs its own rate, the core reports it
-once the game has, and the device reopens at the matching link rate. No
-resampling where the console's rate can be carried. An exact 32040 Hz, the
-real SNES's, is not one the hardware can carry; the analysis is in
-[AUDIO_SAMPLE_RATES.md](documentation/PER_DEVICE_DOCUMENTATION/SM8550/AUDIO_SAMPLE_RATES.md).
-The full table, with every emulator's output rate, is in
-[REFRESH_RATES.md](documentation/PER_DEVICE_DOCUMENTATION/SM8550/REFRESH_RATES.md).
+RetroArch now defaults to **8 ms**, down from the observed 32 ms crackle-free
+floor. This setting is not end-to-end latency. Earlier camera tests already
+showed improvement; further PCM period-floor experiments seek the hardware's
+actual limit. See [audio latency](docs/audio-latency.md) for measurements.
 
 ### KMS, no compositor
 
-Nothing draws through a compositor. Each program takes the panel itself:
+Each program takes the panel itself:
 
-* **The launcher** owns the panel through KMS with a dumb buffer. No GPU, no
-  images, text on black.
+* **The launcher** owns the panel through KMS with a CPU-written dumb buffer:
+  no GPU rendering, just text on black.
 * **RetroArch** renders with Vulkan straight to the display (`VK_KHR_display`).
-* **ARMSX2** does the same, through a patch of ours: the renderer had a
-  direct-to-display path that no frontend ever reached, and
-  `001-vulkan-direct.patch` adds the branch that does. Qt runs offscreen and
-  the GS takes the panel.
-* **mpv** plays films through Vulkan direct to the display too, so a movie
-  never passes through a compositor either.
-* **xemu, PortMaster and Moonlight** run on SDL's KMS driver: there is no
-  compositor in the image to give them a window.
-* **Steam** is the one exception. It brings gamescope, its own compositor, on
-  the DRM backend, because the Steam runtime cannot be recompiled.
+* **ARMSX2** does the same through our patch: its renderer already had a
+  direct-display path, but no frontend reached it. Qt runs offscreen while
+  the renderer takes the panel.
+* **mpv** plays films through Vulkan directly to the display, so a movie
+  follows the same path as a game.
+* **xemu and PortMaster** use SDL's KMS driver. They need no desktop to
+  give them a window.
+* **Steam** is the exception: it uses gamescope on the DRM backend.
 
-sway and EmulationStation are gone from the image.
+There is no desktop compositor or EmulationStation in the image. Each
+program controls presentation without another compositor's frame queue
+between it and the panel.
 
 ### One emulator per system
 
-One tool for the job, and the best one wins. Where ROCKNIX shipped several
-emulators for a platform, one was picked and the rest dropped, together with
-the settings nobody had tuned for them. What was dropped, and why, is in
-[REMOVED_PACKAGES.md](documentation/REMOVED_PACKAGES.md).
+One tool for the job, and the best one wins. Alternatives are removed
+together with the settings nobody had tuned for them. See
+[removed packages](documentation/REMOVED_PACKAGES.md) for what went and why.
 
 | System | Emulator |
 | --- | --- |
@@ -142,119 +145,99 @@ the settings nobody had tuned for them. What was dropped, and why, is in
 | PSP | PPSSPP |
 | Xbox | xemu |
 | Point-and-click | ScummVM |
-| Ports, streaming, PC | PortMaster (as a platform of its own, with the pad's buttons as printed), Moonlight, Steam |
+| Ports, PC | PortMaster, Steam |
 | Movies, music | mpv, PORTAMP |
 
-Every emulator quits with the same buttons, Home + Start. M1 with the
-volume keys sets the brightness, anywhere. Settings > Consoles has a
-PRMPT switch per 2D console (`<console>.preempt`), one pre-emptive frame
-(RetroArch's cheaper run-ahead) on or off. Experimental. The PlayStation
-has no switch: its shipped configuration was measured delivering every
-frame on its vblank, and the pre-emptive frame cost 12 fps for a frame of
-input latency, so there is nothing worth choosing. In RetroArch, M2 shows a game
-guide: a text file next to the ROM with the ROM's name and `.txt`. The game
-waits where it was, and M2 or B brings it back.
+[Folders, formats and cores](documentation/PER_DEVICE_DOCUMENTATION/SM8550/SUPPORTED_EMULATORS_AND_CORES.md).
+Compatibility and performance vary by game.
 
 ### Configured for this panel
 
-* 4:3 with integer scaling where the console's lines divide into 960: Game
-  Boy at 960×864, N64 at 2× on ParaLLEl-RDP, PlayStation at 4× with a CRT
-  shader of our own that draws one beam per console line, the Game Boy
-  Advance at 5× under an LCD subpixel grid (lcd-grid-v2), the Game Boy and
-  Game Boy Color under their own LCD shaders, the SNES at an exact 4× with
-  crt-guest-advanced. Where an integer scale leaves 32-pixel bars, they
-  stay rather than stretch 224 lines over 960: even scanlines need it.
-* Correct palettes and boot logos: a Game Boy Color game gets the GBC
-  hardware and its color correction.
-* A color profile for the panel. The Nova's screen is wide-gamut and
-  blue-tinted; Settings > Color profile can correct it to sRGB and D65, at
-  gamma 2.2 or the sRGB curve, in the display controller's own color
-  blocks, so it holds for every game, film and the launcher. Fitted to
-  pippopapera's colorimeter readings of this panel. Both profiles crush
-  the dark greys on the device today, so stock is the default until they
-  are refitted. Mainline drives two of the controller's three stages; our
-  kernel drives the third, the de-gamma, and the profiles that use it
-  follow their device test. See
-  documentation/PER_DEVICE_DOCUMENTATION/SM8550/COLOR_PROFILE.md.
+* Integer scaling where console lines divide into 960: Game Boy at
+  960×864, GBA at 5×, N64 at 2× on ParaLLEl-RDP, and PlayStation at 4×.
+  LCD shaders serve Game Boy, GBC and GBA; PlayStation gets our CRT shader,
+  and SNES uses crt-guest-advanced at an exact 4×. Where 224 lines leave
+  32-pixel bars, they stay to preserve even scanlines.
+* Correct palettes and boot logos, including GBC hardware and color correction
+  for Game Boy Color games.
+* Optional panel-wide sRGB/D65 color correction, using the display controller
+  for games, films and the launcher. **Both profiles currently crush dark
+  greys, so stock is the default** pending a refit. See
+  [color profiles](documentation/PER_DEVICE_DOCUMENTATION/SM8550/COLOR_PROFILE.md).
 * No automatic savestate loading.
 
 ### Movies at the right shape
 
-mpv is the video player. H.264 and HEVC decode on the Nova's hardware
-decoder, a few percent of one core for a 1080p stream. Standard-definition
-4:3 rips that lost their aspect flag are shown at 4:3 again, and SD gets
-scanlines, because a DVD was made for a CRT. Position is saved on quit.
+mpv uses hardware H.264/HEVC decoding and direct Vulkan display output.
+SD 4:3 rips with missing aspect flags regain their shape and get scanlines.
+Playback position is saved on quit.
 
 ### Lightweight
 
-* The image is about 540 MB compressed.
-* PipeWire and nothing else. PulseAudio is banned, and a check in CI fails the
-  build if it comes back. The graph's minimum quantum is 256 frames, 5.3 ms.
-* No EmulationStation, no sway, no artwork scraping, no media centre, no file
-  manager, no Qt: ARMSX2 runs as its SDL frontend.
-* Wrappers and duplicate tools are removed as they are found. What is in the
-  image, what has gone and what is still on the list is in
-  [PACKAGE_INVENTORY.md](documentation/PACKAGE_INVENTORY.md): about 250 MB
-  out so far, about 130 MB still to go.
-* Debug tools come only in builds that are not official releases: gdb, strace
-  and `vblank-rate`, which measures the panel's real refresh rate.
+The compressed image is now **under 500 MB**. Audio uses PipeWire, with a minimum
+quantum of 256 frames (5.3 ms at 48 kHz). There is no artwork scraping,
+media centre or file manager. Duplicate tools and wrappers are removed;
+[the package inventory](documentation/PACKAGE_INVENTORY.md) records about
+250 MB removed and roughly 130 MB still targeted.
 
 ### Latency
 
-1000 Hz tick, preemption model selectable at boot, the teo idle governor,
-schedutil with the chip's energy model, and the emulator frame queue kept as
-short as it goes: two swapchain images, no threaded video, each frame
-presented once and timed to its vblank, and automatic frame delay in
-RetroArch. The panel holds the mode it is given to better than a part per
-million, measured against the SoC's own clock with `vblank-rate`, so the
-console rates above are what the display actually runs. Black frame
-insertion, which a 120 Hz panel showing 60 Hz content can afford, is work in
-progress.
+Latency takes priority after correctness: a 1000 Hz kernel tick, selectable
+preemption, teo idle governor, schedutil with the chip's energy model,
+swapchain sizes tuned per core, no threaded video, and automatic frame delay in
+RetroArch. Panel timing was measured to better than one part per million
+against the SoC clock. **Black frame insertion is work in progress.**
 
-### Kept current
+A community tester reports latency variation down to one frame, better
+than Android, and button-to-screen latency about one frame lower. These
+measurements describe the tested setup; the audio setting above is a
+separate measure.
 
-Kernel 7.2.5, Mesa 26.2.2, PipeWire 1.6.8 and RetroArch from a recent commit.
-A daily pull request moves the emulators to their upstream heads.
+### Our system services and test tools
 
-### The launcher
+* **portarelauncher:** consoles, games and settings drawn directly through
+  KMS, without a GPU-rendered desktop.
+* **portnet:** a small C client using sd-bus and iwd replaces NetworkManager;
+  iwd handles Wi-Fi and addressing. Existing saved networks migrate.
+* **portsense:** replaces inputsense with device-specific C input handling.
+* **Bluetooth agent:** our small C pairing and auto-connect daemon talks to
+  BlueZ over sd-bus.
+* **PORTAMP and sdl3text:** our music player and in-game text guide reader.
+* **vblank-rate** measures actual panel timing; **tear-test** counts torn and
+  dropped frames using DPU CRCs, with deliberate tearing to validate detection.
+  **pcm-flags** reads driver flags and period constraints; **pcm-floor** streams
+  at accepted periods and counts underruns. These join gdb and strace in
+  unofficial debug builds.
 
-[portarelauncher](https://github.com/portare-ch/portarelauncher) is the
-front-end: consoles, games, and a settings menu with Wi-Fi, Bluetooth, SSH,
-USB gadget mode, time zone, and updates. Updates come straight from GitHub
-over Wi-Fi, from the nightly or the release channel, and install on restart.
-Every device makes its own root password on first boot and shows it under
-About.
+### Device integration
 
-### Tuned for the device
+Suspend/resume includes fixes for UFS, PCIe, Wi-Fi, the gamepad MCU and LEDs,
+though overnight battery drain remains unresolved. microSD runs at UHS-I
+SDR104, and the GPU can drop to 124.8 MHz for menus and films.
 
-* Suspend, with a stack of kernel patches so UFS, PCIe, Wi-Fi, the gamepad
-  MCU and the LEDs survive it.
-* microSD at UHS-I SDR104.
-* The lowest GPU operating point, 124.8 MHz, so a menu or a film keeps the
-  fan off.
-* Charging that eases off as the battery warms: full current below 40 °C,
-  then 3, 2 and 1 A at 40, 42 and 44 °C, the way Android's thermal
-  mitigation does, through a charger limit the kernel now exposes.
+Charging mitigation reduces current as the battery warms; device verification
+is pending. See [known issues](BUGS.md).
 
-Several of the kernel patches behind these came from
-[pocknix-os](https://github.com/shuuri-labs/pocknix-os); authorship is kept
-in each patch header.
+Input latency work extends to the **gamepad MCU firmware and scan loop**.
+Higher effective polling rates are being tested through exposed scan parameters;
+the earlier attempted 400 Hz change did not improve measured reporting and
+was reverted. This remains experimental.
+
+Several kernel patches came from
+[pocknix-os](https://github.com/shuuri-labs/pocknix-os); their authorship is
+preserved in each patch header.
 
 ## What it looks like
 
 <img src="documentation/images/snes-super-mario-world.jpg" width="640" alt="Super Mario World on the Nova: scanlines from crt-guest-advanced at an exact 4x, with the 32-pixel bars">
 
-**Super Mario World.** The panel runs the SNES mode, 120.198 Hz, two
-refreshes for every one of the game's 60.0988 frames, so nothing is dropped
-or repeated. crt-guest-advanced draws the scanlines over an exact 4×; the
-bars above and below are the price of even lines. The audio link is at
-32 kHz, the console's own rate.
+**Super Mario World.** SNES timing at 120.198 Hz, exact 4× CRT scanlines
+with 32-pixel bars, and a 32 kHz audio link.
 
 <img src="documentation/images/movies-dvd-4-3.jpg" width="640" alt="A DVD rip playing in mpv, filling the 4:3 panel">
 
-**A DVD rip.** mpv decodes H.264 on the hardware decoder and draws straight
-to the display, no compositor. The rip had lost its aspect flag; it is shown
-at 4:3 again, filling the panel, with scanlines for standard definition.
+**A DVD rip.** Hardware decoding, direct display output, restored 4:3
+aspect ratio and scanlines for standard definition.
 
 <img src="documentation/images/launcher.jpg" width="640" alt="The launcher: a list of systems with game counts, and the volume, brightness, battery and time in the header">
 
@@ -274,12 +257,41 @@ with games, the counts, and the four numbers that matter in the header.
 * **Anti-features come out.** If it is not needed for a smooth game, it is
   not in the image.
 
-## What is next
+## Everyday use
 
-[ROADMAP.md](ROADMAP.md) is where this is going and
-[BUGS.md](BUGS.md) is what is known to be broken or unfinished. Ongoing:
-verifying today's changes on the device, suspend power, black frame
-insertion, the SNES core choice, and the last 130 MB of footprint.
+[portarelauncher](https://github.com/portare-ch/portarelauncher) provides
+consoles, games and settings for Wi-Fi, Bluetooth, SSH, USB gadget mode,
+time zone and updates. Each device generates its own root password on first
+boot, shown under About.
+
+* **Home + Start** quits every emulator; **M1 + volume** adjusts brightness
+  anywhere.
+* **M2** in RetroArch opens a game guide: place a text file beside the ROM
+  with its name and `.txt`. The game pauses; M2 or B returns to it.
+* Settings > Consoles offers **PRMPT**, an experimental pre-emptive frame
+  per 2D console. PlayStation keeps its measured, tuned configuration
+  without this switch: the pre-emptive frame's performance cost was too high.
+* PortMaster is its own platform, with controls matching the printed buttons.
+* Updates download from GitHub over Wi-Fi through the launcher, using the
+  nightly or release channel, and install on restart.
+
+## Installing and current limitations
+
+Installation steps are at **[os.portare.org](https://os.portare.org)**.
+The first image requires a fresh card installation: PortareOS uses its own
+boot partition label, so an in-place update over ROCKNIX will not find it.
+Subsequent PortareOS updates work through the launcher.
+
+PAL fixes are welcome if they preserve NTSC behaviour. The minimal interface
+and one-emulator policy are deliberate choices. 16:9 systems (except PSP) are not supported.
+
+Read [BUGS.md](BUGS.md) for observed problems and changes awaiting device
+testing, including suspend battery drain and color profiles.
+[ROADMAP.md](ROADMAP.md) covers upcoming work: black frame insertion,
+suspend power, the SNES core choice and further footprint reductions.
+BFI aims for CRT-like motion clarity by inserting black refreshes. It is
+experimental and off by default; rolling bands and cadence stability remain
+unresolved.
 
 ## Building
 
@@ -289,20 +301,12 @@ make docker-SM8550
 
 Images are written to `target/`. The build wants a container runtime, roughly
 100 GB of disk and several hours the first time through. The **Build**
-workflow's `incremental` input restores per-stage state and skips packages
-whose recipes have not changed.
-
-## Installing
-
-PortareOS uses its own boot partition label, so the first image must be
-written to the card as a fresh install; an in-place update over a ROCKNIX
-installation will not find its boot partition. Updates between PortareOS
-builds work normally, from the launcher. Installation steps are at
-[os.portare.org](https://os.portare.org).
+workflow supports incremental builds. Kernel, Mesa, PipeWire and RetroArch
+are kept current; a daily workflow opens pull requests for emulator updates.
 
 ## A note about AI
 
-Yes, 100% and I plan to keep it that way.
+100% AI-assisted development, and I plan to keep it that way.
 
 ## Origin and licences
 
