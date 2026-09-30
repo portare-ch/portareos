@@ -74,6 +74,34 @@ make_target() {
   curl -L https://nixos.org/nix/install | sh -s -- --no-daemon
   . "${HOME}/.nix-profile/etc/profile.d/nix.sh"
 
+  # FEX's Data/nix/LibraryForwarding/shell.nix opens with
+  #
+  #   { pkgs ? import <nixpkgs> { } }:
+  #
+  # so the i686 and x86_64 cross toolchains it builds the thunks with come
+  # from whatever <nixpkgs> resolves to. A fresh install points that at an
+  # unstable channel, which makes what this recipe produces depend on the day
+  # it runs. That is the defect; pin it.
+  #
+  # The pin is a nixos-25.11 commit rather than a channel because unstable's
+  # current pair does not compile. Build 369 died in ThunkLibs with
+  #
+  #   limits: error: size of '__builtin_bit_cast' source type 'long double'
+  #   does not match destination type '__float128' (12 vs 16 bytes)
+  #     return __builtin_bit_cast(__float128, __builtin_nansf128(""));
+  #
+  # from an i686 libstdc++ 16.2.0. clang always reaches that line: the branch
+  # above it needs __builtin_nansq, which is a GCC builtin, so every libstdc++
+  # from at least 14 onwards falls through to the bit_cast when clang is the
+  # compiler - and the thunks are clang-built.
+  #
+  # Which half regressed has not been isolated. clang 19 compiles that exact
+  # construct for i686 against libstdc++ 14's header, and the failing pair is
+  # newer on both counts. It does not matter for the fix: 25.11's pair is the
+  # one these builds have been using all along, and pinning stops the question
+  # arising again.
+  export NIX_PATH="nixpkgs=https://github.com/NixOS/nixpkgs/archive/b6018f87da91d19d0ab4cf979885689b469cdd41.tar.gz"
+
   mkdir -p "${PKG_BUILD}/.${TARGET_NAME}"
   cd "${PKG_BUILD}/.${TARGET_NAME}"
 
