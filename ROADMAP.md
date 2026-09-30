@@ -1,7 +1,7 @@
 # Roadmap
 
 Intent, not promise. Ordered roughly by how much difference each would make.
-Last revised 26 September 2026, at nightly 149.
+Last revised 30 September 2026.
 
 ## The goal
 
@@ -118,7 +118,21 @@ move.
 
 ### Measure, then tune
 
-The performance and latency work so far was reasoned, not measured: the 1000
+The gamepad MCU's report cadence is now measured on the UART:
+`rsinput.frame_rate=3` gives 5 ms (200 Hz), versus the vendor's 9 ms
+(111 Hz). It is set on the kernel command line, with a driver fix that makes
+setting scan parameters before registration safe. Probe and resume send
+the setting; two suspend/resume cycles retained 200 Hz
+([#466](https://github.com/portare-ch/portareos/pull/466)). A scan delay of 2
+gave 250 Hz on the wire, but about 19% of reports never reached evdev;
+the cause is not yet investigated. Values 0 and 1 stopped the pad.
+
+The next input work is to measure button-to-screen latency at the vendor
+setting and at 200 Hz, check buttons and sticks under load, and measure
+power cost and stick noise. Trace the lost reports at 250 Hz before
+considering a faster default.
+
+Other performance and latency choices remain reasoned, not measured: the 1000
 Hz tick, teo, schedutil with the energy model, the two-image swapchain, timed
 presents. A camera at 240 fps pointed at the panel and a button wired to a
 GPIO would turn the remaining decisions (frame delay, BFI, thread pinning to
