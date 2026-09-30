@@ -1,0 +1,141 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] input: rsinput: apply the scan parameters without a rebind
+
+1019 made the MCU's debounce and frame_rate module parameters, but the
+params command only goes out from rsinput_init_commands(), so a new
+value needs an unbind and a rebind to reach the MCU. Sweeping
+frame_rate that way is how the oops 1078 fixes was found, and even
+with that fixed it drops the pad for a few seconds per value, which
+makes measuring the thing awkward and rules the parameters out as
+anything a user could touch.
+
+Send the command from the parameter's own setter instead.
+
+The frame it builds was already assembled inline in
+rsinput_init_commands(); it moves to rsinput_send_params() so both
+paths build it the same way and there is one place to get it wrong.
+
+Reaching the bound device from a setter wants care, because a pointer
+kept in a module variable is exactly the stale-pointer shape that
+oopsed the receive path. driver_for_each_device() avoids it: it walks
+the devices the driver model currently has bound to this driver, under
+the driver model's own locking, so an unbound or half-probed device is
+simply not in the list. drvdata is still checked, because probe sets it
+before the device is fully up.
+
+A write with nothing bound therefore does nothing and succeeds, which
+is what a module parameter set before the driver probes should do.
+
+Not compile-tested - this needs a kernel build. The hunks' context was
+checked against what 0031, 1012 and 1019 produce.
+
+--- a/drivers/input/joystick/rsinput.c
++++ b/drivers/input/joystick/rsinput.c
+@@ -56,10 +56,14 @@
+ static int stick_deadband = 40;
+ static int frame_rate = 7;
+ 
+-module_param(stick_deadband,int,0660);
++static struct serdev_device_driver rsinput_driver;
++static const struct kernel_param_ops rsinput_param_ops;
++
++module_param_cb(stick_deadband, &rsinput_param_ops, &stick_deadband, 0660);
+ MODULE_PARM_DESC(stick_deadband,
+     "MCU joystick deadband in ADC counts (vendor default 40)");
+ 
+-module_param(frame_rate,int,0660);
++module_param_cb(frame_rate, &rsinput_param_ops, &frame_rate, 0660);
+ MODULE_PARM_DESC(frame_rate,
+-    "MCU scan delay in 100us ticks, 0 disables (vendor default 7)");
++    "MCU delay between scans, about 1 ms a unit measured, 0 stops it "
++    "reporting (vendor default 7)");
+@@ -270,2 +272,65 @@ static int rsinput_send_command(struct rsinput_driver *drv, uint8_t cmd, const u
+ 
++/*
++ * The MCU's two scan parameters, big-endian, behind the 0x01 selector its
++ * firmware requires. Built here rather than inline so that probe and a
++ * parameter write cannot drift apart.
++ */
++static int rsinput_send_params(struct rsinput_driver *drv)
++{
++    const uint8_t mcu_params[] = {
++        DATA_COMMOD_SET_PAR,
++        0x01,
++        (stick_deadband >> 24) & 0xff,
++        (stick_deadband >> 16) & 0xff,
++        (stick_deadband >>  8) & 0xff,
++         stick_deadband        & 0xff,
++        (frame_rate >> 24) & 0xff,
++        (frame_rate >> 16) & 0xff,
++        (frame_rate >>  8) & 0xff,
++         frame_rate        & 0xff
++    };
++
++    return rsinput_send_command(drv, CMD_COMMOD, mcu_params,
++                                sizeof(mcu_params));
++}
++
++static int rsinput_resend_params(struct device *dev, void *data)
++{
++    struct rsinput_driver *drv = serdev_device_get_drvdata(to_serdev_device(dev));
++    int error;
++
++    /* probe sets drvdata before the device is fully up. */
++    if (!drv)
++        return 0;
++
++    error = rsinput_send_params(drv);
++    if (error < 0)
++        dev_warn(dev, "Failed to re-send MCU parameters: %d\n", error);
++
++    return 0;
++}
++
++/*
++ * A module variable holding the bound driver would be the same stale-pointer
++ * shape that oopsed rsinput_rx(). driver_for_each_device() walks what the
++ * driver model currently has bound, under its own locking, so nothing that
++ * has gone away can be reached from here.
++ */
++static int rsinput_param_set(const char *val, const struct kernel_param *kp)
++{
++    int error = param_set_int(val, kp);
++
++    if (error)
++        return error;
++
++    driver_for_each_device(&rsinput_driver.driver, NULL, NULL,
++                           rsinput_resend_params);
++    return 0;
++}
++
++static const struct kernel_param_ops rsinput_param_ops = {
++    .set = rsinput_param_set,
++    .get = param_get_int,
++};
++
+ static int rsinput_init_commands(struct rsinput_driver *drv) {
+@@ -330,17 +396,3 @@ static int rsinput_init_commands(struct rsinput_driver *drv) {
+ static int rsinput_init_commands(struct rsinput_driver *drv) {
+     static const uint8_t version_request[] = {DATA_COMMOD_VERSION};
+-    /* Built per call, not static: both fields come from module
+-     * parameters that are writable at runtime. */
+-    const uint8_t mcu_params[] = {
+-        DATA_COMMOD_SET_PAR,
+-        0x01,
+-        (stick_deadband >> 24) & 0xff,
+-        (stick_deadband >> 16) & 0xff,
+-        (stick_deadband >>  8) & 0xff,
+-         stick_deadband        & 0xff,
+-        (frame_rate >> 24) & 0xff,
+-        (frame_rate >> 16) & 0xff,
+-        (frame_rate >>  8) & 0xff,
+-         frame_rate        & 0xff
+-    };
+     unsigned long timeout = msecs_to_jiffies(MCU_VERSION_ACK_TIMEOUT_MS);
+@@ -400,5 +456,5 @@ static int rsinput_init_commands(struct rsinput_driver *drv) {
+ 
+-    error = rsinput_send_command(drv, CMD_COMMOD, mcu_params, sizeof(mcu_params));
++    error = rsinput_send_params(drv);
+     if (error < 0) {
+         dev_err(&drv->serdev->dev, "Failed to set MCU parameters: %d\n", error);
