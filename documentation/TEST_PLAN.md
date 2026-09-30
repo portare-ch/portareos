@@ -487,8 +487,15 @@ Set `ssh.enabled=0`, reboot: it stays 0 (the migration is not re-run).
 
 ### L7 Charging LED (human)
 
-`led.charging=1`: plug the charger, both sticks glow yellow within two
-seconds; unplug, they return. Set it off in Settings: no glow on plug.
+`led.charging=1`: plug the charger, both sticks glow yellow within three
+seconds; unplug, they go dark - the sticks are an indicator while this is
+on, so an rgb colour does not come back. Set it off in Settings: no glow
+on plug, and the colour from `led.color` returns. With `led.color=battery`
+the battery service keeps the sticks either way.
+
+Reboot with the charger already plugged and check the sticks are yellow
+within a few seconds: the service used to lose a race with the battery
+appearing and die for the session (#446).
 
 ### L8 Home + Start for emulators that do not quit (human)
 
