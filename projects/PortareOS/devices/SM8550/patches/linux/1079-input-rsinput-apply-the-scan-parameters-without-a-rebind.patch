@@ -26,12 +26,16 @@ before the device is fully up.
 A write with nothing bound therefore does nothing and succeeds, which
 is what a module parameter set before the driver probes should do.
 
-Not compile-tested - this needs a kernel build. The hunks' context was
-checked against what 0031, 1012 and 1019 produce.
+Not compile-tested - this needs a kernel build. The hunks are generated
+by diff against the file the chain up to 1078 produces, rather than
+written by hand: the first attempt gave hunk 1 no trailing context, and
+a hunk whose last line is a deletion and which ends there can only be
+anchored at end of file. It applied to nothing else, and patch reported
+it as FAILED at 56 rather than as malformed.
 
 --- a/drivers/input/joystick/rsinput.c
 +++ b/drivers/input/joystick/rsinput.c
-@@ -56,10 +56,14 @@
+@@ -73,13 +73,17 @@
  static int stick_deadband = 40;
  static int frame_rate = 7;
  
@@ -49,8 +53,17 @@ checked against what 0031, 1012 and 1019 produce.
 -    "MCU scan delay in 100us ticks, 0 disables (vendor default 7)");
 +    "MCU delay between scans, about 1 ms a unit measured, 0 stops it "
 +    "reporting (vendor default 7)");
-@@ -270,2 +272,65 @@ static int rsinput_send_command(struct rsinput_driver *drv, uint8_t cmd, const u
  
+ module_param(update_params,int,0660);
+ 
+@@ -261,10 +265,13 @@
+         gpiod_set_value_cansleep(drv->reset_gpio, 1);
+ }
+ 
+-static int rsinput_init_commands(struct rsinput_driver *drv) {
+-    static const uint8_t version_request[] = {DATA_COMMOD_VERSION};
+-    /* Built per call, not static: both fields come from module
+-     * parameters that are writable at runtime. */
 +/*
 + * The MCU's two scan parameters, big-endian, behind the 0x01 selector its
 + * firmware requires. Built here rather than inline so that probe and a
@@ -58,18 +71,13 @@ checked against what 0031, 1012 and 1019 produce.
 + */
 +static int rsinput_send_params(struct rsinput_driver *drv)
 +{
-+    const uint8_t mcu_params[] = {
-+        DATA_COMMOD_SET_PAR,
-+        0x01,
-+        (stick_deadband >> 24) & 0xff,
-+        (stick_deadband >> 16) & 0xff,
-+        (stick_deadband >>  8) & 0xff,
-+         stick_deadband        & 0xff,
-+        (frame_rate >> 24) & 0xff,
-+        (frame_rate >> 16) & 0xff,
-+        (frame_rate >>  8) & 0xff,
-+         frame_rate        & 0xff
-+    };
+     const uint8_t mcu_params[] = {
+         DATA_COMMOD_SET_PAR,
+         0x01,
+@@ -277,6 +284,52 @@
+         (frame_rate >>  8) & 0xff,
+          frame_rate        & 0xff
+     };
 +
 +    return rsinput_send_command(drv, CMD_COMMOD, mcu_params,
 +                                sizeof(mcu_params));
@@ -114,28 +122,17 @@ checked against what 0031, 1012 and 1019 produce.
 +    .get = param_get_int,
 +};
 +
- static int rsinput_init_commands(struct rsinput_driver *drv) {
-@@ -330,17 +396,3 @@ static int rsinput_init_commands(struct rsinput_driver *drv) {
- static int rsinput_init_commands(struct rsinput_driver *drv) {
-     static const uint8_t version_request[] = {DATA_COMMOD_VERSION};
--    /* Built per call, not static: both fields come from module
--     * parameters that are writable at runtime. */
--    const uint8_t mcu_params[] = {
--        DATA_COMMOD_SET_PAR,
--        0x01,
--        (stick_deadband >> 24) & 0xff,
--        (stick_deadband >> 16) & 0xff,
--        (stick_deadband >>  8) & 0xff,
--         stick_deadband        & 0xff,
--        (frame_rate >> 24) & 0xff,
--        (frame_rate >> 16) & 0xff,
--        (frame_rate >>  8) & 0xff,
--         frame_rate        & 0xff
--    };
++static int rsinput_init_commands(struct rsinput_driver *drv) {
++    static const uint8_t version_request[] = {DATA_COMMOD_VERSION};
      unsigned long timeout = msecs_to_jiffies(MCU_VERSION_ACK_TIMEOUT_MS);
-@@ -400,5 +456,5 @@ static int rsinput_init_commands(struct rsinput_driver *drv) {
+     int attempt;
+     int error;
+@@ -348,7 +401,7 @@
+         return -ETIMEDOUT;
+     }
  
 -    error = rsinput_send_command(drv, CMD_COMMOD, mcu_params, sizeof(mcu_params));
 +    error = rsinput_send_params(drv);
      if (error < 0) {
          dev_err(&drv->serdev->dev, "Failed to set MCU parameters: %d\n", error);
+         return error;
