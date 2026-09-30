@@ -62,7 +62,7 @@ only been built. BUGS.md carries the check for each unverified row.
 | Updates from GitHub | Nightly or release channel over Wi-Fi, installed on restart. | launcher `update.c`, `portareos-update` | verified | human: an update round trip |
 | Per-device root password on first boot | Shown under About. | `007-rootpw` | verified | auto: password file exists; human: SSH with it |
 | One-shot migrations | `post-update` runs each once: cpugovernor, FpsLimit, ssh on, colorprofile stock. | `post-update` | verified for the first three | auto: marker directory after update |
-| Charging LED | Yellow thumbsticks while charging, switchable. | launcher, LED daemon | verified | human |
+| Charging LED | Yellow thumbsticks while charging, dark otherwise, switchable. | launcher, LED daemon | verified | human |
 | Home + Start handled by the launcher for emulators that do not quit | The launcher closes what does not close itself. | launcher `quit.c` | verified | human |
 | Stick and trigger calibration | Tools > Calibrate Gamepad (GPcal) measures centre, range and deadzone into rsinput's module parameters; Save writes an autostart script so it survives a reboot. | `gamepadcalibration`, `/storage/.config/autostart/GPcal.sh` | unverified; found the pad under the wrong name until nightly 156 | human: calibrate, reboot, sticks still centred; auto: parameters match the saved script |
 

@@ -65,12 +65,18 @@ function bat_led_yellow() {
   done
 }
 
-PREV_BATCAP="null"
+# Painted every round rather than only when the capacity bucket changes.
+# The sticks have other writers - the charging indicator, and a resume can
+# leave them lit - and a cached "nothing changed" meant the battery colour
+# was never re-asserted, so whatever last wrote to them stayed.
 while true
   do
   BAT_LED_STATE=$(get_setting led.color)
   if [ ! ${BAT_LED_STATE} == "battery" ]; then
-    break
+    # Not this script's mode. Keep looping rather than exiting: a clean
+    # exit is not restarted, so switching led.color to battery did nothing
+    # until the next reboot.
+    sleep 15
   else
     CAP=$(cat /sys/class/power_supply/battery/capacity)
     STAT=$(cat /sys/class/power_supply/battery/status)
@@ -88,41 +94,28 @@ while true
         elif (( ${CAP} <= 20 ))
         then
           BATCAP="D_RED"
-          if [ ! ${BATCAP} = ${PREV_BATCAP} ]; then
-            bat_led_red
-          fi
+          bat_led_red
         elif (( ${CAP} <=  30 ))
         then
           BATCAP="D_ORANGE"
-          if [ ! ${BATCAP} = ${PREV_BATCAP} ]; then
-            bat_led_orange
-          fi
+          bat_led_orange
         elif (( ${CAP} <=  40 ))
         then
           BATCAP="D_YELLOW"
-          if [ ! ${BATCAP} = ${PREV_BATCAP} ]; then
-            bat_led_yellow
-          fi
+          bat_led_yellow
         else
           BATCAP="D_GREEN"
-          if [ ! ${BATCAP} = ${PREV_BATCAP} ]; then
-            bat_led_green
-          fi
+          bat_led_green
         fi
       elif (( ${CAP} <= 94 ))
       then
         BATCAP="C_ORANGE"
-        if [ ! ${BATCAP} = ${PREV_BATCAP} ]; then
-          bat_led_orange
-        fi
+        bat_led_orange
       elif (( ${CAP} >= 95 ))
       then
         BATCAP="C_GREEN"
-        if [ ! ${BATCAP} = ${PREV_BATCAP} ]; then
-          bat_led_green
-        fi
+        bat_led_green
       fi
-      PREV_BATCAP=${BATCAP}
       sleep 15
   fi
 done

@@ -5,7 +5,7 @@ ConditionPathExists=/usr/bin/charging_led
 [Service]
 Environment=HOME=/storage
 ExecStart=/usr/bin/charging_led
-Restart=on-failure
+Restart=always
 RestartSec=5
 
 [Install]

@@ -6,7 +6,7 @@ ConditionPathExists=/usr/bin/battery_led_status
 [Service]
 Environment=HOME=/storage
 ExecStart=/usr/bin/battery_led_status
-Restart=on-failure
+Restart=always
 
 [Install]
 WantedBy=multi-user.target
