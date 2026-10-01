@@ -54,6 +54,16 @@ _repo_exists_and_valid() {
       return 1
     fi
 
+    # Every submodule checked out, at the commit the superproject records.
+    # A clone killed while it fetched them - another package failing ends
+    # the whole build - leaves HEAD right and the submodules empty, and the
+    # checks above passed that: dolphin-lr reused such a clone on every
+    # retry and failed in configure on Externals/*.
+    if git submodule status --recursive | grep -q '^[-+U]'; then
+      echo "ERROR: ${PACKAGE}: submodules missing or not at their recorded commits" >&2
+      return 1
+    fi
+
     popd > /dev/null
     return 0
   fi
