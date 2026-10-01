@@ -20,6 +20,17 @@ where armsx2 uses its tag verbatim - and a tag that is not numerically
 newer than the current pin is refused, so a re-tag upstream cannot walk
 a package backwards.
 
+A commit pin whose comment is nothing but a version,
+
+    PKG_VERSION="fa50bb19..." # v1.20.4
+
+is a release pinned by its commit, and follows releases too: the newest
+release's tag is resolved to its commit and the comment rewritten to it.
+Following the default branch instead moved ppsspp-lr 2231 commits past
+v1.20.4 onto a master its patches do not build against, under a comment
+that still said v1.20.4. A comment with anything else in it, such as
+"# v1.22.2 + fixes", is a branch, and follows the branch.
+
 Non-GitHub sources are skipped for want of an API. Steam is the only one.
 
 It never writes a checksum it did not compute. The new tarball is
@@ -59,6 +70,9 @@ ROOTS = [
 ]
 
 SHA1 = re.compile(r"^[0-9a-f]{40}$")
+RELEASE_COMMIT = re.compile(
+    r'^PKG_VERSION="[0-9a-f]{40}"[^\S\n]*#[^\S\n]*(v?\d+(?:\.\d+)+)[^\S\n]*$',
+    re.M)
 UA = {"User-Agent": "portareos-bump-emulator-pins"}
 
 
@@ -182,9 +196,23 @@ def main():
 
         repo = site.split("github.com/", 1)[1].strip("/")
         pinned_to_tag = not SHA1.match(version)
+        m = RELEASE_COMMIT.search(text)
+        release = m.group(1) if m and not pinned_to_tag else None
 
         try:
-            if pinned_to_tag:
+            if release:
+                tag = api(f"https://api.github.com/repos/{repo}"
+                          f"/releases/latest")["tag_name"]
+                if vtuple(tag) <= vtuple(release):
+                    if vtuple(tag) < vtuple(release):
+                        skipped.append((name, f"upstream latest ({tag}) is not "
+                                              f"newer than the pin ({release})"))
+                    else:
+                        current += 1
+                    continue
+                new = api(f"https://api.github.com/repos/{repo}"
+                          f"/commits/{tag}")["sha"]
+            elif pinned_to_tag:
                 # The newest non-prerelease. ARMSX2 publishes nightly-* as
                 # prereleases alongside real ones, and /releases/latest is
                 # the endpoint that already knows the difference.
@@ -225,7 +253,7 @@ def main():
                 skipped.append((name, f"tarball not usable: {e}"))
                 continue
 
-        if pinned_to_tag:
+        if pinned_to_tag or release:
             ahead = "release"
         else:
             try:
@@ -237,6 +265,11 @@ def main():
 
         if not args.dry_run:
             out = repin(text, "PKG_VERSION", version, new)
+            if out is not None and release:
+                out, n = re.subn(
+                    rf'^(PKG_VERSION="{new}"[^\S\n]*#[^\S\n]*){re.escape(release)}',
+                    lambda m: m.group(1) + tag, out, count=1, flags=re.M)
+                out = out if n == 1 else None
             if out is not None and digest is not None:
                 out = repin(out, "PKG_SHA256", have_sha, digest)
             if out is None:
@@ -245,7 +278,8 @@ def main():
             path.write_text(out)
 
         bumped.append({
-            "name": name, "repo": repo, "old": version, "new": new,
+            "name": name, "repo": repo,
+            "old": release or version, "new": tag if release else new,
             "ahead": ahead, "size": size, "kind": "tarball" if tarball else "git",
             "compare": f"https://github.com/{repo}/compare/{version[:12]}...{new[:12]}",
         })
