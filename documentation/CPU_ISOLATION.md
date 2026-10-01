@@ -88,13 +88,18 @@ controllers are mounted under `/sys/fs/cgroup/*`, and the cgroup2 tree at
 `/sys/fs/cgroup/unified` offers `cpuset` and `memory` but is not managed. The
 kernel is ready: `CONFIG_CPUSETS=y`, without `CPUSETS_V1`.
 
-### Phase 1: unified hierarchy
+### Phase 1: unified hierarchy (done)
 
-- Build systemd with `-Ddefault-hierarchy=unified`.
-- Audit everything that reads v1 paths. In the tree that is only the Docker
-  addon, which uses the systemd cgroup driver and runs on v2.
-- Check on the device that every service still starts, and that suspend and
-  resume (which may use the freezer) still work.
+- systemd is built with `-Ddefault-hierarchy=unified`, upstream's default.
+  `/sys/fs/cgroup` is then a single cgroup2 tree.
+- Nothing in the tree reads v1 paths. The Docker addon uses the systemd
+  cgroup driver, which runs on v2. The kernel has every controller systemd
+  uses there: cpuset, cpu, memory, io, pids, and BPF for device control.
+- One unit sets a device policy: `iwd.service` (`DevicePolicy=closed`). On v2
+  that is a BPF program rather than the v1 devices controller. Wi-Fi is the
+  first thing to check on a new image.
+- Also check after flashing: every service starts (`systemctl --failed`), and
+  suspend and resume work.
 
 ### Phase 2: a game slice
 
