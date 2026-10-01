@@ -69,10 +69,9 @@ system keeps scaling. The kernel is built without it (`CONFIG_UCLAMP_TASK`).
 - **Test:** `coremap-check` checks a running emulator's threads against its
   documented layout.
 
-What none of this does: keep other processes off the game's cores. A mask set
-with `taskset` only binds the process it is set on. The launcher, PipeWire,
-systemd services and kernel worker threads can still be scheduled onto cores
-3-7 during a game.
+A mask set with `taskset` only binds the process it is set on. Keeping the
+launcher, PipeWire, systemd services and kernel worker threads off a game's
+cores is phase 2 below.
 
 ## Plan: cpuset isolation
 
@@ -94,25 +93,40 @@ kernel is ready: `CONFIG_CPUSETS=y`, without `CPUSETS_V1`.
 - Check on the device that every service still starts, and that suspend and
   resume (which may use the freezer) still work.
 
-### Phase 2: a game slice
+### Phase 2: a game slice (done)
 
-- A `game.slice` with `AllowedCPUs=3-7`.
-- runemu starts the emulator in a transient scope in that slice
-  (`systemd-run --scope --slice=game.slice ...`). The process mask (`taskset`)
-  and the emulator's own pinning then work inside it. A cpuset bounds
-  `sched_setaffinity`, so the slice must include every core the emulator
-  pins to.
-- While a game runs, runemu narrows everything else, and restores it on exit:
-  - `system.slice` to `AllowedCPUs=0-2`, with `systemctl set-property
-    --runtime`.
-  - Unbound kernel workqueues to 0-2, through
+The quirk `040-affinity` names the two sets: `GAME_CPUS=3-7` and
+`SYSTEM_CPUS=0-2`.
+
+- **The emulator:** runemu starts it in a transient scope in `game.slice`
+  (`systemd-run --scope --slice=game.slice -p AllowedCPUs=3-7`). The scope
+  execs the command in place, so the emulator keeps runemu's pid tree, and
+  the pid file and `kill_tree` work as before. The process mask (`taskset`)
+  and the emulator's own pinning apply inside the scope.
+- **Everything else, while the game runs:**
+  - `system.slice` goes to `AllowedCPUs=0-2`, with `systemctl set-property
+    --runtime`. That includes the launcher and runemu itself.
+  - The kernel's unbound workqueues go to 0-2, through
     `/sys/devices/virtual/workqueue/cpumask`.
-- Kernel threads bound to a core, and the scheduler's own work, stay where
-  they are. That is the limit of what cpusets do without `isolcpus` or
+- **Restore:** on exit, and from an `EXIT` trap, so a run killed with TERM
+  restores too. A KILL leaves only `--runtime` state, which a reboot clears;
+  the next game's exit also restores it.
+- **When it is skipped:**
+  - On the hybrid hierarchy, or when the quirk names no sets.
+  - With `<system>.cpuisolation=0`, per system or per game.
+  - For a system set to `cores=little`. A cpuset bounds `sched_setaffinity`,
+    so `taskset -c 0-2` inside a scope on 3-7 would fail to start the game.
+    For the same reason the scope has to include every core an emulator pins
+    to.
+- **Limits:** kernel threads bound to a core, and the scheduler's own work,
+  stay where they are. That is as far as cpusets go without `isolcpus` or
   `nohz_full`, which would take cores from the system permanently.
-- To decide: whether PipeWire belongs in `game.slice` or stays with the system
-  on the A510s. Its real-time thread is light, but it sits on the audio path.
-  Measure xruns both ways (`perf-probe`).
+- **Open:** PipeWire is a system service, so it runs on the A510s during a
+  game. Its real-time thread is light, but it sits on the audio path. Compare
+  xruns with it in `game.slice` (`perf-probe`).
+- **Test:** `coremap-check` also checks this on the unified hierarchy: the
+  emulator must be in `game.slice`, and `system.slice` must not reach the
+  emulator's reserved cores.
 
 Rendering is KMS only, with no compositor during a game, so the system has
 little left to run while a game is up. That is what makes taking cores 3-7
