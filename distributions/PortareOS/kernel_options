@@ -12,6 +12,11 @@ CONFIG_SCHED_CLUSTER=y
 # schedutil, the default governor (autostart/008-perfmode). Energy Aware
 # Scheduling needs it, and uses the energy model sm8550.dtsi provides.
 CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y
+# Utilization clamping, so a thread can carry a floor for schedutil to clock
+# and place by. An emulator whose threads take turns looks lightly loaded
+# however busy the frame is: PS2 ran at 40 fps under schedutil and 59.7 with
+# the big cores pinned at maximum. Depends on schedutil above.
+CONFIG_UCLAMP_TASK=y
 
 # Latency tuning (issue #13). Asserted for the same reason as everything above:
 # a preemption or idle symbol that Kconfig drops leaves a kernel that boots and

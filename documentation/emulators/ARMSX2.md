@@ -194,7 +194,7 @@ Seen failing on the build before 002 (2026-10-01): every thread allowed on
 - RetroArch segfaults on exit, after `Releasing host memory for virtual
   systems...` (seen twice in `exec.log`).
 - A `uclamp.min` on EE, VU and GS could replace the global `performance`
-  governor. The kernel is built without `CONFIG_UCLAMP_TASK`.
+  governor. The kernel has `CONFIG_UCLAMP_TASK`; nothing sets a clamp yet.
 - Texture barriers: the standalone forced them off
   (`OverrideTextureBarriers = 0`); the core's automatic turns them on, and a
   barrier is expensive on a tiler. Not measured yet (ROADMAP).
