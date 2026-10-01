@@ -177,13 +177,19 @@ update, and the memory cards stay in the `ps2` folder.
   - Texture barriers: the standalone forced them off
     (`OverrideTextureBarriers = 0`); the core's automatic turns them on,
     and a barrier is expensive on a tiler.
-  - Pacing: the standalone timed itself to the panel's vsync. The core
-    keeps PCSX2's own 59.94 Hz limiter and also parks the GS thread until
-    each `retro_run` takes its frame - two clocks.
-  - `VsyncQueueSize` 2 instead of 0: up to two frames queued ahead.
+  - Pacing, done: the core now takes RetroArch's frame rate as the host
+    refresh rate and lets the hand-off to `retro_run` pace it, one clock
+    (patch 001).
+  - `VsyncQueueSize`, done: 0 as in the standalone (patch 001). Step to 1
+    only if 0 cannot hold full speed.
+  - Clocks and core layout: schedutil clocked the big cores down because
+    the core's threads take turns within a frame (40 fps against 59.7 on
+    performance). PS2 now runs on performance, with EE pinned to the X3 and
+    VU and GS to the A715s. Research and measurements in
+    `documentation/emulators/ARMSX2.md`.
 
-  None of these is a core option; the core keeps them in
-  `<system>/pcsx2/inis/armsx2-libretro.ini`. Measure each on its own.
+  Texture barriers are not a core option; the core keeps them in
+  `<system>/pcsx2/inis/armsx2-libretro.ini`. Measure on its own.
 - Compare it with what the standalone did on the same games: compatibility,
   speed, frame pacing, input/audio latency, controls and save behavior.
 - RetroAchievements: the core exposes no memory to RetroArch, so PS2 has
