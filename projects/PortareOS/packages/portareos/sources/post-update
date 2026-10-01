@@ -190,7 +190,6 @@ fi
 ### Add items below this line that are safe to remove after a period of time.
 ################################################################################
 
-# Copy aethersx2 bios files for armsx2 for convenience
 ### ScummVM's core looks for its themes and engine data under RetroArch's
 ### system directory, and they have to match the core's version, so they
 ### are copied from the image after every update. The ini next to them is
@@ -201,9 +200,20 @@ if [ ! -f /storage/roms/bios/scummvm.ini ]; then
   cp /usr/config/scummvm/scummvm.ini /storage/roms/bios/scummvm.ini
 fi
 
-if [ -d "/storage/roms/bios/aethersx2/bios" ] && [ ! -d "/storage/roms/bios/armsx2" ]; then
-  cp -rf /storage/roms/bios/aethersx2/bios /storage/roms/bios/armsx2
-fi
+### The PS2 core reads its BIOS from bios/pcsx2/bios only. The standalone
+### emulators before it used bios/armsx2 and bios/aethersx2/bios, so copy
+### what is there across, leaving any file already in place alone.
+mkdir -p /storage/roms/bios/pcsx2/bios
+for dir in /storage/roms/bios/armsx2 /storage/roms/bios/aethersx2/bios; do
+  [ -d "${dir}" ] && rsync -a --ignore-existing "${dir}/" /storage/roms/bios/pcsx2/bios/
+done
+
+### And a system or game pinned to the standalone in system.cfg would
+### launch a program that is no longer there, so those pins go and the
+### core, es_systems' default, applies.
+sed -i -e '/^ps2\(\[.*\]\)\?\.core=armsx2-sa$/d' \
+       -e '/^ps2\(\[.*\]\)\?\.emulator=armsx2$/d' \
+  /storage/.config/system/configs/system.cfg
 
 # Set the flag to enable batteryplus capacity reporting if it doesn't already exist
 grep -q "^system\.batteryplus\.enabled=" /storage/.config/system/configs/system.cfg ||

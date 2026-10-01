@@ -51,7 +51,7 @@ mkdir -p "${OUT}" || exit 1
 echo "t,cpu0_khz,cpu_big_khz,gpu_hz,temp_c,charge_uah,emu_pct,xruns" > "${OUT}/samples.csv"
 
 pid_of_emu() {
-  for n in flycast dolphin-emu-nogui armsx2-sa retroarch ppsspp; do
+  for n in flycast dolphin-emu-nogui retroarch ppsspp; do
     p="$(pidof "${n}" 2>/dev/null | cut -d' ' -f1)"; [ -n "${p}" ] && { echo "${p}"; return; }
   done
 }

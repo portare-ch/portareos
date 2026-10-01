@@ -1,27 +1,26 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2025-present ROCKNIX (https://github.com/ROCKNIX)
 
-PKG_NAME="armsx2-sa"
+PKG_NAME="armsx2-lr"
 PKG_VERSION="2.7.2"
 PKG_SHA256="ebdffe4e3be3d509ee1ca331fcd53e0a0c257779dd38d7547b4e89103cddea5b"
 PKG_LICENSE="GPLv3"
 PKG_SITE="https://github.com/ARMSX2/ARMSX2"
 PKG_URL="${PKG_SITE}/archive/refs/tags/${PKG_VERSION}.tar.gz"
 PKG_LONGDESC="ARMSX2 is a native ARM64 PlayStation 2 (PS2) emulator, a fork of PCSX2 that ports the EE/IOP/VU JIT recompilers to ARM64."
-# SDL frontend only: no Qt. armsx2-sdl is the upstream handheld frontend,
-# VK_KHR_display straight to the panel, FullscreenUI for the on-screen menus.
-PKG_DEPENDS_TARGET="toolchain llvm:host SDL3 libpng zlib libjpeg-turbo zstd lz4 libwebp freetype plutosvg curl libpcap ffmpeg shaderc"
+# The libretro core, armsx2_libretro.so, and nothing else: it draws into
+# RetroArch's Vulkan context and hands RetroArch its audio and input, so
+# PS2 goes out through the same display, PipeWire and controller path as
+# every other core. The SDL frontend it replaced is not built.
+#
+# SDL3 stays: the core does not use it, but CMake requires it whatever is
+# being built. ffmpeg went with the frontend's video capture; nothing in
+# the tree links it any more.
+PKG_DEPENDS_TARGET="toolchain llvm:host SDL3 libpng zlib libjpeg-turbo zstd lz4 libwebp freetype plutosvg curl libpcap shaderc"
 PKG_TOOLCHAIN="manual"
 PKG_BUILD_FLAGS="speed"
 
 PATCHES_URL="https://github.com/PCSX2/pcsx2_patches/archive/refs/tags/latest.zip"
-
-get_graphicdrivers
-  if listcontains "${GRAPHIC_DRIVERS}" "(panfrost)"; then
-    GRAPHICS_DRIVER="panfrost"
-  elif listcontains "${GRAPHIC_DRIVERS}" "(freedreno)"; then
-    GRAPHICS_DRIVER="freedreno"
-  fi
 
 pre_configure_target() {
   PCSX2_CMAKE_BASE=(
@@ -32,18 +31,25 @@ pre_configure_target() {
     -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF
     -DLTO_PCSX2_CORE=ON
     -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON
+    # Vulkan only: RetroArch runs Vulkan here, and the core renders into the
+    # frontend's context, so a GL renderer would have nothing to draw into.
     -DUSE_VULKAN=ON
-    # No OpenGL and no X11: the SDL frontend reaches the panel through
-    # VK_KHR_display alone. A GL renderer would need an EGL surface, which
-    # takes a compositor, and X11 was only there for the GL context.
     -DUSE_OPENGL=OFF
     -DUSE_BACKTRACE=OFF
     -DENABLE_QT_UI=OFF
-    -DENABLE_SDL_FRONTEND=ON
+    -DENABLE_SDL_FRONTEND=OFF
+    # ENABLE_LIBRETRO is defined for the whole PCSX2 library, not just the
+    # core, so no frontend can be built from this configuration.
+    -DENABLE_LIBRETRO=ON
+    # With ENABLE_LIBRETRO, FindShaderc prefers the static shaderc_combined
+    # and links it in, for a core that travels to machines without shaderc.
+    # This one does not travel: the image ships libshaderc_shared.so.1, and
+    # naming it makes the core dlopen that, as the standalone did, instead of
+    # carrying its own glslang and SPIRV-Tools.
+    -DSHADERC_LIBRARY=${SYSROOT_PREFIX}/usr/lib/libshaderc_shared.so
     -DENABLE_TESTS=OFF
-    # No Wayland: ARMSX2 draws straight to the panel through VK_KHR_display,
-    # with no compositor to be a client of. ON also made its CMake require
-    # ECM (extra-cmake-modules), which nothing here provides.
+    # No window system: the frontend owns the surface. WAYLAND_API=ON would
+    # also make CMake require ECM, which nothing here provides.
     -DWAYLAND_API=OFF
     -DX11_API=OFF
     -DCMAKE_LINKER_TYPE=LLD
@@ -94,51 +100,27 @@ make_target() {
     "${PCSX2_CMAKE_BASE[@]}"
   )
   cmake "${tgt_opts[@]}"
-  cmake --build "${PKG_BUILD}/.${TARGET_NAME}" --target pcsx2-sdl
-  wget -c -t 5 -O "bin/resources/patches.zip" ${PATCHES_URL}
+  cmake --build "${PKG_BUILD}/.${TARGET_NAME}" --target pcsx2-libretro
+  wget -c -t 5 -O "${PKG_BUILD}/bin/resources/patches.zip" ${PATCHES_URL}
 }
 
 makeinstall_target() {
-  mkdir -p ${INSTALL}/usr/bin
-  cp -rf ${PKG_DIR}/scripts/* ${INSTALL}/usr/bin
-  chmod 755 ${INSTALL}/usr/bin/*
+  mkdir -p ${INSTALL}/usr/lib/libretro
+  cp -a ${PKG_BUILD}/.${TARGET_NAME}/bin/armsx2_libretro.so ${INSTALL}/usr/lib/libretro
+  # No info file in libretro-core-info for this core; upstream ships one.
+  cp -a ${PKG_BUILD}/armsx2_libretro.info ${INSTALL}/usr/lib/libretro
 
-  mkdir -p ${INSTALL}/usr/share/armsx2-sa
-  cp -rf ${PKG_BUILD}/.${TARGET_NAME}/bin/* ${INSTALL}/usr/share/armsx2-sa
-
-  mkdir -p ${INSTALL}/usr/config
-  cp -rf ${PKG_DIR}/config/common/ARMSX2 ${INSTALL}/usr/config
-  cp -f ${PKG_DIR}/config/common/armsx2.gptk ${INSTALL}/usr/config/ARMSX2
-
-  # The generic config is the Nova's (#15), checked against its panel:
-  # nothing in PCSX2.ini names a resolution, AspectRatio "Auto 4:3/3:2" fills
-  # the 4:3 panel, the launcher passes -fullscreen so StartFullscreen=false is
-  # moot, widescreen patches are off, and IntegerScaling stays off: PCSX2
-  # scales the internal framebuffer in whole multiples, which on a 1280x960
-  # window means 1024x896 for a 512x448 game and no gain in a 3D title.
-  # upscale_multiplier is 2: 512x448 renders at 1024x896 and the output
-  # scaler takes it the last step to the panel, where native resolution
-  # was being stretched 2.1x.
-  case ${DEVICE} in
-    S922X)
-      cp -rf ${PKG_DIR}/config/S922X/ARMSX2 ${INSTALL}/usr/config
-    ;;
-    *)
-      cp -rf ${PKG_DIR}/config/inputplumber/ARMSX2 ${INSTALL}/usr/config
-    ;;
-  esac
-}
-
-post_install() {
-  case ${GRAPHICS_DRIVER} in
-    panfrost)
-      GRAPHICS="export MESA_GL_VERSION_OVERRIDE=3.3 MESA_GLSL_VERSION_OVERRIDE=330"
-    ;;
-    *)
-      GRAPHICS=""
-    ;;
-  esac
-
-  sed -e "s/@GRAPHICS@/${GRAPHICS}/g" \
-        -i ${INSTALL}/usr/bin/start_armsx2.sh
+  # GameDB, shaders, fonts and the patches archive. The core reads them from
+  # <system>/pcsx2/resources, which is on /storage; tmpfiles.d links it here.
+  #
+  # A frontend's build copies these next to its binary and the core's build
+  # does not, so this does the same by hand - including the part that is
+  # easy to miss: armsx2_overrides.yaml, ARMSX2's GameDB tuning for tiler
+  # GPUs such as the Adreno, which lives outside bin/resources so desktop
+  # builds never ship it. Without it the core runs with desktop GS settings.
+  mkdir -p ${INSTALL}/usr/share/armsx2
+  cp -a ${PKG_BUILD}/bin/resources ${INSTALL}/usr/share/armsx2
+  rm -rf ${INSTALL}/usr/share/armsx2/resources/shaders/dx11
+  cp -a ${PKG_BUILD}/bin/resources-overlay/armsx2_overrides.yaml \
+    ${INSTALL}/usr/share/armsx2/resources
 }

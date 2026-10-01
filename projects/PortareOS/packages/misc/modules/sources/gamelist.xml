@@ -60,18 +60,6 @@
         <image>./images/steam.svg</image>
     </game>
     <game>
-        <path>./Start ARMSX2.sh</path>
-        <name>Start ARMSX2</name>
-        <desc>Opens ARMSX2's own menus, for PS2 settings.</desc>
-        <developer>PortareOS</developer>
-        <publisher>PortareOS</publisher>
-        <rating>5.0</rating>
-        <releasedate>2021</releasedate>
-        <genre>Emulator</genre>
-        <players>1</players>
-        <image>./images/pcsx2.svg</image>
-    </game>
-    <game>
         <path>./Start 64bit Retroarch.sh</path>
         <name>Start RetroArch (64-bit)</name>
         <desc>Opens RetroArch's own menu, for settings that apply to every core.</desc>

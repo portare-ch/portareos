@@ -3,8 +3,8 @@
 # Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
 
 # Movies. mpv is the only player on the device, and it draws straight to the
-# panel through Vulkan's VK_KHR_display - no compositor, the same path ARMSX2
-# takes. portarelauncher has dropped DRM master by the time this runs.
+# panel through Vulkan's VK_KHR_display - no compositor, the same path
+# RetroArch takes. portarelauncher has dropped DRM master by the time this runs.
 
 . /etc/profile
 

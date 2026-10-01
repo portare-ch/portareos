@@ -13,8 +13,7 @@ PKG_BUILD_FLAGS="+pic"
 # is banned, jack is unavailable because our pipewire is built
 # -Dpipewire-jack=disabled, and alsa would work but only through pcm_pipewire.
 # SDL2 here is built with SDL_PIPEWIRE=ON and SDL_PULSEAUDIO=OFF, with
-# SDL_AUDIODRIVER=pipewire pinned in /etc/profile, which is the route ARMSX2
-# already takes.
+# SDL_AUDIODRIVER=pipewire pinned in /etc/profile.
 #
 # Three things link libmpg123 to decode with, and none of them runs the
 # binary: SDL2_mixer, amiberry and easyrpg-lr. Building no output module at all

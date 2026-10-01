@@ -14,11 +14,11 @@ PKG_LONGDESC="Vulkan Installable Client Driver (ICD) Loader."
 # Every WSI platform is built, rather than gated on DISPLAYSERVER. That gate
 # only makes sense when the compositor's protocol is the only one clients can
 # use, and it is not: sway depends on xwayland, so X11 clients run here and
-# reach Vulkan through Xlib. gamescope, armsx2-sa and minivmacsa all link
-# libX11, so building the Wayland WSI alone leaves those undefined at link
-# time. rpcs3 used to be the clearest case, compiling
-# vk::instance::create_swapchain against vkCreateXlibSurfaceKHR, but it is no
-# longer shipped and the three above are reason enough on their own.
+# reach Vulkan through Xlib. gamescope links libX11, so building the Wayland
+# WSI alone leaves it undefined at link time. rpcs3 used to be the clearest
+# case, compiling vk::instance::create_swapchain against
+# vkCreateXlibSurfaceKHR, but it is no longer shipped and gamescope is
+# reason enough on its own.
 
 pre_configure_target() {
   PKG_CMAKE_OPTS_TARGET="-DBUILD_TESTS=OFF \
