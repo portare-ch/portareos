@@ -157,15 +157,22 @@ function mount_games() {
         ### Udevil shouldn't mount it this early, but just in-case.
         umount /var/media/* 2>/dev/null
 
+        ### FAT has no owners: give its files to games, group-writable, so
+        ### an emulator running as game (system.gameuser) can save to it.
+        MOUNT_OPTS=""
+        case ${FSTYPE} in
+          vfat|exfat) MOUNT_OPTS="-o gid=1000,umask=0002" ;;
+        esac
+
         log $0 "Mounting ${1} on ${MOUNT_PATH}"
-        /usr/bin/busybox mount ${1} ${MOUNT_PATH} >/dev/null 2>&1
+        /usr/bin/busybox mount ${MOUNT_OPTS} ${1} ${MOUNT_PATH} >/dev/null 2>&1
 
         log $0 "Checking filesystem ${1}."
         if ! touch "${MOUNT_PATH}/.tmp-portareos"; then
           log $0 "Fixing filesystem ${1}."
           /usr/bin/busybox umount ${1} >/dev/null 2>&1
           /usr/sbin/fsck -Mly ${1} >/dev/null 2>&1
-          /usr/bin/busybox mount ${1} ${MOUNT_PATH} >/dev/null 2>&1
+          /usr/bin/busybox mount ${MOUNT_OPTS} ${1} ${MOUNT_PATH} >/dev/null 2>&1
         else
           rm "${MOUNT_PATH}/.tmp-portareos"
 	      fi
