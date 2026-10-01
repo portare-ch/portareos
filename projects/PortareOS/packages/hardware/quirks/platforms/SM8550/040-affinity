@@ -5,8 +5,14 @@
 # 0-2 A510, 3-4 A715, 5-6 A710, 7 X3. FRONTEND_CORES is for an emulator that
 # pins its own hot threads (the PS2 core: EE on 7, VU and GS on 3 and 4): the
 # frontend and everything else it starts stay on the A710s, off those cores.
+#
+# GAME_CPUS and SYSTEM_CPUS split the SoC while a game runs: runemu puts the
+# emulator in a scope on GAME_CPUS, and system.slice and the kernel's unbound
+# workqueues on SYSTEM_CPUS (documentation/CPU_ISOLATION.md).
 cat <<EOF2 >/storage/.config/profile.d/040-affinity
 SLOW_CORES="taskset -c 0-2"
 FAST_CORES="taskset -c 3-7"
 FRONTEND_CORES="taskset -c 5-6"
+GAME_CPUS="3-7"
+SYSTEM_CPUS="0-2"
 EOF2
