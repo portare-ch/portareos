@@ -11,11 +11,14 @@ PKG_URL="https://github.com/systemd/systemd-stable/archive/v${PKG_VERSION}.tar.g
 PKG_DEPENDS_TARGET="toolchain libcap kmod util-linux libidn2 Python3:host Jinja2:host pcre2 zstd libgcrypt openssl"
 PKG_LONGDESC="A system and session manager for Linux, compatible with SysV and LSB init scripts."
 
+# The unified cgroup hierarchy, upstream's default: systemd confines a slice to
+# cores (AllowedCPUs=) only there, and the game slice depends on it
+# (documentation/CPU_ISOLATION.md). Hybrid was inherited, never chosen.
 PKG_MESON_OPTS_TARGET="--libdir=/usr/lib \
                        -Drootprefix=/usr \
                        -Dsplit-usr=false \
                        -Dsplit-bin=true \
-                       -Ddefault-hierarchy=hybrid \
+                       -Ddefault-hierarchy=unified \
                        -Dtty-gid=5 \
                        -Dtests=false \
                        -Dseccomp=false \
