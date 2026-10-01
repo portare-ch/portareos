@@ -8,11 +8,14 @@ cores, each move refilling a private L2, and the scheduler sometimes
 stacked all three on one core.
 
 The libretro core now turns pinning on, and the processor list it pins
-from has a total order: frequency, then the newer design within a tier,
-then the core number. Frequency alone, under an unstable sort, picked
-between the 8 Gen 2's A715s and A710s at random, which all run at
-2.8 GHz. There the order is X3, A715, A715, A710, A710, A510s: EE gets
-the prime core to itself, VU and GS the A715s.
+from is ranked as the kernel ranks cores: cpu_capacity, else
+cpuinfo_max_freq, else cpuinfo's own frequency, using the reader the
+Android path already had. cpuinfo's frequency read 0 for every core on
+the 8 Gen 2 under Linux, and ranking by it put EE, VU and GS on the
+A510s. The order is total: within a tier of equal weight, the newer
+design, then the core number. On the 8 Gen 2 that is X3, A715, A715,
+A710, A710, A510s: EE gets the prime core to itself, VU and GS the
+A715s.
 ---
 diff --git a/pcsx2-libretro/Main.cpp b/pcsx2-libretro/Main.cpp
 --- a/pcsx2-libretro/Main.cpp
@@ -34,23 +37,66 @@ diff --git a/pcsx2-libretro/Main.cpp b/pcsx2-libretro/Main.cpp
 diff --git a/pcsx2/VMManager.cpp b/pcsx2/VMManager.cpp
 --- a/pcsx2/VMManager.cpp
 +++ b/pcsx2/VMManager.cpp
-@@ -4156,10 +4156,19 @@ static void InitializeProcessorList()
+@@ -69,9 +69,10 @@
+ #include <sstream>
+ #include <common/RedtapeWilCom.h>
+ 
+-#if defined(__ANDROID__)
++#if defined(__linux__)
+ // Performance-core selection: std::popcount/max_element for the mask, and plain POSIX I/O
+ // for the sysfs capacity nodes (they report st_size == 0, so buffered reads come back empty).
++// Linux as a whole, not only Android: the processor order for thread pinning ranks by them too.
+ #include <algorithm>
+ #include <bit>
+ #include <cstdio>
+@@ -4019,7 +4020,7 @@ static u32 GetProcessorIdForProcessor(const cpuinfo_processor* proc)
+ #endif
+ }
+ 
+-#if defined(__ANDROID__)
++#if defined(__linux__)
+ // Per-CPU scheduler capacity, as the kernel's own EAS uses it. Read with plain POSIX I/O:
+ // these sysfs nodes report st_size == 0, so any size-based read comes back EMPTY.
+ // Returns 0 when the node is missing (older kernels) or unreadable.
+@@ -4075,7 +4076,9 @@ static std::vector<u32> GetProcessorWeights()
+ 	}
+ 	return weights;
+ }
++#endif
+ 
++#if defined(__ANDROID__)
+ // Every processor within PERF_CLUSTER_RATIO of the fastest one. Deliberately NOT "the cluster
+ // owning the fastest core": cpuinfo starts a new cluster whenever max_frequency differs, so on
+ // any 1+3+4 or 1+2+2+3 flagship the prime core is a cluster of ONE, and confining EE/VU/GS to
+@@ -4156,10 +4159,30 @@ static void InitializeProcessorList()
  		processors.push_back(proc);
  	}
  
 -	// Prioritize faster cores in heterogeneous CPUs.
-+	// Prioritize faster cores in heterogeneous CPUs. Pinning takes the first three, so the order
-+	// has to be total: a tier of equal clocks can mix designs (Snapdragon 8 Gen 2 runs two A715s
-+	// and two A710s at 2.8 GHz), and an unstable sort on frequency alone picked among them at
-+	// random. Within a tier, cpuinfo numbers a newer design of the same series higher; the core
-+	// number settles the rest. Only within a tier: where the clocks read as 0 everything ties,
-+	// and across series the numbering means nothing (the X3 sorts below the A510).
++	// Prioritize faster cores in heterogeneous CPUs, ranked as the kernel ranks them:
++	// cpu_capacity, else cpuinfo_max_freq, else cpuinfo's own frequency (GetProcessorWeights).
++	// cpuinfo's frequency alone read 0 for every core on a Snapdragon 8 Gen 2 under Linux, and
++	// pinning then put EE, VU and GS on the A510s. Pinning takes the first three, so the order has
++	// to be total: a tier of equal weight can mix designs (that SoC's two A715s and two A710s are
++	// all 657), and within one, cpuinfo numbers a newer design of the same series higher. Only
++	// within a tier: across series the numbering means nothing (the X3 sorts below the A510).
++	// The core number settles the rest.
++#if defined(__linux__)
++	const std::vector<u32> weights = GetProcessorWeights();
++	const cpuinfo_processor* const first = cpuinfo_get_processors();
++	const auto weight = [&weights, first](const cpuinfo_processor* proc) {
++		return weights[static_cast<size_t>(proc - first)];
++	};
++#else
++	const auto weight = [](const cpuinfo_processor* proc) { return proc->core->frequency; };
++#endif
  	std::sort(processors.begin(), processors.end(),
- 		[](const cpuinfo_processor* lhs, const cpuinfo_processor* rhs) {
+-		[](const cpuinfo_processor* lhs, const cpuinfo_processor* rhs) {
 -			return (lhs->core->frequency > rhs->core->frequency);
-+			if (lhs->core->frequency != rhs->core->frequency)
-+				return (lhs->core->frequency > rhs->core->frequency);
-+			if (lhs->core->frequency != 0 && lhs->core->uarch != rhs->core->uarch)
++		[&weight](const cpuinfo_processor* lhs, const cpuinfo_processor* rhs) {
++			if (weight(lhs) != weight(rhs))
++				return (weight(lhs) > weight(rhs));
++			if (weight(lhs) != 0 && lhs->core->uarch != rhs->core->uarch)
 +				return (lhs->core->uarch > rhs->core->uarch);
 +			return (GetProcessorIdForProcessor(lhs) < GetProcessorIdForProcessor(rhs));
  		});
