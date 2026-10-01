@@ -52,7 +52,9 @@ memory controller, not only the cores the game uses.
 
 The finer tool is utilization clamping: a `uclamp.min` on the emulator's hot
 threads, so schedutil clocks and places them as busy while the rest of the
-system keeps scaling. The kernel is built without it (`CONFIG_UCLAMP_TASK`).
+system keeps scaling. The kernel has it (`CONFIG_UCLAMP_TASK`, asserted in
+`distributions/PortareOS/kernel_options`). Nothing sets a clamp yet: util-linux
+is built without `uclampset`, and no core calls `sched_setattr`.
 
 ## Placement today
 
