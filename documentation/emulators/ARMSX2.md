@@ -131,9 +131,14 @@ How it gets there:
   starts on the A710s.
 - **Hot threads.** The core then pins EE, VU and GS itself (002,
   `EnableThreadPinning`) to the first three entries of its processor list.
-  The list is ordered by clock, then the newer design within a tier, then
-  the core number: 7, 3, 4, 5, 6, 0, 1, 2. Clock alone, under an unstable
-  sort, picked between the A715s and A710s at random.
+  The list is ranked as the kernel ranks cores: `cpu_capacity`, else
+  `cpuinfo_max_freq`, else cpuinfo's own clock. Ties go to the newer design
+  within a tier, then to the core number. On the Nova: 7, 3, 4, 5, 6, 0, 1, 2.
+- **Why not cpuinfo's clock:** it reads 0 for every core here. The first
+  version of 002 ranked by it and fell back to the core number, putting EE,
+  VU and GS on the A510s. Those cores are outside the game's cpuset, so the
+  kernel refused the pinning and all three stayed on the process mask, cores
+  5-6.
 - **Helper threads.** "ISO Decompress" starts while the CDVD opens, before
   the pinning, and stays on the process mask. A thread started later by a
   pinned thread would inherit that thread's single core; `coremap-check`
@@ -160,8 +165,13 @@ other non-niced thread is allowed on those cores. Run it during a game:
 
     ssh root@<device> coremap-check
 
-Seen failing on the build before 002 (2026-10-01): every thread allowed on
-3-7, GS observed on cores 3, 4, 5, 6 and 7.
+It has caught two failures so far:
+
+- On the build before 002 (2026-10-01): every thread allowed on 3-7, GS
+  seen on cores 3, 4, 5, 6 and 7.
+- On the first nightly with 002 (`1a3d441`, 2026-10-02): EE, MTVU and GS
+  confined to 5-6 with the rest of the process, after the pinning to cores
+  0-2 was refused.
 
 ## Settings and why
 
@@ -183,6 +193,9 @@ Seen failing on the build before 002 (2026-10-01): every thread allowed on
 | 2026-10-01 | 001, queue 0 | NFSU, in race | schedutil | 40.3-43.1 fps; EE 18-22%, GS 18-26%: threads idle most of the frame |
 | 2026-10-01 | 001, queue 0 | NFSU, in race | cores 3-7 on performance, by hand | 55.8 fps over the switch, then 59.7; by ear "much better" |
 | 2026-10-01 | 001, queue 0 | NFSU, first minutes of a session (intro FMV, menus) | schedutil | 57.1-59.1 fps, EE 26-49%; by ear, FMV sound good |
+| 2026-10-02 | nightly `1a3d441` (001, 002 first version, performance, isolation) | NFSU, menus | EE, VU, GS on 5-6 | 59.6-59.8 fps |
+| 2026-10-02 | nightly `1a3d441` | NFSU, in race | EE, VU, GS on 5-6 | 47.2 fps; EE 25%, GS 25%, VU 19% at full clocks, so waiting on each other |
+| 2026-10-02 | nightly `1a3d441` | NFSU, in race | moved live with `taskset -p`: EE 7, VU 3, GS 4 | 52.2 over the move, then 58.8, then 59.9 for three windows (~90 s); EE 23-28%, GS 24-34%, VU 17-23% |
 
 ## Open questions
 
