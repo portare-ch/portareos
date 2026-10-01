@@ -58,12 +58,12 @@ pre_configure_target() {
   for _v in CFLAGS CXXFLAGS LDFLAGS; do
     export ${_v}="$(echo ${!_v} | sed 's/-mabi=lp64//g; s/-mtune=[^ ]*//g')"
   done
-}
 
   for _f in "${SYSROOT_PREFIX}"/usr/lib/*.o "${SYSROOT_PREFIX}"/usr/lib/*.a; do
     [ -f "${_f}" ] || continue
     "${TOOLCHAIN}/bin/llvm-strip" --strip-debug "${_f}" 2>/dev/null || true
   done
+}
 
 make_target() {
   mkdir -p "${PKG_BUILD}/.${TARGET_NAME}"

@@ -120,11 +120,13 @@ declare -a HAS_CHEEVOS=(    arcade
 
 declare -a NO_REWIND=(  atomiswave
                         dreamcast
+                        gamecube
                         mame
                         n64
                         naomi
                         neogeocd
                         odyssey2
+                        ps2
                         psp
                         pspminis
                         saturn
@@ -134,9 +136,11 @@ declare -a NO_REWIND=(  atomiswave
 
 declare -a NO_RUNAHEAD=(    atomiswave
                             dreamcast
+                            gamecube
                             n64
                             naomi
                             neogeocd
+                            ps2
                             psp
                             saturn
                             sega32x
