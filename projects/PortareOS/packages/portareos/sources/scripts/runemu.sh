@@ -485,16 +485,64 @@ if [ "${KMSMODE}" = "1" ]; then
   fi
 fi
 
+### Keep the rest of the system off the game's cores
+### (documentation/CPU_ISOLATION.md). The emulator runs in a scope in
+### game.slice on GAME_CPUS; while it runs, system.slice - the launcher and
+### this script included - and the kernel's unbound workqueues go to
+### SYSTEM_CPUS. systemd manages cpusets only on the unified hierarchy, and
+### the device quirk has to name both sets. A cpuset bounds taskset, so a
+### system set to the little cores is left alone rather than started on cores
+### its mask excludes. --runtime and the EXIT trap: a killed run leaves
+### nothing a reboot does not clear, a normal one leaves nothing at all.
+WQ_CPUMASK="/sys/devices/virtual/workqueue/cpumask"
+
+cpus_to_mask() {
+  local part c mask=0
+  for part in ${1//,/ }; do
+    for ((c = ${part%-*}; c <= ${part#*-}; c++)); do
+      mask=$((mask | (1 << c)))
+    done
+  done
+  printf '%x\n' "${mask}"
+}
+
+release_cpus() {
+  [ "${CPUS_ISOLATED:-0}" = "1" ] || return 0
+  systemctl set-property --runtime system.slice AllowedCPUs= 2>/dev/null
+  [ -n "${WQ_SAVED:-}" ] && echo "${WQ_SAVED}" >"${WQ_CPUMASK}" 2>/dev/null
+  CPUS_ISOLATED=0
+}
+
+GAMESCOPE=""
+CPUISOLATION=$(get_setting "cpuisolation" "${PLATFORM}" "${ROMNAME##*/}")
+if [ "${CPUISOLATION}" != "0" ] &&
+   [ "${CORES}" != "little" ] &&
+   [ -f /sys/fs/cgroup/cgroup.controllers ] &&
+   [ -n "${GAME_CPUS:-}" ] && [ -n "${SYSTEM_CPUS:-}" ]
+then
+  ${VERBOSE} && log $0 "Isolate: game on ${GAME_CPUS}, system on ${SYSTEM_CPUS}"
+  CPUS_ISOLATED=1
+  trap release_cpus EXIT
+  systemctl set-property --runtime system.slice AllowedCPUs="${SYSTEM_CPUS}"
+  if [ -w "${WQ_CPUMASK}" ]; then
+    WQ_SAVED="$(cat "${WQ_CPUMASK}")"
+    cpus_to_mask "${SYSTEM_CPUS}" >"${WQ_CPUMASK}"
+  fi
+  GAMESCOPE="systemd-run --scope --quiet --collect --slice=game.slice -p AllowedCPUs=${GAME_CPUS}"
+fi
+
 # If the rom is a shell script just execute it, useful for DOSBOX and ScummVM scan scripts
 if [[ "${ROMNAME}" == *".sh" ]] && [ ! "${PLATFORM}" = "ports" ] && [ ! "${PLATFORM}" = "windows" ]; then
         ${VERBOSE} && log $0 "Executing shell script ${ROMNAME}"
-        "${ROMNAME}" &>>${OUTPUT_LOG}
+        ${GAMESCOPE} "${ROMNAME}" &>>${OUTPUT_LOG}
         ret_error=$?
 else
-        ${VERBOSE} && log $0 "Executing $(eval echo ${RUNTHIS})"
-        eval ${RUNTHIS} &>>${OUTPUT_LOG}
+        ${VERBOSE} && log $0 "Executing $(eval echo ${GAMESCOPE} ${RUNTHIS})"
+        eval ${GAMESCOPE} ${RUNTHIS} &>>${OUTPUT_LOG}
         ret_error=$?
 fi
+
+release_cpus
 
 ### Switch back to performance mode to clean up
 performance

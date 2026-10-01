@@ -17,6 +17,10 @@ CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y
 # however busy the frame is: PS2 ran at 40 fps under schedutil and 59.7 with
 # the big cores pinned at maximum. Depends on schedutil above.
 CONFIG_UCLAMP_TASK=y
+# cgroup v2 cpusets. runemu keeps the system off a game's cores with them
+# (documentation/CPU_ISOLATION.md); without them systemd ignores
+# AllowedCPUs= and the game shares its cores with everything else, silently.
+CONFIG_CPUSETS=y
 
 # Latency tuning (issue #13). Asserted for the same reason as everything above:
 # a preemption or idle symbol that Kconfig drops leaves a kernel that boots and

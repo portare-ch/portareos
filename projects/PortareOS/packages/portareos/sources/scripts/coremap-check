@@ -103,6 +103,27 @@ for comm in "${!WANT[@]}"; do
   grep -qx "${comm}" /proc/"${PID}"/task/*/comm 2>/dev/null || { echo "missing thread: ${comm}"; FAIL=1; }
 done
 
+# Isolation (runemu, CPU_ISOLATION.md phase 2): the emulator in game.slice,
+# and system.slice kept off the reserved cores. Needs the unified hierarchy;
+# on hybrid there is nothing to check.
+if [ -f /sys/fs/cgroup/cgroup.controllers ]; then
+  CG="$(sed -n 's/^0:://p' /proc/"${PID}"/cgroup)"
+  SYS="$(cat /sys/fs/cgroup/system.slice/cpuset.cpus.effective 2>/dev/null)"
+  echo "emulator cgroup ${CG}"
+  echo "system.slice cpus ${SYS:-?}"
+  case "${CG}" in
+    /game.slice/*) ;;
+    *) echo "FAIL emulator is not in game.slice"; FAIL=1 ;;
+  esac
+  for c in $(expand "${SYS:-0-63}"); do
+    case " ${RESERVED} " in
+      *" ${c} "*) echo "FAIL system.slice may run on reserved core ${c}"; FAIL=1; break ;;
+    esac
+  done
+else
+  echo "isolation: not available on the hybrid cgroup hierarchy"
+fi
+
 [ "${FAIL}" -eq 0 ] && { echo PASS; exit 0; }
 echo FAIL
 exit 1
