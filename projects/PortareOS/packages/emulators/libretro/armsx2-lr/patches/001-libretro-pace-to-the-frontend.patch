@@ -1,0 +1,104 @@
+From: portare-ch <hello@portare.org>
+Subject: [PATCH] libretro: pace to the frontend's frames, one clock
+
+The core reported no refresh rate for its surfaceless window, so the VM
+never synced to a host and slept to its own timer at the guest rate,
+while RetroArch called retro_run on the panel's. retro_run takes the
+frame the GS published or repeats the last, and the GS blocks until it
+is taken: two clocks racing, which shows as repeated frames and a GS
+thread stalled behind them.
+
+The window now carries the rate retro_run runs at, the frontend's
+target refresh divided by the swap interval RetroArch picks for the
+announced 59.94 fps, and VsyncEnable, SyncToHostRefreshRate and
+UseVSyncForTiming are on, as the standalone ran them. The VM then runs
+the guest at the host's rate and leaves pacing to the present, which
+is the hand-off to retro_run. SkipDuplicateFrames goes off, since vsync
+timing needs every frame presented. VsyncQueueSize goes from 2 to 0:
+a frame stays queued until retro_run takes it, so the EE starts a frame
+only once the last one is taken, and runs no frame ahead of the screen.
+
+The Null audio backend's ring goes from 50 to 64 ms. It overflows by
+dropping chunks silently.
+---
+diff --git a/pcsx2-libretro/Main.cpp b/pcsx2-libretro/Main.cpp
+--- a/pcsx2-libretro/Main.cpp
++++ b/pcsx2-libretro/Main.cpp
+@@ -137,6 +137,14 @@ namespace LibretroCore
+ 	static bool s_hw_render_gl = false;
+ 	static std::atomic<bool> s_cpu_thread_initialized{false};
+ 	static std::atomic<bool> s_context_ready{false};
++
++	// The frame rate announced in retro_get_system_av_info before the VM
++	// reports its own.
++	static constexpr float kAnnouncedFps = 59.94f;
++
++	// The rate retro_run is called at, handed to the GS as the host refresh
++	// rate; 0 when the frontend does not say. See retro_load_game.
++	static float s_host_refresh_rate = 0.0f;
+ } // namespace LibretroCore
+ 
+ // Settings persistence (INI under the frontend's system directory).
+@@ -241,6 +249,25 @@ bool LibretroCore::InitializeConfig()
+ 		// Audio goes out through retro_run pulling the stream ring; the Null
+ 		// backend keeps SPU2 mixing into the ring with no device thread.
+ 		s_base_settings->SetStringValue("SPU2/Output", "Backend", "Null");
++		// What retro_run drains each call collects here; on overflow whole
++		// chunks are dropped without a word.
++		s_base_settings->SetUIntValue("SPU2/Output", "BufferMS", 64);
++
++		// One clock: the frontend's. With the host refresh rate in the window
++		// info, the VM runs at the speed that makes the guest frame rate equal
++		// to it, and instead of sleeping to its own timer leaves the pacing to
++		// the present, which blocks in VKLibretro::PublishFrame until retro_run
++		// takes the frame. Vsync timing needs every frame presented, so
++		// duplicates are not skipped.
++		s_base_settings->SetBoolValue("EmuCore/GS", "VsyncEnable", true);
++		s_base_settings->SetBoolValue("EmuCore/GS", "SyncToHostRefreshRate", true);
++		s_base_settings->SetBoolValue("EmuCore/GS", "UseVSyncForTiming", true);
++		s_base_settings->SetBoolValue("EmuCore/GS", "SkipDuplicateFrames", false);
++		// A frame stays queued until retro_run has taken it, so the EE runs
++		// up to this many frames ahead of the one on screen; the default of 2
++		// is two frames of input lag. At 0 the EE starts a frame once the
++		// last one is taken, as the standalone ran.
++		s_base_settings->SetIntValue("EmuCore/GS", "VsyncQueueSize", 0);
+ 	}
+ 
+ 	Error save_error;
+@@ -340,6 +367,7 @@ static std::optional<WindowInfo> BuildLibretroWindowInfo()
+ 	wi.surface_width = LibretroCore::kFrameWidth;
+ 	wi.surface_height = LibretroCore::kFrameHeight;
+ 	wi.surface_scale = 1.0f;
++	wi.surface_refresh_rate = LibretroCore::s_host_refresh_rate;
+ 	return wi;
+ }
+ 
+@@ -1754,7 +1782,7 @@ RETRO_API void retro_get_system_av_info(struct retro_system_av_info* info)
+ 	info->geometry.max_height = VKLibretro::kMaxCanvasHeight;
+ #endif
+ 	info->geometry.aspect_ratio = 4.0f / 3.0f;
+-	info->timing.fps = 59.94;
++	info->timing.fps = LibretroCore::kAnnouncedFps;
+ 	info->timing.sample_rate = 48000.0;
+ }
+ 
+@@ -1779,6 +1807,19 @@ RETRO_API bool retro_load_game(const struct retro_game_info* game)
+ 
+ 	CrashHandler::Install();
+ 
++	// RetroArch holds each frame for round(refresh / fps) refreshes, the fps
++	// being the one announced above, so retro_run runs at the refresh rate
++	// divided by that: 59.94 on a 119.88 Hz panel, 60 on a 60 Hz one. Read
++	// here, before the negotiation opens the GS and asks for the window.
++	float target_refresh = 0.0f;
++	if (environ_cb(RETRO_ENVIRONMENT_GET_TARGET_REFRESH_RATE, &target_refresh) && target_refresh > 0.0f)
++	{
++		const float interval = std::max(1.0f, std::round(target_refresh / LibretroCore::kAnnouncedFps));
++		LibretroCore::s_host_refresh_rate = target_refresh / interval;
++		log_cb(RETRO_LOG_INFO, "Pacing to the frontend: %.3f Hz refresh, %.3f Hz frames.\n",
++			target_refresh, LibretroCore::s_host_refresh_rate);
++	}
++
+ 	if (!LibretroCore::InitializeConfig())
+ 	{
+ 		log_cb(RETRO_LOG_ERROR, "Failed to initialize config.\n");
