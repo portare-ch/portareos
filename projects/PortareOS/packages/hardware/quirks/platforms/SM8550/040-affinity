@@ -2,7 +2,11 @@
 # SPDX-License-Identifier: GPL-2.0
 # Copyright (C) 2024 ROCKNIX (https://github.com/ROCKNIX)
 
-cat <<EOF >/storage/.config/profile.d/040-affinity
+# 0-2 A510, 3-4 A715, 5-6 A710, 7 X3. FRONTEND_CORES is for an emulator that
+# pins its own hot threads (the PS2 core: EE on 7, VU and GS on 3 and 4): the
+# frontend and everything else it starts stay on the A710s, off those cores.
+cat <<EOF2 >/storage/.config/profile.d/040-affinity
 SLOW_CORES="taskset -c 0-2"
 FAST_CORES="taskset -c 3-7"
-EOF
+FRONTEND_CORES="taskset -c 5-6"
+EOF2

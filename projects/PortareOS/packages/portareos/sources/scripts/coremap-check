@@ -1,0 +1,108 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
+#
+# Check the running emulator's threads against the core layout documented for
+# it in documentation/emulators/. Run it while a game is up:
+#
+#   coremap-check [seconds]      default 5
+#
+# Prints each thread's allowed cores and where it was seen running, then
+# PASS or FAIL. Exits 1 on FAIL, 2 when nothing it knows is running.
+#
+# A layout is a set of hot threads, each allowed exactly the cores named, and
+# the cores they reserve: any other thread allowed on a reserved core fails,
+# unless it is niced background work (nice > 0), which is reported but passes.
+
+set -u
+
+SECONDS_TO_SAMPLE="${1:-5}"
+
+# name|pid-finder|hot threads as comm=cores, separated by ;
+layout_for() {
+  local p
+  p="$(pgrep -f 'armsx2_libretro\.so' | head -1)"
+  if [ -n "${p}" ]; then
+    echo "armsx2|${p}|CPU Thread=7;MTVU=3;GS=4"
+    return
+  fi
+  return 1
+}
+
+# "3-4,7" -> "3 4 7"
+expand() {
+  local part out=""
+  for part in ${1//,/ }; do
+    if [[ "${part}" == *-* ]]; then
+      out+=" $(seq "${part%-*}" "${part#*-}" | tr '\n' ' ')"
+    else
+      out+=" ${part}"
+    fi
+  done
+  echo ${out}
+}
+
+LAYOUT="$(layout_for)" || { echo "no emulator with a documented layout is running"; exit 2; }
+NAME="${LAYOUT%%|*}"; REST="${LAYOUT#*|}"
+PID="${REST%%|*}"; HOT="${REST#*|}"
+
+declare -A WANT SEEN
+RESERVED=""
+IFS=';' read -ra ENTRIES <<< "${HOT}"
+for e in "${ENTRIES[@]}"; do
+  WANT["${e%%=*}"]="$(expand "${e#*=}")"
+  RESERVED+=" $(expand "${e#*=}")"
+done
+
+# Where each thread runs, sampled 10 times a second. comm can hold spaces, so
+# the fields after it are counted from the closing parenthesis.
+END=$(( $(date +%s) + SECONDS_TO_SAMPLE ))
+while [ "$(date +%s)" -lt "${END}" ]; do
+  for t in /proc/"${PID}"/task/*; do
+    tid="${t##*/}"
+    stat="$(cat "${t}/stat" 2>/dev/null)" || continue
+    cpu="$(echo "${stat##*) }" | awk '{print $37}')"
+    case " ${SEEN[${tid}]:-} " in *" ${cpu} "*) ;; *) SEEN["${tid}"]+=" ${cpu}" ;; esac
+  done
+  sleep 0.1
+done
+
+echo "${NAME}, pid ${PID}, sampled ${SECONDS_TO_SAMPLE}s"
+printf '%-8s %-18s %-5s %-12s %-12s %s\n' tid thread nice allowed seen verdict
+FAIL=0
+for t in /proc/"${PID}"/task/*; do
+  tid="${t##*/}"
+  comm="$(cat "${t}/comm" 2>/dev/null)" || continue
+  stat="$(cat "${t}/stat")"
+  nice="$(echo "${stat##*) }" | awk '{print $17}')"
+  allowed="$(sed -n 's/^Cpus_allowed_list:\s*//p' "${t}/status")"
+  cores="$(expand "${allowed}")"
+  verdict="ok"
+  if [ -n "${WANT[${comm}]:-}" ]; then
+    if [ "${cores}" != "${WANT[${comm}]}" ]; then
+      verdict="FAIL want ${WANT[${comm}]// /,}"; FAIL=1
+    fi
+  else
+    for c in ${cores}; do
+      case " ${RESERVED} " in
+        *" ${c} "*)
+          if [ "${nice}" -gt 0 ]; then
+            verdict="background on reserved cores"
+          else
+            verdict="FAIL on reserved core ${c}"; FAIL=1
+          fi
+          break
+          ;;
+      esac
+    done
+  fi
+  printf '%-8s %-18s %-5s %-12s %-12s %s\n' "${tid}" "${comm}" "${nice}" "${allowed}" "$(echo ${SEEN[${tid}]:-} | tr ' ' ',')" "${verdict}"
+done
+
+for comm in "${!WANT[@]}"; do
+  grep -qx "${comm}" /proc/"${PID}"/task/*/comm 2>/dev/null || { echo "missing thread: ${comm}"; FAIL=1; }
+done
+
+[ "${FAIL}" -eq 0 ] && { echo PASS; exit 0; }
+echo FAIL
+exit 1

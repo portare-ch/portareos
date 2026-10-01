@@ -394,6 +394,9 @@ case ${CORES} in
   big)
     EMUPERF="${FAST_CORES}"
   ;;
+  frontend)
+    EMUPERF="${FRONTEND_CORES}"
+  ;;
   *)
     unset EMUPERF
   ;;

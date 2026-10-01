@@ -1,0 +1,58 @@
+From: portare-ch <hello@portare.org>
+Subject: [PATCH] libretro: pin EE, VU and GS to the fastest cores, in a fixed order
+
+Thread pinning was off: the defaults that turn it on for big.LITTLE
+CPUs are written only when the ini is first created, which the libretro
+core's settings path never did. EE, VU and GS moved between the big
+cores, each move refilling a private L2, and the scheduler sometimes
+stacked all three on one core.
+
+The libretro core now turns pinning on, and the processor list it pins
+from has a total order: frequency, then the newer design within a tier,
+then the core number. Frequency alone, under an unstable sort, picked
+between the 8 Gen 2's A715s and A710s at random, which all run at
+2.8 GHz. There the order is X3, A715, A715, A710, A710, A510s: EE gets
+the prime core to itself, VU and GS the A715s.
+---
+diff --git a/pcsx2-libretro/Main.cpp b/pcsx2-libretro/Main.cpp
+--- a/pcsx2-libretro/Main.cpp
++++ b/pcsx2-libretro/Main.cpp
+@@ -268,6 +268,13 @@ bool LibretroCore::InitializeConfig()
+ 		// is two frames of input lag. At 0 the EE starts a frame once the
+ 		// last one is taken, as the standalone ran.
+ 		s_base_settings->SetIntValue("EmuCore/GS", "VsyncQueueSize", 0);
++
++		// EE, VU and GS each on a core of their own, fastest first: on a
++		// Snapdragon 8 Gen 2 the X3 for EE alone, the A715s for VU and GS.
++		// The defaults would turn this on for any big.LITTLE CPU, but they
++		// are only written when the ini is created, and threads that move
++		// between cores refill a private L2 each time.
++		s_base_settings->SetBoolValue("EmuCore", "EnableThreadPinning", true);
+ 	}
+ 
+ 	Error save_error;
+diff --git a/pcsx2/VMManager.cpp b/pcsx2/VMManager.cpp
+--- a/pcsx2/VMManager.cpp
++++ b/pcsx2/VMManager.cpp
+@@ -4156,10 +4156,19 @@ static void InitializeProcessorList()
+ 		processors.push_back(proc);
+ 	}
+ 
+-	// Prioritize faster cores in heterogeneous CPUs.
++	// Prioritize faster cores in heterogeneous CPUs. Pinning takes the first three, so the order
++	// has to be total: a tier of equal clocks can mix designs (Snapdragon 8 Gen 2 runs two A715s
++	// and two A710s at 2.8 GHz), and an unstable sort on frequency alone picked among them at
++	// random. Within a tier, cpuinfo numbers a newer design of the same series higher; the core
++	// number settles the rest. Only within a tier: where the clocks read as 0 everything ties,
++	// and across series the numbering means nothing (the X3 sorts below the A510).
+ 	std::sort(processors.begin(), processors.end(),
+ 		[](const cpuinfo_processor* lhs, const cpuinfo_processor* rhs) {
+-			return (lhs->core->frequency > rhs->core->frequency);
++			if (lhs->core->frequency != rhs->core->frequency)
++				return (lhs->core->frequency > rhs->core->frequency);
++			if (lhs->core->frequency != 0 && lhs->core->uarch != rhs->core->uarch)
++				return (lhs->core->uarch > rhs->core->uarch);
++			return (GetProcessorIdForProcessor(lhs) < GetProcessorIdForProcessor(rhs));
+ 		});
+ 
+ 	SmallString str;

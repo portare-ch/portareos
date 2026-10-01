@@ -333,6 +333,15 @@ migrate_colorprofile_stock() {
   esac
 }
 
+# system.cfg ships the PS2 core layout, ps2.cores=frontend and
+# ps2.cpugovernor=performance; an existing install has neither and runs PS2
+# on all big cores under schedutil. A ps2 value the user already set is left
+# alone, and a per-game one still wins over these.
+migrate_ps2_cpu_layout() {
+  [ -n "$(get_setting ps2.cores)" ] || set_setting ps2.cores frontend
+  [ -n "$(get_setting ps2.cpugovernor)" ] || set_setting ps2.cpugovernor performance
+}
+
 # glide64 was the shipped N64 renderer until ParaLLEl-RDP replaced it. It
 # needs OpenGL, which here is zink, and RetroArch crashed within seconds of
 # every N64 launch on a device still carrying it. Only glide64 is moved.
@@ -381,3 +390,4 @@ migrate ssh-default-on migrate_ssh_on
 migrate colorprofile-stock migrate_colorprofile_stock
 migrate n64-parallel-rdp migrate_n64_parallel_rdp
 migrate integerscale-on migrate_integerscale_on
+migrate ps2-cpu-layout migrate_ps2_cpu_layout
