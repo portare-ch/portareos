@@ -196,6 +196,8 @@ It has caught two failures so far:
 | 2026-10-02 | nightly `1a3d441` (001, 002 first version, performance, isolation) | NFSU, menus | EE, VU, GS on 5-6 | 59.6-59.8 fps |
 | 2026-10-02 | nightly `1a3d441` | NFSU, in race | EE, VU, GS on 5-6 | 47.2 fps; EE 25%, GS 25%, VU 19% at full clocks, so waiting on each other |
 | 2026-10-02 | nightly `1a3d441` | NFSU, in race | moved live with `taskset -p`: EE 7, VU 3, GS 4 | 52.2 over the move, then 58.8, then 59.9 for three windows (~90 s); EE 23-28%, GS 24-34%, VU 17-23% |
+| 2026-10-02 | nightly `1a3d441` | Time Crisis II, gameplay | EE, VU, GS on 5-6 | 59.0 fps, near saturation: EE 63%, VU 52%, GS 35% (about 1.5 of the 2 cores) |
+| 2026-10-02 | nightly `1a3d441` | Time Crisis II, gameplay | moved live: EE 7, VU 3, GS 4 | 59.7-59.9 fps; EE 38-53%, VU 28-42%, GS 18-29%, the same work in less thread time |
 
 ## Open questions
 
