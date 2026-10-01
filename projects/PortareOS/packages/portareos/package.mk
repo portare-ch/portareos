@@ -50,6 +50,12 @@ EOF
 post_install() {
   ln -sf portareos.target ${INSTALL}/usr/lib/systemd/system/default.target
 
+  # The user emulators run as with system.gameuser=1 (runemu). Its device
+  # groups are named where they are created: video, audio, input and render
+  # in systemd, pipewire in pipewire. games owns what it may write.
+  add_group games 1000
+  add_user game x 1000 1000 "PortareOS games" "/storage" "/bin/false"
+
   if [ ! -d "${INSTALL}/usr/share" ]
   then
     mkdir "${INSTALL}/usr/share"

@@ -90,7 +90,8 @@ pre_configure_target() {
 
 post_install() {
   add_user pipewire x 982 980 "pipewire-daemon" "/var/run/pipewire" "/bin/sh"
-  add_group pipewire 980
+  # game reaches the system socket (SocketGroup=pipewire) as a member
+  add_group pipewire 980 game
   mkdir -p ${INSTALL}/etc/alsa/conf.d
   ln -sf /usr/share/alsa/alsa.conf.d/50-pipewire.conf ${INSTALL}/etc/alsa/conf.d/50-pipewire.conf
   ln -sf /usr/share/alsa/alsa.conf.d/99-pipewire-default.conf ${INSTALL}/etc/alsa/conf.d/99-pipewire-default.conf
