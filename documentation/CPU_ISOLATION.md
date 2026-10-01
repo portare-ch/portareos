@@ -53,8 +53,16 @@ memory controller, not only the cores the game uses.
 The finer tool is utilization clamping: a `uclamp.min` on the emulator's hot
 threads, so schedutil clocks and places them as busy while the rest of the
 system keeps scaling. The kernel has it (`CONFIG_UCLAMP_TASK`, asserted in
-`distributions/PortareOS/kernel_options`). Nothing sets a clamp yet: util-linux
-is built without `uclampset`, and no core calls `sched_setattr`.
+`distributions/PortareOS/kernel_options`).
+
+The PS2 core sets one on its pinned threads (ARMSX2 patch 003): each thread's
+floor is its core's `cpu_capacity`, so EE gets 1024 on the X3, and VU and GS
+657 on the A715s. Cores 3-6 share one clock, so a floor on VU or GS lifts all
+four while that thread runs. Under the `performance` governor a floor changes
+nothing; PS2 keeps `performance` until schedutil with the floor is measured
+to hold the same. The gain then is power and heat: the A510s and the memory
+bus go back to scaling, and the big cores drop while the threads sleep
+between frames.
 
 ## Placement today
 

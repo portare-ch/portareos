@@ -12,6 +12,8 @@
     ring.
   - `002-libretro-pin-threads-by-core-tier.patch`: thread pinning and a total
     core order.
+  - `003-libretro-clamp-pinned-threads.patch`: a utilization floor on the
+    pinned threads.
 - Settings live in `/storage/roms/bios/pcsx2/inis/armsx2-libretro.ini`, not
   `PCSX2.ini`. The core rewrites the keys the patches force on every load, and
   keeps everything else. That includes values left behind by an earlier build:
@@ -182,6 +184,7 @@ It has caught two failures so far:
 | `BufferMS = 64` | 001 | ring capacity, ~3.8 frames |
 | `EnableThreadPinning = true` | 002 | fixed cores, warm L2 |
 | `ps2.cpugovernor=performance` | `system.cfg`, migration `ps2-cpu-layout` | 40 to 59.7 fps, see measurements |
+| `uclamp.min` = the pinned core's `cpu_capacity` on EE, VU, GS | 003 | full clock for the hot threads under schedutil; no effect while the governor is `performance` |
 | `ps2.cores=frontend` | `system.cfg`, migration `ps2-cpu-layout` | RetroArch on the A710s |
 | `ps2` in `NO_RUNAHEAD`, `NO_REWIND` | `setsettings.sh` | both save a state every frame; a PS2 state is 68 MB, and each one switches pacing off and on |
 | `armsx2_upscale = 2x` | `retroarch-core-options.cfg` | as the standalone ran (#15) |
@@ -208,8 +211,14 @@ It has caught two failures so far:
   display backend.
 - RetroArch segfaults on exit, after `Releasing host memory for virtual
   systems...` (seen twice in `exec.log`).
-- A `uclamp.min` on EE, VU and GS could replace the global `performance`
-  governor. The kernel has `CONFIG_UCLAMP_TASK`; nothing sets a clamp yet.
+- Whether 003's clamp can replace the `performance` governor. Patch 003 sets
+  it: EE 1024 on the X3, VU and GS 657 on the A715s. It has no effect until
+  PS2 runs under schedutil. Test by setting `ps2.cpugovernor=schedutil` in
+  `system.cfg`, then compare against `performance` on the same scene: fps,
+  repeated frames, audio, and drain, clocks and temperature from `perf-probe`.
+  The default changes only if schedutil with the clamp holds what
+  `performance` does. `exec.log` shows `EE thread util clamp min 1024` when
+  it is set.
 - Texture barriers: the standalone forced them off
   (`OverrideTextureBarriers = 0`); the core's automatic turns them on, and a
   barrier is expensive on a tiler. Not measured yet (ROADMAP).
