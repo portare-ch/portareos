@@ -27,7 +27,11 @@ things may break along the way.
 | --- | --- | --- |
 | Super Nintendo | Snes9x | ✅ Tested, full speed |
 | PlayStation | SwanStation | ✅ Tested |
+| PlayStation 2 | [ARMSX2 (libretro)](documentation/emulators/ARMSX2.md) | ✅ Tested, full speed |
 | GameCube | Dolphin (libretro) | ❌ Currently broken: hangs, no sound ([#463](https://github.com/portare-ch/portareos/issues/463)) |
+
+A linked emulator has its own page with what was measured and why it is set
+up the way it is: [documentation/emulators/](documentation/emulators/README.md).
 
 ## Concepts
 
