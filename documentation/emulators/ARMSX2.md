@@ -14,6 +14,8 @@
     core order.
   - `003-libretro-clamp-pinned-threads.patch`: a utilization floor on the
     pinned threads.
+  - `004-libretro-apply-gamedb-blending.patch`: blending accuracy raised to
+    the GameDB's per-game recommendation.
 - Settings live in `/storage/roms/bios/pcsx2/inis/armsx2-libretro.ini`, not
   `PCSX2.ini`. The core rewrites the keys the patches force on every load, and
   keeps everything else. That includes values left behind by an earlier build:
@@ -242,6 +244,7 @@ It has caught two failures so far:
 | `ps2.cores=frontend` | `system.cfg`, migration `ps2-cpu-layout` | RetroArch on the A710s |
 | `ps2` in `NO_RUNAHEAD`, `NO_REWIND` | `setsettings.sh` | both save a state every frame; a PS2 state is 68 MB, and each one switches pacing off and on |
 | `armsx2_upscale = 2x` | `retroarch-core-options.cfg` | as the standalone ran (#15) |
+| `armsx2_blending_accuracy = "Automatic"` | `retroarch-core-options.cfg`, patch 004 | Basic, raised per game to the GameDB's `recommendedBlendingLevel`, within its `maximumBlendingLevel`. Upstream only warns about the recommendation, on an OSD the core does not show, so every game ran at Basic. An explicit level is kept as chosen. `exec.log` shows `GameDB: Raising blending accuracy from 1 to the recommended 3` |
 | `VK_DRIVER_FILES` = ARMSX2's Turnip | runemu, `armsx2` core only; `ps2.vulkandriver=system` opts out | the driver build ARMSX2's GS is tuned for (#497) |
 
 ## Measurements
@@ -258,6 +261,12 @@ It has caught two failures so far:
 | 2026-10-02 | nightly `1a3d441` | Time Crisis II, gameplay | moved live: EE 7, VU 3, GS 4 | 59.7-59.9 fps; EE 38-53%, VU 28-42%, GS 18-29%, the same work in less thread time |
 
 ## Open questions
+
+- What Automatic blending costs where it raises the level: NFSU (recommends
+  High) in a race, on ARMSX2's Turnip and on the image's Mesa
+  (`ps2.vulkandriver=system`). Higher levels mean more destination reads,
+  which is the work ARMSX2's Turnip makes cheaper; this is also where its
+  gain should show.
 
 - ARMSX2's Turnip against the image's Mesa (`ps2.vulkandriver=system`), same
   scenes: fps, frametimes, GPU load. Expect in `exec.log`

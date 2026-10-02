@@ -1,0 +1,121 @@
+From: portare-ch <hello@portare.org>
+Subject: [PATCH] libretro: apply the GameDB's recommended blending level
+
+A GameDB entry's recommendedBlendingLevel only ever produced an OSD
+warning that the current level is lower. The libretro core does not
+show that OSD, so every game ran at the core option's default, Basic:
+Need for Speed Underground, which recommends High, included.
+
+A new GS flag, accurate_blending_auto, makes the recommendation the
+level instead, within any maximumBlendingLevel the same entry sets. The
+cap is read in place, because the entry's fixes apply in their listed
+order and the cap may come first. GameDB logs the raise:
+"GameDB: Raising blending accuracy from 1 to the recommended 3".
+
+The libretro option gains Automatic, now its default: Basic, raised per
+game this way. An explicit level is kept as chosen. Outside the libretro
+core the flag stays off and nothing changes.
+---
+diff --git a/pcsx2-libretro/Main.cpp b/pcsx2-libretro/Main.cpp
+--- a/pcsx2-libretro/Main.cpp
++++ b/pcsx2-libretro/Main.cpp
+@@ -999,8 +999,8 @@ static struct retro_core_option_v2_definition kOptionDefinitions[] = {
+ 		"How accurately PS2 framebuffer blending is emulated on the GPU. Lower levels are faster; "
+ 		"raise it only for games with visible blending artifacts.",
+ 		nullptr, "video",
+-		{{"Minimum", nullptr}, {"Basic", nullptr}, {"Medium", nullptr}, {"High", nullptr},
+-			{"Full", nullptr}, {"Maximum", nullptr}, {nullptr, nullptr}}, "Basic"},
++		{{"Automatic", "Automatic (GameDB)"}, {"Minimum", nullptr}, {"Basic", nullptr}, {"Medium", nullptr},
++			{"High", nullptr}, {"Full", nullptr}, {"Maximum", nullptr}, {nullptr, nullptr}}, "Automatic"},
+ 	{"armsx2_dithering", "Dithering", "Dithering",
+ 		"Unscaled replicates PS2 dithering; Off can reduce banding artifacts at higher internal resolutions.",
+ 		nullptr, "video",
+@@ -1097,7 +1097,7 @@ static struct retro_variable kCoreVariables[] = {
+ 	{"armsx2_deinterlacing", "Deinterlacing; Automatic|Off|Weave TFF|Weave BFF|Bob TFF|Bob BFF|Blend TFF|Blend BFF|Adaptive TFF|Adaptive BFF"},
+ 	{"armsx2_no_interlacing_patches", "No-interlacing patches (restart); disabled|enabled"},
+ 	{"armsx2_widescreen_patches", "Widescreen patches (restart); disabled|enabled"},
+-	{"armsx2_blending_accuracy", "Blending accuracy; Basic|Minimum|Medium|High|Full|Maximum"},
++	{"armsx2_blending_accuracy", "Blending accuracy; Automatic|Basic|Minimum|Medium|High|Full|Maximum"},
+ 	{"armsx2_dithering", "Dithering; Unscaled|Off|Scaled"},
+ 	{"armsx2_trilinear_filtering", "Trilinear filtering; Automatic|Off|Trilinear (PS2)|Trilinear (Forced)"},
+ 	{"armsx2_mipmapping", "Hardware mipmapping; enabled|disabled"},
+@@ -1251,11 +1251,14 @@ static void ApplyCoreOptions(bool startup)
+ 		var = {"armsx2_blending_accuracy", nullptr};
+ 		if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+ 		{
+-			// Indices match the AccBlendLevel enum.
++			// Indices match the AccBlendLevel enum. Automatic is Basic, raised per game to the
++			// GameDB's recommendedBlendingLevel; an explicit level is kept as chosen.
+ 			static constexpr const char* kLevels[] = {"Minimum", "Basic", "Medium", "High", "Full", "Maximum"};
++			const bool automatic = !std::strcmp(var.value, "Automatic");
++			s_base_settings->SetBoolValue("EmuCore/GS", "accurate_blending_auto", automatic);
+ 			for (size_t i = 0; i < std::size(kLevels); i++)
+ 			{
+-				if (!std::strcmp(var.value, kLevels[i]))
++				if (!std::strcmp(automatic ? "Basic" : var.value, kLevels[i]))
+ 				{
+ 					s_base_settings->SetIntValue("EmuCore/GS", "accurate_blending_unit", static_cast<int>(i));
+ 					break;
+diff --git a/pcsx2/Config.h b/pcsx2/Config.h
+--- a/pcsx2/Config.h
++++ b/pcsx2/Config.h
+@@ -974,7 +974,10 @@ struct Pcsx2Config
+ 					LoadTextureReplacements : 1,
+ 					LoadTextureReplacementsAsync : 1,
+ 					PrecacheTextureReplacements : 1,
+-					OrganizeSnapshotsByGame : 1;
++					OrganizeSnapshotsByGame : 1,
++					// Raise AccurateBlendingUnit to a game's GameDB recommendedBlendingLevel instead of
++					// only warning about it. Off by default; the libretro core's Automatic sets it.
++					AccurateBlendingAuto : 1;
+ 			};
+ 		};
+ 
+diff --git a/pcsx2/GameDatabase.cpp b/pcsx2/GameDatabase.cpp
+--- a/pcsx2/GameDatabase.cpp
++++ b/pcsx2/GameDatabase.cpp
+@@ -1129,6 +1129,33 @@ void GameDatabaseSchema::GameEntry::applyGSHardwareFixes(
+ 
+ 			case GSHWFixId::RecommendedBlendingLevel:
+ 			{
++				// Automatic: the level becomes the recommendation instead of a warning about it,
++				// within any maximumBlendingLevel the same entry sets. The cap is read here rather
++				// than left to its own case, which may run before this one in the entry's order.
++				if (config.AccurateBlendingAuto && !is_sw_renderer &&
++					value >= 0 && value <= static_cast<int>(AccBlendLevel::Maximum))
++				{
++					AccBlendLevel level = static_cast<AccBlendLevel>(value);
++					for (const auto& [cap_id, cap] : gsHWFixes)
++					{
++						if (cap_id == GSHWFixId::MaximumBlendingLevel && cap >= 0 &&
++							cap <= static_cast<int>(AccBlendLevel::Maximum))
++						{
++							level = std::min(level, static_cast<AccBlendLevel>(cap));
++						}
++					}
++					if (config.AccurateBlendingUnit < level)
++					{
++						if (!quiet)
++							Console.WriteLn("GameDB: Raising blending accuracy from %d to the recommended %d",
++								static_cast<int>(config.AccurateBlendingUnit), static_cast<int>(level));
++						config.AccurateBlendingUnit = level;
++					}
++					if (!quiet)
++						Host::RemoveKeyedOSDMessage("HWBlendingWarning");
++					break;
++				}
++
+ 				if (quiet)
+ 					break;
+ 
+diff --git a/pcsx2/Pcsx2Config.cpp b/pcsx2/Pcsx2Config.cpp
+--- a/pcsx2/Pcsx2Config.cpp
++++ b/pcsx2/Pcsx2Config.cpp
+@@ -1134,6 +1134,7 @@ void Pcsx2Config::GSOptions::LoadSave(SettingsWrapper& wrap)
+ 	SettingsWrapBitBool(HWROVBarriersVK);
+ 	SettingsWrapBitBool(CoalesceRenderPasses);
+ 	SettingsWrapIntEnumEx(AccurateBlendingUnit, "accurate_blending_unit");
++	SettingsWrapBitBoolEx(AccurateBlendingAuto, "accurate_blending_auto");
+ 	SettingsWrapIntEnumEx(TextureFiltering, "filter");
+ 	SettingsWrapIntEnumEx(TexturePreloading, "texture_preloading");
+ 	SettingsWrapIntEnumEx(GSDumpCompression, "GSDumpCompression");
