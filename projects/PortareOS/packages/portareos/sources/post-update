@@ -333,6 +333,14 @@ migrate_colorprofile_stock() {
   esac
 }
 
+# system.cfg ships music.cores=little. Without it runemu starts PORTAMP in
+# the game slice on cores 3-7 (#485), where start_portamp.sh's taskset to the
+# little cores is refused and music does not play. A music value the user set
+# is left alone.
+migrate_music_little_cores() {
+  [ -n "$(get_setting music.cores)" ] || set_setting music.cores little
+}
+
 # system.cfg ships the PS2 core layout, ps2.cores=frontend and
 # ps2.cpugovernor=performance; an existing install has neither and runs PS2
 # on all big cores under schedutil. A ps2 value the user already set is left
@@ -391,3 +399,4 @@ migrate colorprofile-stock migrate_colorprofile_stock
 migrate n64-parallel-rdp migrate_n64_parallel_rdp
 migrate integerscale-on migrate_integerscale_on
 migrate ps2-cpu-layout migrate_ps2_cpu_layout
+migrate music-little-cores migrate_music_little_cores

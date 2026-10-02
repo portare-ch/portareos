@@ -132,6 +132,10 @@ The quirk `040-affinity` names the two sets: `GAME_CPUS=3-7` and
   - With `<system>.cpuisolation=0`, per system or per game.
   - For a system set to `cores=little`. A cpuset bounds `sched_setaffinity`,
     so `taskset -c 0-2` inside a scope on 3-7 would fail to start the game.
+    A launch script that pins itself to the little cores needs its system
+    set to `little` for the same reason: PORTAMP does (`start_portamp.sh`),
+    so `music.cores=little` ships in `system.cfg`. Without it, music did not
+    play once #485 was in.
     For the same reason the scope has to include every core an emulator pins
     to.
 - **Limits:** kernel threads bound to a core, and the scheduler's own work,
