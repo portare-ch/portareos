@@ -84,6 +84,13 @@ So the read-back ordering inside a render pass is left to the driver, and
 the per-draw barriers that the image's Mesa needs are off. Timed presents
 stay in effect (`Timed presents: swap interval 2`).
 
+**Measured** (NFSU race, blending High, five minutes each, 2026-10-03):
+on ARMSX2's Turnip the GPU was 34-41 % busy at a mean 356 MHz, with race
+windows at 59.2-59.9 fps. On the image's Mesa it was 43-55 % busy at a mean
+572 MHz, with windows at 49.9-59.9 fps. Busy share times clock puts the GPU
+work per frame at about half. Different sections of the race, so a trend
+rather than an exact A/B (#492).
+
 **What was checked before, on the Nova (nightly `1a3d441`):**
 - It loads on our kernel and libraries: `Turnip Adreno (TM) 740`,
   `driverInfo = Mesa 26.3.0-devel (git-axfl2-001)`.
@@ -273,20 +280,22 @@ It has caught two failures so far:
 | 2026-10-02 | nightly `1a3d441` | Time Crisis II, gameplay | EE, VU, GS on 5-6 | 59.0 fps, near saturation: EE 63%, VU 52%, GS 35% (about 1.5 of the 2 cores) |
 | 2026-10-02 | nightly `1a3d441` | Time Crisis II, gameplay | moved live: EE 7, VU 3, GS 4 | 59.7-59.9 fps; EE 38-53%, VU 28-42%, GS 18-29%, the same work in less thread time |
 | 2026-10-02 | build 208 (`006c681`): ARMSX2's Turnip (barriers off), pinning, floor | Time Crisis II, gameplay | driver changed from the row above | 59.9 fps in all four windows; EE 46-57%, VU 34-48%, GS 27-35%, GPU 10-15%. No gain and no loss; the game barely reads back in-pass, the only thing the driver speeds up |
+| 2026-10-03 | build `6f8d1b3`: blending Automatic (NFSU raised to High), ARMSX2's Turnip | NFSU, race, 5 min | run A | race windows 59.2, 59.5, 59.8, 59.9, 59.8, 59.9 fps; GPU busy 34-41 %, GPU clock mean 356 MHz (floor not in effect, #502); max zone 72 °C; fan at its first step |
+| 2026-10-03 | same, `ps2.vulkandriver=system` | NFSU, race, 5 min | run B: the image's Mesa, ARMSX2's barriers back on (`barrier-ordered`) | race windows 56.2, 58.7, 59.0, 59.4, 57.6, 59.9, 49.9, 57.4 fps; GPU busy 43-55 %, GPU clock mean 572 MHz, at 680 MHz in half the samples (floor 401 MHz); max zone 74 °C; fan up to its second step |
 
 ## Open questions
 
-- What Automatic blending costs where it raises the level: NFSU (recommends
-  High) in a race, on ARMSX2's Turnip and on the image's Mesa
-  (`ps2.vulkandriver=system`). Higher levels mean more destination reads,
-  which is the work ARMSX2's Turnip makes cheaper; this is also where its
-  gain should show.
+- What Automatic blending costs where it raises the level. NFSU at High holds
+  59.2-59.9 fps in a race on ARMSX2's Turnip; on the image's Mesa the same
+  level costs more (49.9-59.9). Other games raised by the GameDB are
+  unmeasured.
 
-- ARMSX2's Turnip against the image's Mesa (`ps2.vulkandriver=system`), same
-  scenes: fps, frametimes, GPU load. Time Crisis II showed no difference. The
-  driver's gains are in games that read back what they draw: the author's
-  measurements are Indiana Jones, Stuntman, Splashdown and WRC 3. Both logs' lines for this are in the
-  Vulkan driver section above; the GS ones are in the RetroArch log.
+- ARMSX2's Turnip against the image's Mesa, frame-exact. On the same race
+  (NFSU, blending High), roughly half the GPU work per frame and fewer slow
+  windows, but from different sections of the race (see measurements).
+  Time Crisis II showed no difference. A recorded scene through #492 makes
+  it exact; read-back-heavy games (the author's: Indiana Jones, Stuntman,
+  Splashdown, WRC 3) should show more.
 
 - Queue depth 0 against 1 with pinning and `performance`: fps, repeated
   frames, audio gaps in a 15 s capture.
