@@ -69,7 +69,20 @@ their prebuilt aarch64 driver, unmodified.
 - `ps2.vulkandriver=system` (per system or per game) keeps the image's
   driver, to compare the two.
 
-**What was checked on the Nova (nightly `1a3d441`):**
+**In effect since build 208 (`006c681`).** A PS2 launch maps
+`/usr/lib/armsx2-turnip/libvulkan_freedreno.so` with
+`VK_DRIVER_FILES` set, and the core's GS messages in the RetroArch log (not
+`exec.log`) read:
+
+    VK: self-read road = in-pass, driver-ordered, declared feedback loop (driver fact) [texbarrier=on intile=off layout=on ordersOverlap=claimed]
+    VK: driver claims feedback-loop fix generation 2 (driverInfo 'Mesa 26.3.0-devel (git-axfl2-001)'); declared-loop ordering TRUSTED.
+    VK: driver rule: Turnip a7xx -- declared feedback loop with the per-draw barriers KEPT; NOT in effect, overridden here.
+
+So the read-back ordering inside a render pass is left to the driver, and
+the per-draw barriers that the image's Mesa needs are off. Timed presents
+stay in effect (`Timed presents: swap interval 2`).
+
+**What was checked before, on the Nova (nightly `1a3d441`):**
 - It loads on our kernel and libraries: `Turnip Adreno (TM) 740`,
   `driverInfo = Mesa 26.3.0-devel (git-axfl2-001)`.
 - It needs glibc 2.38 (the image has 2.41), and expat, zlib, zstd, libdrm,
@@ -256,13 +269,15 @@ It has caught two failures so far:
 | 2026-10-02 | nightly `1a3d441` | NFSU, in race | moved live with `taskset -p`: EE 7, VU 3, GS 4 | 52.2 over the move, then 58.8, then 59.9 for three windows (~90 s); EE 23-28%, GS 24-34%, VU 17-23% |
 | 2026-10-02 | nightly `1a3d441` | Time Crisis II, gameplay | EE, VU, GS on 5-6 | 59.0 fps, near saturation: EE 63%, VU 52%, GS 35% (about 1.5 of the 2 cores) |
 | 2026-10-02 | nightly `1a3d441` | Time Crisis II, gameplay | moved live: EE 7, VU 3, GS 4 | 59.7-59.9 fps; EE 38-53%, VU 28-42%, GS 18-29%, the same work in less thread time |
+| 2026-10-02 | build 208 (`006c681`): ARMSX2's Turnip (barriers off), pinning, floor | Time Crisis II, gameplay | driver changed from the row above | 59.9 fps in all four windows; EE 46-57%, VU 34-48%, GS 27-35%, GPU 10-15%. No gain and no loss; the game barely reads back in-pass, the only thing the driver speeds up |
 
 ## Open questions
 
 - ARMSX2's Turnip against the image's Mesa (`ps2.vulkandriver=system`), same
-  scenes: fps, frametimes, GPU load. Expect in `exec.log`
-  `driver claims feedback-loop fix generation 2 ... TRUSTED`, and in the
-  RetroArch log `Timed presents: swap interval 2`.
+  scenes: fps, frametimes, GPU load. Time Crisis II showed no difference. The
+  driver's gains are in games that read back what they draw: the author's
+  measurements are Indiana Jones, Stuntman, Splashdown and WRC 3. Both logs' lines for this are in the
+  Vulkan driver section above; the GS ones are in the RetroArch log.
 
 - Queue depth 0 against 1 with pinning and `performance`: fps, repeated
   frames, audio gaps in a 15 s capture.
