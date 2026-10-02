@@ -1,0 +1,132 @@
+From: portare-ch <hello@portare.org>
+Subject: [PATCH] libretro: a utilization floor on the pinned EE, VU and GS threads
+
+EE, VU and GS take turns within a frame, so schedutil reads each as
+mostly idle and clocks its cluster down: NFSU ran at 40 fps under
+schedutil and 59.7 with the big cores on performance. PortareOS
+answered that with the performance governor for the whole session,
+every cluster and the memory bus included.
+
+When pinning places the threads, each now also gets a uclamp.min of
+its core's own cpu_capacity (EE 1024 on the X3, VU and GS 657 on the
+A715s on a Snapdragon 8 Gen 2). schedutil then runs that core's
+cluster at full clock while the thread is runnable, and lets it drop
+when it sleeps. The floor is cleared when pinning is.
+
+ThreadHandle::SetUtilClampMin does it with a raw sched_setattr that
+keeps the policy and parameters. Without CONFIG_UCLAMP_TASK the call
+fails and nothing changes; under the performance governor nothing
+changes either.
+---
+diff --git a/common/Linux/LnxThreads.cpp b/common/Linux/LnxThreads.cpp
+--- a/common/Linux/LnxThreads.cpp
++++ b/common/Linux/LnxThreads.cpp
+@@ -21,13 +21,13 @@
+ #if defined(__linux__)
+ #include <sys/prctl.h>
+ #include <sys/resource.h>
++#include <sys/syscall.h>
+ #include <sys/types.h>
+ #include <sched.h>
+ #include <cerrno>
+ 
+ // glibc < v2.30 doesn't define gettid...
+ #if __GLIBC__ == 2 && __GLIBC_MINOR__ < 30
+-#include <sys/syscall.h>
+ #define gettid() syscall(SYS_gettid)
+ #endif
+ #else
+@@ -207,6 +207,38 @@ bool Threading::ThreadHandle::SetNicePriority(int nice) const
+ #endif
+ }
+ 
++bool Threading::ThreadHandle::SetUtilClampMin(u32 value) const
++{
++	if (m_native_id == 0)
++		return false;
++
++	// struct sched_attr as of the utilization clamps (SCHED_ATTR_SIZE_VER1). A raw syscall:
++	// glibc wraps sched_setattr only since 2.41.
++	struct
++	{
++		u32 size;
++		u32 sched_policy;
++		u64 sched_flags;
++		s32 sched_nice;
++		u32 sched_priority;
++		u64 sched_runtime;
++		u64 sched_deadline;
++		u64 sched_period;
++		u32 sched_util_min;
++		u32 sched_util_max;
++	} attr = {};
++	static_assert(sizeof(attr) == 56);
++	// SCHED_FLAG_KEEP_POLICY, _KEEP_PARAMS and _UTIL_CLAMP_MIN, by value: newer glibc defines
++	// them as macros and older glibc not at all.
++	constexpr u64 keep_policy = 0x08;
++	constexpr u64 keep_params = 0x10;
++	constexpr u64 util_clamp_min = 0x20;
++	attr.size = sizeof(attr);
++	attr.sched_flags = keep_policy | keep_params | util_clamp_min;
++	attr.sched_util_min = value;
++	return syscall(SYS_sched_setattr, static_cast<pid_t>(m_native_id), &attr, 0u) == 0;
++}
++
+ u64 Threading::ThreadHandle::GetAffinity() const
+ {
+ #if defined(__linux__)
+diff --git a/common/Threading.h b/common/Threading.h
+--- a/common/Threading.h
++++ b/common/Threading.h
+@@ -80,6 +80,12 @@ namespace Threading
+ 		/// per-thread priority support.
+ 		bool SetNicePriority(int nice) const;
+ 
++#if defined(__linux__)
++		/// Sets the thread's utilization floor (uclamp.min, 0..1024): schedutil clocks the CPU it
++		/// runs on as if it were at least this busy while it is runnable. Needs CONFIG_UCLAMP_TASK.
++		bool SetUtilClampMin(u32 value) const;
++#endif
++
+ 		/// Diagnostic: current CPU-affinity mask (cores this thread may run on),
+ 		/// reflecting any cpuset/cgroup clamp. 0 if unsupported/failed.
+ 		u64 GetAffinity() const;
+diff --git a/pcsx2/VMManager.cpp b/pcsx2/VMManager.cpp
+--- a/pcsx2/VMManager.cpp
++++ b/pcsx2/VMManager.cpp
+@@ -4459,6 +4459,11 @@ void VMManager::SetEmuThreadAffinities()
+ 		MTGS::GetThreadHandle().SetAffinity(0);
+ 		vu1Thread.GetThreadHandle().SetAffinity(0);
+ 		s_vm_thread_handle.SetAffinity(0);
++#if defined(__linux__)
++		MTGS::GetThreadHandle().SetUtilClampMin(0);
++		vu1Thread.GetThreadHandle().SetUtilClampMin(0);
++		s_vm_thread_handle.SetUtilClampMin(0);
++#endif
+ 		s_software_renderer_processor_list = {};
+ 		return;
+ 	}
+@@ -4488,6 +4493,23 @@ void VMManager::SetEmuThreadAffinities()
+ 	INFO_LOG("  GS thread is on processor {} (0x{:x})", gs_index, gs_affinity);
+ 	MTGS::GetThreadHandle().SetAffinity(gs_affinity);
+ 
++#if defined(__linux__)
++	// A utilization floor of each pinned core's own capacity, so schedutil runs that core's
++	// cluster at full clock while the thread is runnable, and lets it drop when the thread
++	// sleeps. The threads take turns within a frame, so without a floor schedutil reads each as
++	// mostly idle and clocks the cluster down. Without CONFIG_UCLAMP_TASK the call fails and
++	// nothing changes; under the performance governor it changes nothing either.
++	const auto clamp = [](const Threading::ThreadHandle& handle, u32 processor, const char* name) {
++		const u32 capacity = ReadCpuSysfsU32(processor, "cpu_capacity");
++		if (capacity != 0 && handle.SetUtilClampMin(capacity))
++			INFO_LOG("  {} thread util clamp min {}", name, capacity);
++	};
++	clamp(s_vm_thread_handle, ee_index, "EE");
++	if (EmuConfig.Speedhacks.vuThread)
++		clamp(vu1Thread.GetThreadHandle(), vu_index, "VU");
++	clamp(MTGS::GetThreadHandle(), gs_index, "GS");
++#endif
++
+ #ifdef __ANDROID__
+ 	// Bump the emu-critical threads slightly above default so Android's
+ 	// scheduler favors them over app/UI housekeeping under load. EPERM is
