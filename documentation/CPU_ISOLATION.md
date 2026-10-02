@@ -47,8 +47,10 @@ lightly loaded however full the frame is:
 
 Today's answer is a per-system governor. runemu applies `<system>.cpugovernor`
 at launch and restores `system.cpugovernor` on exit. `ps2.cpugovernor` ships
-as `performance`. The `performance` function sets every cluster and the
-memory controller, not only the cores the game uses.
+as `performance`. The `performance` function sets every CPU cluster, not
+only the cores the game uses. It would also pin the memory bus, but
+`DMC_FREQ` is unset on this device (its only devfreq devices are the GPU and
+the UFS controller), so that part does nothing here.
 
 The finer tool is utilization clamping: a `uclamp.min` on the emulator's hot
 threads, so schedutil clocks and places them as busy while the rest of the
@@ -60,9 +62,8 @@ floor is its core's `cpu_capacity`, so EE gets 1024 on the X3, and VU and GS
 657 on the A715s. Cores 3-6 share one clock, so a floor on VU or GS lifts all
 four while that thread runs. Under the `performance` governor a floor changes
 nothing; PS2 keeps `performance` until schedutil with the floor is measured
-to hold the same. The gain then is power and heat: the A510s and the memory
-bus go back to scaling, and the big cores drop while the threads sleep
-between frames.
+to hold the same. The gain then is power and heat: the A510s go back to
+scaling, and the big cores drop while the threads sleep between frames.
 
 ## Placement today
 
