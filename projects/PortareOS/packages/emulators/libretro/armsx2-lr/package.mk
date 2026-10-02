@@ -17,6 +17,9 @@ PKG_LONGDESC="ARMSX2 is a native ARM64 PlayStation 2 (PS2) emulator, a fork of P
 # being built. ffmpeg went with the frontend's video capture; nothing in
 # the tree links it any more.
 PKG_DEPENDS_TARGET="toolchain llvm:host SDL3 libpng zlib libjpeg-turbo zstd lz4 libwebp freetype plutosvg curl libpcap shaderc"
+# ARMSX2's own Turnip build, which runemu gives this core alone (#497). It is
+# an Adreno driver, so only for the device that has one.
+[ "${DEVICE}" = "SM8550" ] && PKG_DEPENDS_TARGET+=" armsx2-turnip"
 PKG_TOOLCHAIN="manual"
 PKG_BUILD_FLAGS="speed"
 

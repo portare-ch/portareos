@@ -42,6 +42,60 @@ Every GS submit takes RetroArch's `queue_lock` (`VKLibretro`'s
 `vkQueuePresentKHR`, because the core gives it the same queue for presenting.
 Not measured whether Turnip's display backend blocks inside the present.
 
+## Vulkan driver
+
+PS2 runs on the ARMSX2 team's own Turnip build, not the image's Mesa (#497).
+Package `armsx2-turnip` (SM8550 device package), currently release
+`axfl2-001` from [bmdhacks/armsx2-turnip](https://github.com/bmdhacks/armsx2-turnip):
+their prebuilt aarch64 driver, unmodified.
+
+**Why:**
+- ARMSX2's GS is written against this build. It identifies the driver from
+  `driverInfo`: `git-axfl2-` on Adreno 730 and up means the driver orders a
+  declared feedback loop itself (a flush before each such draw on a7xx), so
+  ARMSX2 drops its own barriers.
+- The build's author measured it on the Adreno 740: Indiana Jones 17.5 to
+  9.9 ms a frame at 2x, Stuntman 24.0 to 21.9, nothing slower.
+- Carrying these patches in our Mesa was evaluated and found safe for the
+  other emulators (#497), but too costly to maintain. The ARMSX2 team keeps
+  optimizing the driver; we take their releases.
+
+**How only PS2 gets it:**
+- The package installs to `/usr/lib/armsx2-turnip`, outside the Vulkan
+  loader's search path, with its manifest rewritten to point there.
+- runemu exports `VK_DRIVER_FILES` to that manifest for the `armsx2` core
+  alone, so the whole RetroArch process uses it for PS2 launches and nothing
+  else does.
+- `ps2.vulkandriver=system` (per system or per game) keeps the image's
+  driver, to compare the two.
+
+**What was checked on the Nova (nightly `1a3d441`):**
+- It loads on our kernel and libraries: `Turnip Adreno (TM) 740`,
+  `driverInfo = Mesa 26.3.0-devel (git-axfl2-001)`.
+- It needs glibc 2.38 (the image has 2.41), and expat, zlib, zstd, libdrm,
+  libwayland-client, libudev and libstdc++ (GLIBCXX 3.4.29; the image has
+  3.4.34), all present.
+- Its device extensions are a superset of the image's Mesa 26.2.3: five more,
+  none fewer. `VK_KHR_display` is there, which is how RetroArch presents.
+- Timed presents (RetroArch patch 0014) need `VK_GOOGLE_display_timing`.
+  Upstream Mesa offers it when the instance enables `VK_KHR_display` and no
+  window-system surface (`wsi_instance_supports_google_display_timing`,
+  `wsi_common.c`). RetroArch's KMS context does exactly that, on either
+  driver; no rebuild is involved. `vulkaninfo` enables every surface type, so
+  it lists the extension for neither driver. The first PS2 launch on this
+  driver should log `VK_GOOGLE_display_timing: presents are timed by the
+  driver.`
+
+**Cost: the panel profile.** It is stock Mesa outside Turnip, so it lacks our
+`mesa-002` patch. When RetroArch takes the display it clears the CRTC's colour
+stages. With the default `display.colorprofile=stock` those are empty, and
+nothing changes. With `gamma22` or `srgb`, PS2 games show the panel
+uncorrected.
+
+**Bump:** set `PKG_VERSION` and `PKG_SHA256` to a newer release's aarch64
+tarball. Check that the ARMSX2 core trusts the tag it carries
+(`GSGPUDriverProfile.cpp`, `declared_loop_fix_generation`).
+
 ## Pacing: one clock
 
 Before 001 the core reported no refresh rate, so the VM never synced to a host
@@ -188,6 +242,7 @@ It has caught two failures so far:
 | `ps2.cores=frontend` | `system.cfg`, migration `ps2-cpu-layout` | RetroArch on the A710s |
 | `ps2` in `NO_RUNAHEAD`, `NO_REWIND` | `setsettings.sh` | both save a state every frame; a PS2 state is 68 MB, and each one switches pacing off and on |
 | `armsx2_upscale = 2x` | `retroarch-core-options.cfg` | as the standalone ran (#15) |
+| `VK_DRIVER_FILES` = ARMSX2's Turnip | runemu, `armsx2` core only; `ps2.vulkandriver=system` opts out | the driver build ARMSX2's GS is tuned for (#497) |
 
 ## Measurements
 
@@ -203,6 +258,11 @@ It has caught two failures so far:
 | 2026-10-02 | nightly `1a3d441` | Time Crisis II, gameplay | moved live: EE 7, VU 3, GS 4 | 59.7-59.9 fps; EE 38-53%, VU 28-42%, GS 18-29%, the same work in less thread time |
 
 ## Open questions
+
+- ARMSX2's Turnip against the image's Mesa (`ps2.vulkandriver=system`), same
+  scenes: fps, frametimes, GPU load. Expect in `exec.log`
+  `driver claims feedback-loop fix generation 2 ... TRUSTED`, and in the
+  RetroArch log `Timed presents: swap interval 2`.
 
 - Queue depth 0 against 1 with pinning and `performance`: fps, repeated
   frames, audio gaps in a 15 s capture.
