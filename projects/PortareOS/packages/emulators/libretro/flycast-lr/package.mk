@@ -2,7 +2,7 @@
 # Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="flycast-lr"
-PKG_VERSION="04669ebe4164bb589e6a2050aa1559724aa94291"
+PKG_VERSION="59ed35a7ea7c1940d4c8ac221a662d0e6d6dc9ea"
 PKG_LICENSE="GPL-2.0-or-later"
 PKG_SITE="https://github.com/flyinghead/flycast"
 PKG_URL="${PKG_SITE}.git"
