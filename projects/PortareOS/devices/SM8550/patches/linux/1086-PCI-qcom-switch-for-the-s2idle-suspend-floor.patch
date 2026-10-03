@@ -1,0 +1,39 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] PCI: qcom: switch for the s2idle suspend floor
+
+1048 keeps the suspend OPP's DDR/LLCC vote through s2idle because the
+firmware did not return from cluster_sleep_1 without it on the AYN Thor
+and the RP6. That vote also keeps DDR and CX from collapsing (#505).
+
+pcie_qcom.suspend_floor=N drops the OPP as upstream does, so the Nova
+can be tested without a rebuild. It is writable at runtime and not
+persisted: a forced restart after a failed resume brings the floor back.
+---
+ drivers/pci/controller/dwc/pcie-qcom.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/pci/controller/dwc/pcie-qcom.c b/drivers/pci/controller/dwc/pcie-qcom.c
+index c1a70f5..05a7a84 100644
+--- a/drivers/pci/controller/dwc/pcie-qcom.c
++++ b/drivers/pci/controller/dwc/pcie-qcom.c
+@@ -2174,6 +2174,11 @@ static int qcom_pcie_probe(struct platform_device *pdev)
+  * the sleep-set bandwidth votes survive the platform sleep state.  Fall
+  * back to dropping the OPP entirely when no suspend OPP is marked.
+  */
++static bool suspend_floor = true;
++module_param(suspend_floor, bool, 0644);
++MODULE_PARM_DESC(suspend_floor,
++		 "Keep the suspend OPP's DDR/LLCC vote through s2idle (default: Y). N lets DDR and CX collapse, and may not resume.");
++
+ static int qcom_pcie_set_suspend_opp(struct qcom_pcie *pcie)
+ {
+ 	struct device *dev = pcie->pci->dev;
+@@ -2182,7 +2187,7 @@ static int qcom_pcie_set_suspend_opp(struct qcom_pcie *pcie)
+ 	int ret;
+ 
+ 	freq = dev_pm_opp_get_suspend_opp_freq(dev);
+-	if (!freq)
++	if (!freq || !suspend_floor)
+ 		return dev_pm_opp_set_opp(dev, NULL);
+ 
+ 	opp = dev_pm_opp_find_freq_exact(dev, freq, true);
