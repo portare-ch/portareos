@@ -89,15 +89,17 @@ cause is in the kernel log: two clock controllers never get their
     gcc-sm8550 100000.clock-controller: sync_state() pending due to 3d6a000.gmu
     gpu_cc-sm8550 3d90000.clock-controller: sync_state() pending due to 3d6a000.gmu
 
-- `3d6a000.gmu` is the GPU's management unit. The Adreno driver uses it
-  without binding a driver to the device, so its suppliers wait for it
-  forever.
-- `1d88000.crypto` (the crypto engine) has no driver in this kernel.
+- `3d6a000.gmu` is the GPU's management unit. The Adreno driver used it
+  without binding a driver to the device, so its suppliers waited for it
+  forever. Kernel patches 1081-1085, Akhil P Oommen's "drm/msm: Attach a
+  driver to GMU" series, give it one.
+- `1d88000.crypto` is the UFS inline crypto engine, not the general one
+  (QCE, `crypto@1dfa000`). Nothing uses inline encryption, so the device
+  tree disables it rather than building its driver.
 
-Whether running `sync_state()` lets the SoC collapse, and what it saves, is
-the next measurement. It needs no new build: the kernel calls it on writing
-`1` (no newline) to the provider's `state_synced`. The test and the ways to
-make it permanent are in #505.
+Whether `sync_state()` lets the SoC collapse, and what it saves, is the next
+measurement (#505). On a build without those changes, the kernel calls it on
+writing `1` (no newline) to the provider's `state_synced`.
 
 ## Measuring
 
