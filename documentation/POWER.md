@@ -10,10 +10,10 @@ charge counter. #496 holds the discussion.
 | State | Draw |
 |---|---|
 | Launcher idle, panel blanked | 0.95-1.0 W, about 250 mA |
-| Suspended (s2idle) | about 170 mA, 0.65 W |
+| Suspended (s2idle) | 54-200 mA, about 60-80 mA overnight |
 
-Suspend saves only a third, and the CPU settings below change nothing
-measurable. The SoC never reaches its system-level low-power states, awake or
+Suspend saves between a quarter and three quarters, and the CPU settings below
+change nothing measurable. The SoC never reaches its system-level low-power states, awake or
 suspended, and that, not the CPUs, is where the draw is. See "The SoC never
 sleeps".
 
@@ -68,6 +68,11 @@ counter:
 | idle, panel blanked | 85402 uAh in 1200 s | 256 mA |
 | suspended (`PM: suspend entry (s2idle)` ... `suspend exit`) | 57170 uAh in 1214 s | 170 mA |
 
+That suspend was a bad one. The sleep ledger (`/storage/.cache/sleep-ledger.log`,
+one line per suspend) shows the same kernel drawing 54 to 200 mA asleep: about
+60 mA overnight on 09-28 and 09-29, 69 mA over 5.5 hours on 10-03. What makes
+the difference is not known yet.
+
 ## The SoC never sleeps
 
 `/sys/kernel/debug/qcom_stats` counts how often the platform enters its
@@ -97,9 +102,21 @@ cause is in the kernel log: two clock controllers never get their
   (QCE, `crypto@1dfa000`). Nothing uses inline encryption, so the device
   tree disables it rather than building its driver.
 
-Whether `sync_state()` lets the SoC collapse, and what it saves, is the next
-measurement (#505). On a build without those changes, the kernel calls it on
-writing `1` (no newline) to the provider's `state_synced`.
+On build `18e3273`, with both, gcc and gpu_cc report `state_synced` and the
+pending lines are gone, but nothing changed measurably: 1.015 W idle with the
+panel blanked, and 80 mA over a 10-minute suspend, within the old spread.
+`cxsd`, `aosd` and `ddr` stay 0.
+
+The one known vote that holds the platform up in suspend is deliberate. With
+the Wi-Fi link in D3cold, kernel patches 1048 and 1049 set the PCIe
+controller's suspend OPP through s2idle: a 250 MB/s DDR and LLCC bandwidth
+vote, and a request for `low_svs` on CX. Without that vote the firmware never
+returned from `cluster_sleep_1` on the AYN Thor and the Retroid Pocket 6.
+Removing it is the test that would show what full collapse saves on the Nova,
+at the risk of a hang on resume (#505).
+
+Awake, the CPU subsystem itself never reaches its system-level idle (`apss`
+stays 0), so the platform cannot collapse whatever the votes.
 
 ## Measuring
 
