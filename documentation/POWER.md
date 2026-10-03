@@ -112,8 +112,10 @@ the Wi-Fi link in D3cold, kernel patches 1048 and 1049 set the PCIe
 controller's suspend OPP through s2idle: a 250 MB/s DDR and LLCC bandwidth
 vote, and a request for `low_svs` on CX. Without that vote the firmware never
 returned from `cluster_sleep_1` on the AYN Thor and the Retroid Pocket 6.
-Removing it is the test that would show what full collapse saves on the Nova,
-at the risk of a hang on resume (#505).
+The Nova is no different. With the vote dropped (`pcie_qcom.suspend_floor=N`,
+kernel patch 1086) it restarted by itself instead of resuming, so the floor
+stays and CX and DDR collapse in s2idle is out of reach with this firmware
+(#505). The switch is runtime-only, so the restart brings the floor back.
 
 Awake, the CPU subsystem itself never reaches its system-level idle (`apss`
 stays 0), so the platform cannot collapse whatever the votes.
