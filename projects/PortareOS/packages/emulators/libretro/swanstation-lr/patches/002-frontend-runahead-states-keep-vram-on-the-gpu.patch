@@ -1,0 +1,176 @@
+Frontend run-ahead states: keep VRAM on the GPU
+
+RetroArch's preemptive frames save a state every frame and load it back in
+the same process. retro_serialize always took the full path, whose VRAM
+readback waits for the GPU to finish everything queued, the frame's upscaled
+rendering included; at 4x on Vulkan that stall missed vblanks in Tekken 3
+(portareos#495). For RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE, copy
+VRAM to a texture per frontend buffer instead, the way the core's own
+memory states do. Normal savestates are unchanged.
+diff --git a/src/core/system.cpp b/src/core/system.cpp
+index 01d32e4..3d5d44a 100644
+--- a/src/core/system.cpp
++++ b/src/core/system.cpp
+@@ -109,6 +109,18 @@ static float s_vertical_frequency = 60.0f;
+ static std::unique_ptr<CheatList> s_cheat_list;
+ 
+ static std::deque<MemorySaveState> s_runahead_states;
++
++// The frontend overwrites one buffer per preemptive frame, so a slot per
++// buffer address is enough; seq tells a state from the one it replaced.
++struct FrontendRunaheadSlot
++{
++  const void* key = nullptr;
++  uint64_t seq = 0;
++  std::unique_ptr<HostDisplayTexture> vram_texture;
++};
++static constexpr uint32_t FRONTEND_RUNAHEAD_MAGIC = 0x41525753; // "SWRA"
++static FrontendRunaheadSlot s_frontend_runahead_slots[4];
++static uint64_t s_frontend_runahead_seq = 0;
+ static bool s_runahead_replay_pending = false;
+ static uint32_t s_runahead_frames = 0;
+ 
+@@ -1746,6 +1758,83 @@ void SetCheatList(std::unique_ptr<CheatList> cheats)
+ void ClearMemorySaveStates()
+ {
+   s_runahead_states.clear();
++
++  for (FrontendRunaheadSlot& slot : s_frontend_runahead_slots)
++  {
++    slot.key = nullptr;
++    slot.seq = 0;
++    slot.vram_texture.reset();
++  }
++}
++
++bool IsFrontendRunaheadState(const void* data, size_t size)
++{
++  uint32_t magic;
++  if (size < sizeof(magic))
++    return false;
++
++  std::memcpy(&magic, data, sizeof(magic));
++  return magic == FRONTEND_RUNAHEAD_MAGIC;
++}
++
++bool SaveFrontendRunaheadState(const void* key, ByteStream* state)
++{
++  // The readback renderer keeps a second VRAM on the CPU that a GPU copy
++  // would leave behind.
++  if (IsShutdown() || g_settings.gpu_use_software_renderer_for_readbacks)
++    return false;
++
++  FrontendRunaheadSlot* slot = nullptr;
++  for (FrontendRunaheadSlot& s : s_frontend_runahead_slots)
++  {
++    if (s.key == key)
++    {
++      slot = &s;
++      break;
++    }
++  }
++  if (!slot)
++  {
++    slot = &s_frontend_runahead_slots[0];
++    for (FrontendRunaheadSlot& s : s_frontend_runahead_slots)
++    {
++      if (s.seq < slot->seq)
++        slot = &s;
++    }
++  }
++
++  const uint64_t seq = ++s_frontend_runahead_seq;
++  if (!state->Write2(&FRONTEND_RUNAHEAD_MAGIC, sizeof(FRONTEND_RUNAHEAD_MAGIC)) || !state->Write2(&seq, sizeof(seq)))
++    return false;
++
++  HostDisplayTexture* host_texture = slot->vram_texture.release();
++  StateWrapper sw(state, StateWrapper::Mode::Write, SAVE_STATE_VERSION);
++  const bool result = DoState(sw, &host_texture, false, true);
++  slot->vram_texture.reset(host_texture);
++  slot->key = result ? key : nullptr;
++  slot->seq = result ? seq : 0;
++  return result;
++}
++
++bool LoadFrontendRunaheadState(ByteStream* state)
++{
++  uint32_t magic;
++  uint64_t seq;
++  if (!state->Read2(&magic, sizeof(magic)) || magic != FRONTEND_RUNAHEAD_MAGIC || !state->Read2(&seq, sizeof(seq)))
++    return false;
++
++  for (FrontendRunaheadSlot& slot : s_frontend_runahead_slots)
++  {
++    if (slot.seq != seq || !slot.vram_texture)
++      continue;
++
++    StateWrapper sw(state, StateWrapper::Mode::Read, SAVE_STATE_VERSION);
++    HostDisplayTexture* host_texture = slot.vram_texture.get();
++    return DoState(sw, &host_texture, true, true);
++  }
++
++  Log_ErrorPrint("Frontend run-ahead state no longer held.");
++  return false;
+ }
+ 
+ void UpdateMemorySaveStateSettings()
+diff --git a/src/core/system.h b/src/core/system.h
+index 7d7987b..2b0a983 100644
+--- a/src/core/system.h
++++ b/src/core/system.h
+@@ -149,4 +149,11 @@ void ClearMemorySaveStates();
+ void UpdateMemorySaveStateSettings();
+ void SetRunaheadReplayFlag();
+ 
++/// States the libretro frontend takes for its own run-ahead and preemptive
++/// frames (RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE). VRAM stays on the
++/// GPU, as in the core's own memory states, keyed by the frontend's buffer.
++bool SaveFrontendRunaheadState(const void* key, ByteStream* state);
++bool LoadFrontendRunaheadState(ByteStream* state);
++bool IsFrontendRunaheadState(const void* data, size_t size);
++
+ } // namespace System
+diff --git a/src/libretro/libretro_host_interface.cpp b/src/libretro/libretro_host_interface.cpp
+index a0613fb..c9e3bda 100644
+--- a/src/libretro/libretro_host_interface.cpp
++++ b/src/libretro/libretro_host_interface.cpp
+@@ -927,9 +927,29 @@ size_t HostInterface::retro_serialize_size()
+   return System::MAX_SAVE_STATE_SIZE;
+ }
+ 
++static retro_savestate_context GetSavestateContext()
++{
++  retro_savestate_context ctx = RETRO_SAVESTATE_CONTEXT_NORMAL;
++  if (!g_retro_environment_callback(RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT, &ctx))
++    return RETRO_SAVESTATE_CONTEXT_NORMAL;
++  return ctx;
++}
++
+ bool HostInterface::retro_serialize(void* data, size_t size)
+ {
+   std::unique_ptr<ByteStream> stream = ByteStream_CreateMemoryStream(data, static_cast<uint32_t>(size));
++
++  // Run-ahead and preemptive frames save a state every frame and load it
++  // back in this process. The full path reads VRAM back, which waits for the
++  // GPU to finish everything queued, the frame's upscaled rendering included;
++  // these keep it on the GPU instead.
++  if (GetSavestateContext() == RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE)
++  {
++    if (System::SaveFrontendRunaheadState(data, stream.get()))
++      return true;
++    stream->SeekAbsolute(0);
++  }
++
+   return System::SaveState(stream.get());
+ }
+ 
+@@ -952,6 +972,9 @@ bool HostInterface::retro_unserialize(const void* data, size_t size)
+   }
+ 
+   std::unique_ptr<ByteStream> stream = ByteStream_CreateReadOnlyMemoryStream(data, static_cast<uint32_t>(size));
++  if (ctx == RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE && System::IsFrontendRunaheadState(data, size))
++    return System::LoadFrontendRunaheadState(stream.get());
++
+   return System::LoadState(stream.get(), is_memory_state);
+ }
+ 

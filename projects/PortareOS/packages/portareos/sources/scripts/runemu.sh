@@ -421,8 +421,19 @@ esac
 ### We need the original system cooling profile later so get it now!
 COOLINGPROFILE=$(get_setting cooling.profile)
 
+### A preemptive frame runs the PlayStation core twice on every press, and
+### at 4x that lands on the vblank only with the clocks up: 0.5 missed
+### vblanks a second against 3.8 at the defaults (#495). Only while the
+### switch is on; without it the console holds every frame at the defaults.
+PREEMPT_CLOCKS=0
+if [ "${PLATFORM}" = psx ] && [ "$(get_setting preempt "${PLATFORM}" "${ROMNAME##*/}")" = 1 ]
+then
+  PREEMPT_CLOCKS=1
+fi
+
 ### Configure GPU performance mode
 GPUPERF=$(get_setting "gpuperf" "${PLATFORM}" "${ROMNAME##*/}")
+[ "${PREEMPT_CLOCKS}" = 1 ] && GPUPERF=performance
 if [ ! -z ${GPUPERF} ]
 then
   ${VERBOSE} && log $0 "Set GPU performance to (${GPUPERF})"
@@ -467,6 +478,7 @@ fi
 
 ### Set the governor mode for emulation
 CPU_GOVERNOR=$(get_setting "cpugovernor" "${PLATFORM}" "${ROMNAME##*/}")
+[ "${PREEMPT_CLOCKS}" = 1 ] && CPU_GOVERNOR=performance
 ${VERBOSE} && log $0 "Set emulation performance mode to (${CPU_GOVERNOR})"
 ${CPU_GOVERNOR}
 

@@ -51,12 +51,9 @@ Each has its check; do them before building on top.
   core time should rise only a little while nothing is pressed. A
   `[Run-Ahead Preemptive]` warning in the log means the core does not
   support it and it goes on the NO_RUNAHEAD list; a frame flickering back
-  on a press means its savestate is not deterministic, same list. On the
-  PlayStation the key is `psx.profile=latency`, and it also writes `swanstation_GPU_Renderer = "Software"`
-  and `swanstation_GPU_ResolutionScale = "1"` into
-  `config/SwanStation/SwanStation.opt`; visuals writes the shipped Vulkan
-  and 4x back. The per-core `SwanStation.cfg` keeps run-ahead off, which
-  is fine: pre-emptive frames are the other flag.
+  on a press means its savestate is not deterministic, same list. The
+  PlayStation uses the same key, `psx.preempt=1`, and keeps Vulkan at 4x;
+  measured in `documentation/emulators/SwanStation.md`.
 * **Which N64 games run at 32 kHz.** Super Mario 64 and the two Zeldas are
   believed to; RetroArch's statistics overlay, or the `Sink rate` log line,
   says. Nothing depends on the list any more, it is only worth knowing.
@@ -388,6 +385,24 @@ only through `preempt_input_state` with the core's own poll stubbed out, so
 a core whose `deterministic` claim in its info file is not quite true drifts
 quietly rather than failing. We assert that claim ourselves for SwanStation,
 over an upstream that lowered it to `basic`.
+
+### Fixed: the cost was the VRAM readback, not the second run (#495)
+
+The explanation above was wrong in its middle step. The emulation thread
+was idle at 13-30% of a core while frames missed, because SwanStation's
+`retro_serialize` read VRAM back for every state, and the readback waits for
+the GPU to finish the whole queued frame first. Raising the clocks did not
+help on its own: `performance` on cores 3-7 left 53.3 fps, and the GPU at
+680 MHz restored 59.0 fps but still missed 8.7 vblanks a second. The
+software renderer measuring the same as Vulkan was probably a cost of its
+own, the CPU rasterizer running twice; it was not measured again.
+
+SwanStation patch `002` keeps VRAM on the GPU for frontend run-ahead states,
+the way the core's own memory states do: 59.6 fps and 3.8 missed a second
+at the default clocks, 59.8 and 0.5 with `performance` and the GPU at
+maximum, which `runemu.sh` now sets while PRMPT is on. So the PlayStation has
+its switch back, still off by default.
+`documentation/emulators/SwanStation.md` has the runs.
 
 ## Audio
 

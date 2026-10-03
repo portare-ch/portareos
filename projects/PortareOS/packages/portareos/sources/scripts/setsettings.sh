@@ -1022,8 +1022,8 @@ function set_runahead() {
     # Preemptive frames are one frame: the same savestate and core
     # requirements as run-ahead, but the frame is rerun only when the
     # input changed, so idle play costs a savestate per frame rather than
-    # a second emulation. The PlayStation does not offer them - measured
-    # at 12 fps on Tekken 3, see BUGS.md - so this is the 2D consoles.
+    # a second emulation. The PlayStation's needs SwanStation patch 002 and,
+    # in runemu, its clocks up (#495).
     local PREEMPT="false"
     if preempt_enabled
     then
