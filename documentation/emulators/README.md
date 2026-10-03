@@ -9,6 +9,7 @@ numbers that justified the current one.
 | Emulator | Systems | File |
 |---|---|---|
 | ARMSX2 (libretro) | PS2 | [ARMSX2.md](ARMSX2.md) |
+| SwanStation (libretro) | PlayStation | [SwanStation.md](SwanStation.md) |
 
 Each file keeps these sections, leaving out what does not apply:
 

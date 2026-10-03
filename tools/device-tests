@@ -104,8 +104,8 @@ if [ -n "${GAME}" ]; then
   else
     check D3 "swap interval 0, RetroArch picks" [ "$(cfg_val video_swap_interval)" = 0 ]
   fi
-  if [ "${GAME}" = psx ] && [ "$(setting psx.profile)" = latency ]; then
-    skip D4 "frame delay is off under PlayStation latency (E3)"
+  if [ "$(setting ${GAME}.preempt)" = 1 ]; then
+    check D4 "automatic frame delay off beside the preemptive frame" [ "$(cfg_val video_frame_delay_auto)" = false ]
   else
     check D4 "automatic frame delay on" [ "$(cfg_val video_frame_delay_auto)" = true ]
   fi
@@ -212,11 +212,10 @@ else
   skip L1 "launcher at idle (game running)"
 fi
 BAD=""
-for k in gb gbc gba nes snes genesis; do
+for k in gb gbc gba nes psx snes genesis; do
   v=$(setting $k.preempt); [ "$v" = 0 -o "$v" = 1 ] || BAD="${BAD} $k=${v:-unset}"
 done
-check L3 "every 2D console has preempt 0 or 1${BAD}" [ -z "${BAD}" ]
-check L3 "psx.profile is latency or visuals" bash -c "[ '$(setting psx.profile)' = latency -o '$(setting psx.profile)' = visuals ]"
+check L3 "every console in Settings > Consoles has preempt 0 or 1${BAD}" [ -z "${BAD}" ]
 PW=$(setting root.password)
 check L5 "root password is 12 no-lookalike chars, not a default (${#PW})" bash -c "echo '${PW}' | grep -qE '^[abcdefghjkmnpqrstuvwxyz23456789]{12}$'"
 for m in cpugovernor-schedutil es-fpslimit ssh-default-on colorprofile-stock; do

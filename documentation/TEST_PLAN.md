@@ -339,12 +339,11 @@ stays off by default.
 
 ### E3 PlayStation runs every frame on time (auto+human)
 
-The PlayStation has one configuration and no mode switch. It is the
-Vulkan renderer at 4x with preemptive frames off, two swapchain images
-and automatic frame delay on, and it was measured at the ceiling: every
-frame the console asks for, delivered on its vblank. A change to this
-path is a regression unless it reproduces the numbers below. The
-alternative was measured too and removed; BUGS.md has both.
+The PlayStation's default is the Vulkan renderer at 4x with preemptive
+frames off, two swapchain images and automatic frame delay on, and it was
+measured at the ceiling: every frame the console asks for, delivered on
+its vblank. A change to this path is a regression unless it reproduces
+the numbers below.
 
 Auto, after a PSX launch:
 
@@ -376,6 +375,13 @@ Three things make it a pass, and each fails differently:
 Spread below 25.07 ms is the core finishing early or late against a
 present deadline the swapchain absorbs; it does not reach the panel and
 is not a failure.
+
+With PRMPT on (`psx.preempt=1`), mashing through a fight: the launched
+config has `preemptive_frames_enable = "true"` and
+`video_frame_delay_auto = "false"`, the CPU and GPU governors read
+`performance` while the game runs, and the reference is 59.8 fps with
+about 0.5 frames a second at or above 25.07 ms and p99 24.96. More than 2
+a second means patch 002 or the clocks are not in effect.
 
 ### E4 Game guide on M2 (human)
 
