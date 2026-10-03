@@ -27,30 +27,13 @@ case ${DEVICE} in
     PKG_PATCH_DIRS="${LINUX} ${DEVICE} default"
     ;;
   H700|SM6115|SM8250|SM8550|SM8650|SM8750)
-    # Pinned to 7.2.5 because 7.2.6 breaks wifi. Not provisional - this is
-    # the answer, and reverting it takes wifi out again.
-    #
-    # The experiment: hold the 7.2.6 patch set constant and move only the
-    # kernel. All 93 patches were test-applied to 7.2.5 first and every one
-    # applied, so exactly one variable changed. On 7.2.6 the WCN7850 never
-    # finished its MHI BHI firmware load, failing with -5, and no networks
-    # were ever found. On 7.2.5, from the same tree, on build
-    # aaf9017125d123624044953afdf662b5762b4bce:
-    #
-    #   mhi mhi0: Requested to power ON
-    #   mhi mhi0: Power on setup success
-    #   mhi mhi0: Wait for device to enter SBL or Mission mode
-    #   ath12k_wifi7_pci 0000:01:00.0: fw_version 0x110cffff
-    #     WLAN.HMT.1.1.c5-00302-QCAHMTSWPL_V1.0_V2.0_SILICONZ-1.115823.3
-    #   ath12k_wifi7_pci 0000:01:00.0: MAC_ADDR set to 00:03:7f:38:32:49
-    #
-    # and wlan0 associated. So the regression is upstream, between 7.2.5 and
-    # 7.2.6, and none of our patches cause it.
-    #
-    # Moving to 7.2.6 or later needs the offending upstream commit found and
-    # carried as a revert or a fix. Tracked in #194.
-    PKG_VERSION="7.2.5"
-    PKG_SHA256="55ddf0df8325d9dad96fcff7bd93977d22e3f50af06527572af59b77c7632b78"
+    # 7.2.6 converted the SM8550 PCIe iommu-map to five-cell entries
+    # (9eb128da8525). pcie-qcom and fw_devlink still parsed it four cells
+    # at a time, so the WCN7850's RID never reached the BDF-to-SID table,
+    # its firmware DMA faulted and the MHI BHI load failed with -5 (#194).
+    # Kernel patches 1087 and 1088 fix both parsers.
+    PKG_VERSION="7.2.9"
+    PKG_SHA256="b4c5dfbe51a364a6c7f03869200f88c8e1f77403539005f14b7fc6bc91b8d8ba"
     PKG_URL="https://www.kernel.org/pub/linux/kernel/v${PKG_VERSION/.*/}.x/${PKG_NAME}-${PKG_VERSION}.tar.xz"
     # PKG_VERSION no longer matches the 7.2 patch dir, so it is no longer
     # added automatically - list it explicitly or those patches are silently

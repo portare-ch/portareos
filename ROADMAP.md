@@ -224,9 +224,6 @@ crash or reboot. Publish tested adapters, displays and remaining limitations.
   verify every mode on hardware against the core's output, including switching
   between games and returning to the launcher
   ([#284](https://github.com/portare-ch/portareos/issues/284)).
-- **Move off the 7.2.5 kernel pin:** reproduce and isolate the Wi-Fi regression recorded
-  against the 7.2.5 pin before moving it
-  ([#194](https://github.com/portare-ch/portareos/issues/194)).
 - **Launcher:** finish navigation and selection persistence, expose game
   launch failures, and integrate M1/M2 controls. Coordinate implementation
   with the portarelauncher repository.
