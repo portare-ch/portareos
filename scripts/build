@@ -299,6 +299,22 @@ record_timestamp BUILD_CONFIGURE
 pkg_call_exists_opt pre_configure && pkg_call
 pkg_call_exists_opt pre_configure_${TARGET} && pkg_call
 
+# "meson setup" on a directory it has already configured prints "Directory
+# already configured", generates nothing and exits 0. So a build directory
+# carrying meson's private data but no build.ninja sails through configure and
+# dies in ninja instead:
+#
+#   ninja: error: loading 'build.ninja': No such file or directory
+#
+# A cancelled run leaves exactly that behind, and build/ is archived by the
+# toolchain stage and shipped downstream in its artifact, so one interrupted
+# run poisons every incremental build after it until somebody builds cold.
+# Drop the half-written metadata and let the configure below start over.
+if [ "${PKG_TOOLCHAIN}" = "meson" ] && [ -d meson-private ] && [ ! -f build.ninja ]; then
+  echo "Configure state without build.ninja, reconfiguring from scratch"
+  rm -rf meson-private meson-info meson-logs .ninja_deps .ninja_log compile_commands.json
+fi
+
 if pkg_call_exists configure_${TARGET}; then
   pkg_call
 else
