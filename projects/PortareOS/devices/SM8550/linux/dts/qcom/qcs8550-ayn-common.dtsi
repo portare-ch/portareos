@@ -1029,6 +1029,14 @@
 	};
 };
 
+/*
+ * Nothing uses inline encryption (no SCSI_UFS_CRYPTO), so the engine never
+ * gets a driver, and gcc waits for it forever before its sync_state (#505).
+ */
+&ice {
+	status = "disabled";
+};
+
 &iris {
 	status = "okay";
 };
