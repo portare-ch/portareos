@@ -1,0 +1,61 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
+#
+# What the device costs while nothing runs (#496): battery power, interrupt
+# and context-switch rates, deep idle on the little cores, and which threads
+# wake it up most. Runs on battery only; leave the device alone meanwhile.
+#
+#   idle-probe [seconds]      default 300
+#
+# For the overnight case, start it detached and let the launcher blank the
+# panel first:  setsid idle-probe 600 >/storage/idle-probe.txt 2>&1 &
+
+set -u
+
+S="${1:-300}"
+B=/sys/class/power_supply/battery
+
+[ "$(cat ${B}/status)" = "Discharging" ] || { echo "on a charger: battery power cannot be measured"; exit 2; }
+for p in $(pidof retroarch 2>/dev/null); do
+  grep -q libretro /proc/${p}/cmdline 2>/dev/null && { echo "a game is running"; exit 2; }
+done
+
+irqs()  { awk '/^ *[0-9]+:/ {for (i = 2; i <= 9; i++) s += $i} END {print s}' /proc/interrupts; }
+ctxsw() { awk '/^ctxt/ {print $2}' /proc/stat; }
+deep()  { local c=0 f; for f in /sys/devices/system/cpu/cpu[0-2]/cpuidle/state1/usage; do c=$((c + $(cat ${f}))); done; echo ${c}; }
+
+# Per thread: CPU ticks and context switches, the latter being how often it woke.
+threads() {
+  local t st p v
+  for t in /proc/[0-9]*/task/[0-9]*; do
+    st="$(cat ${t}/stat 2>/dev/null)" || continue
+    set -- ${st##*) }
+    v=$(awk '/^voluntary_ctxt_switches/ {v = $2} /^nonvoluntary_ctxt_switches/ {n = $2} END {print v + n}' ${t}/status 2>/dev/null)
+    p=${t#/proc/}; p=${p%%/*}
+    echo "${t##*/} $(( ${12} + ${13} )) ${v:-0} $(tr ' ' '_' < /proc/${p}/comm 2>/dev/null)/$(tr ' ' '_' < ${t}/comm 2>/dev/null)"
+  done
+}
+
+T0=$(mktemp); T1=$(mktemp); P=$(mktemp)
+trap 'rm -f ${T0} ${T1} ${P}' EXIT
+
+threads >${T0}; I0=$(irqs); C0=$(ctxsw); D0=$(deep)
+END=$(( $(date +%s) + S ))
+while [ "$(date +%s)" -lt "${END}" ]; do
+  echo "$(cat ${B}/current_now) $(cat ${B}/voltage_now)" >>${P}
+  sleep 2
+done
+threads >${T1}; I1=$(irqs); C1=$(ctxsw); D1=$(deep)
+
+echo "idle-probe, ${S}s, $(date -Is)"
+echo "screen    $( [ "$(cat /sys/class/backlight/backlight/bl_power 2>/dev/null)" = "4" ] && echo off || echo on)"
+awk '{n++; w += -$1 * $2 / 1e12} END {printf "power     %.3f W mean over %d samples\n", w / n, n}' ${P}
+echo "irq       $(( (I1 - I0) / S ))/s"
+echo "ctxsw     $(( (C1 - C0) / S ))/s"
+echo "deep idle $(( (D1 - D0) / S ))/s entries on cores 0-2"
+echo
+echo "wakeups/s  cpu s  thread"
+awk -v s=${S} 'NR == FNR {c[$1] = $2; w[$1] = $3; next}
+  ($1 in w) {dw = $3 - w[$1]; if (dw > 0) printf "%9.1f %6.2f  %s\n", dw / s, ($2 - c[$1]) / 100, $4}' ${T0} ${T1} |
+  sort -rn | head -15
