@@ -2,8 +2,8 @@
 # Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="nestopia-lr"
-PKG_VERSION="8f00f500912a847062de432e38765c7285483e62"
-PKG_SHA256="82aa1624189dad4302abe5af6cc6eee3821f34be346430566b3cab2904ce171b"
+PKG_VERSION="b9fdc9c4e6d374abacd1a678ae46ec7f963ef59a"
+PKG_SHA256="5e5081b2fd5ad3ef83f9fa1bcd9d25b8b16bf0d9dfebc9a78ab0d014ffa62869"
 PKG_LICENSE="GPLv2"
 PKG_SITE="https://github.com/libretro/nestopia"
 PKG_URL="${PKG_SITE}/archive/${PKG_VERSION}.tar.gz"
