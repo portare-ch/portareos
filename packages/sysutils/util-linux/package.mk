@@ -105,12 +105,15 @@ post_install()  {
   fi
 }
 
-# Sourcing the global recipe also brings in its post_install, which enables
-# swap.service. That unit is LibreELEC's swapfile mount and lives in the
-# global recipe's system.d, not ours. PortareOS does swap through
+# Upstream's recipe above; this fork's follows and replaces it, for the
+# program selection below: blkdiscard and schedutils are ours, and upstream
+# builds a different set.
+#
+# Upstream's post_install enables swap.service, LibreELEC's swapfile mount,
+# whose unit is not shipped here. PortareOS does swap through
 # portareos-memory-manager, which reads the /etc/swap.conf written below, so
-# the unit is neither shipped nor wanted, and enable_service dies on a file
-# that is not there.
+# the unit is neither shipped nor wanted, and enable_service would die on a
+# file that is not there.
 unset -f post_install
 PKG_NAME="util-linux"
 PKG_DEPENDS_HOST="ccache:host autoconf:host automake:host intltool:host libtool:host pkg-config:host"

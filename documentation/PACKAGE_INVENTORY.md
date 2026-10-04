@@ -108,7 +108,7 @@ Still on the table: slang-shaders ~60 + Python 34 + GStreamer 8: **about 100 MB*
 
 ## Method
 
-Package set: a walk of `PKG_DEPENDS_TARGET` from `virtual/image` through `packages/` and `projects/PortareOS/packages/` (project overrides winning), conditionals included. Ground truth: on the device, `ls -S /usr/bin`, `du -sm` over `/usr/lib` and `/usr/share`, `ldd` over every binary in `/usr/bin` to see who links GTK, GStreamer, Python, Qt and X11, the systemd unit list, and `command -v` for the tools in question.
+Package set: a walk of `PKG_DEPENDS_TARGET` from `virtual/image` through `packages/` (then also `projects/PortareOS/packages/`, project overrides winning, before the two trees were folded into one), conditionals included. Ground truth: on the device, `ls -S /usr/bin`, `du -sm` over `/usr/lib` and `/usr/share`, `ldd` over every binary in `/usr/bin` to see who links GTK, GStreamer, Python, Qt and X11, the systemd unit list, and `command -v` for the tools in question.
 
 ## Trimmed in place
 

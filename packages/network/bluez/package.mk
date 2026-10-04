@@ -84,12 +84,15 @@ post_install() {
   enable_service obex.service
 }
 
-# Sourcing the global recipe also brings in its post_install, which enables
-# bluetooth-defaults.service and obex.service. Neither is ours: the image
-# ships bluetooth.service alone, brought up on demand by autostart's
-# portareos-bluetooth rather than enabled at build time, and obexd is not
-# built at all because the recipe passes --disable-obex. Inheriting the
-# function only makes enable_service die on units that are not there.
+# Upstream's recipe above; this fork's follows and replaces it. A handheld
+# needs a2dp, avrcp, hid and midi, and upstream builds none of them.
+#
+# Upstream's post_install enables bluetooth-defaults.service and
+# obex.service. Neither is ours: the image ships bluetooth.service alone,
+# brought up on demand by autostart's portareos-bluetooth rather than
+# enabled at build time, and obexd is not built at all because the recipe
+# passes --disable-obex. Left defined, enable_service would die on units
+# that are not there.
 unset -f post_install
 PKG_NAME="bluez"
 PKG_SITE="http://www.bluez.org/"

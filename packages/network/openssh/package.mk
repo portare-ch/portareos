@@ -60,6 +60,11 @@ post_install() {
   fi
   enable_service sshd.service
 }
+
+# Upstream's recipe above; this fork's follows and replaces it. It exists
+# for daemons/001-ssh, which reads the ssh.enabled setting and seeds
+# authorized_keys, and for an sshd.service that creates /storage/.cache/ssh
+# and fixes key permissions before start.
 PKG_NAME="openssh"
 PKG_SITE="https://www.openssh.com/"
 PKG_DEPENDS_TARGET="toolchain openssl zlib"

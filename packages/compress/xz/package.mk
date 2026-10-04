@@ -26,8 +26,10 @@ PKG_CONFIGURE_OPTS_TARGET="--enable-static \
                            --disable-xzdec \
                            --enable-symbol-versions=no"
 
-# What follows is this fork's build configuration, which differs from the
-# global recipe's and is the reason this override exists at all.
+# Upstream's recipe above; this fork's build configuration follows and is
+# what differs. xz unpacks every source tarball in the build and is the
+# most scrutinised supply-chain package in the tree, so the version above
+# is the one to keep current.
 PKG_DEPENDS_HOST="ccache:host"
 PKG_DEPENDS_TARGET="toolchain"
 PKG_BUILD_FLAGS="+pic +pic:host"

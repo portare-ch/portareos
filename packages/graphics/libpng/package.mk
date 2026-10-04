@@ -40,11 +40,15 @@ post_makeinstall_target() {
   rm -rf ${INSTALL}/usr/bin
 }
 
+# Upstream's recipe above; this fork's build configuration follows. An
+# earlier copy sat on 1.6.40 while upstream carried 1.6.58 - eighteen patch
+# releases of an image parser that every frontend on the device feeds
+# untrusted files to - so the version above is the one to keep current.
 PKG_DEPENDS_HOST="zlib:host"
 PKG_DEPENDS_TARGET="toolchain zlib"
 PKG_BUILD_FLAGS="+pic +pic:host"
 
-# Shared on target, unlike the global recipe: everything here links libpng
+# Shared on target, unlike upstream's options above: everything here links libpng
 # dynamically, and a static one would be duplicated into each consumer.
 PKG_CONFIGURE_OPTS_TARGET="ac_cv_lib_z_zlibVersion=yes \
                            --enable-static \
