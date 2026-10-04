@@ -17,8 +17,10 @@ design, then the core number. On the 8 Gen 2 that is X3, A715, A715,
 A710, A710, A510s: EE gets the prime core to itself, VU and GS the
 A715s.
 
-2.8 builds the capacity reader on all of Linux itself, so only the
-ranking and the libretro side are carried here.
+2.8 builds the capacity reader and the performance-core mask on all of
+Linux itself, so only the ranking and the libretro side are carried
+here; splitting that block again hid GetPerformanceCoresMask from 2.8's
+own desktop-Linux code.
 ---
 diff --git a/pcsx2-libretro/Main.cpp b/pcsx2-libretro/Main.cpp
 --- a/pcsx2-libretro/Main.cpp
@@ -40,17 +42,7 @@ diff --git a/pcsx2-libretro/Main.cpp b/pcsx2-libretro/Main.cpp
 diff --git a/pcsx2/VMManager.cpp b/pcsx2/VMManager.cpp
 --- a/pcsx2/VMManager.cpp
 +++ b/pcsx2/VMManager.cpp
-@@ -4447,7 +4447,9 @@ static std::vector<u32> GetProcessorWeights()
- 	}
- 	return weights;
- }
-+#endif
- 
-+#if defined(__ANDROID__)
- // Every processor within PERF_CLUSTER_RATIO of the fastest one. Deliberately NOT "the cluster
- // owning the fastest core": cpuinfo starts a new cluster whenever max_frequency differs, so on
- // any 1+3+4 or 1+2+2+3 flagship the prime core is a cluster of ONE, and confining EE/VU/GS to
-@@ -4586,10 +4588,30 @@ static void InitializeProcessorList()
+@@ -4586,10 +4586,30 @@ static void InitializeProcessorList()
  		processors.push_back(proc);
  	}
  
