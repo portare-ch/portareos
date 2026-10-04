@@ -1,22 +1,27 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2009-2016 Stephan Raue (stephan@openelec.tv)
 # Copyright (C) 2019-present Team LibreELEC (https://libreelec.tv)
+# Copyright (C) 2023 JELOS (https://github.com/JustEnoughLinuxOS)
 
 PKG_NAME="boost"
-PKG_VERSION="1.91.0"
-PKG_SHA256="de5e6b0e4913395c6bdfa90537febd9028ea4c0735d2cdb0cd9b45d5f51264f5"
-PKG_LICENSE="BSL-1.0"
-PKG_SITE="https://www.boost.org/"
+PKG_VERSION="1.86.0"
+PKG_SHA256="1bed88e40401b2cb7a1f76d4bab499e352fa4d0c5f31c0dbae64e24d34d7513b"
+PKG_LICENSE="OSS"
+PKG_SITE="http://www.boost.org/"
 PKG_URL="https://archives.boost.io/release/${PKG_VERSION}/source/${PKG_NAME}_${PKG_VERSION//./_}.tar.bz2"
 PKG_DEPENDS_HOST="toolchain:host"
 PKG_DEPENDS_TARGET="toolchain boost:host Python3 zlib bzip2"
 PKG_LONGDESC="boost: Peer-reviewed STL style libraries for C++"
 PKG_TOOLCHAIN="manual"
 PKG_BUILD_FLAGS="+pic"
+PKG_B2_PARAM=" binary-format=elf link=static threading=multi toolset=gcc "
+if [ "${TARGET_ARCH}" = "aarch64" ]; then
+	PKG_B2_PARAM+=" abi=aapcs address-model=64 architecture=arm "
+fi
 
 make_host() {
   cd tools/build/src/engine
-    sh build.sh gcc --cxx=${HOST_CXX} --cxxflags=${HOST_CXXFLAGS}
+    sh build.sh
 }
 
 makeinstall_host() {
@@ -35,25 +40,30 @@ configure_target() {
                   --with-python=${TOOLCHAIN}/bin/python \
                   --with-python-root=${SYSROOT_PREFIX}/usr
 
-  echo "using gcc : $(${CC} -v 2>&1  | tail -n 1 | awk '{print $3}') : ${CC}  : <compileflags>\"${CFLAGS}\" <linkflags>\"${LDFLAGS}\" ;" \
-    >tools/build/src/user-config.jam
-  echo "using python : ${PKG_PYTHON_VERSION#python} : ${TOOLCHAIN} : ${SYSROOT_PREFIX}/usr/include : ${SYSROOT_PREFIX}/usr/lib ;" \
-    >>tools/build/src/user-config.jam
+  echo "using gcc : $(${CC} -v 2>&1  | tail -n 1 |awk '{print $3}') : ${CXX}  : <compileflags>\"${CFLAGS}\" <linkflags>\"${LDFLAGS}\" ;" \
+    > tools/build/src/user-config.jam
+  echo "using python : ${PKG_PYTHON_VERSION/#python} : ${TOOLCHAIN} : ${SYSROOT_PREFIX}/usr/include : ${SYSROOT_PREFIX}/usr/lib ;" \
+    >> tools/build/src/user-config.jam
 }
-
 makeinstall_target() {
-  ${TOOLCHAIN}/bin/b2 -d2 --ignore-site-config \
-                      --layout=system \
-                      --prefix=${SYSROOT_PREFIX}/usr \
-                      --toolset=gcc link=static \
-                      --with-chrono \
-                      --with-date_time \
-                      --with-filesystem \
-                      --with-iostreams \
-                      --with-python \
-                      --with-random \
-                      --with-regex -sICU_PATH="${SYSROOT_PREFIX}/usr" \
-                      --with-serialization \
-                      --with-thread \
-                      install
+  ln -sf ${TOOLCHAIN}/bin/b2 ${TOOLCHAIN}/bin/bjam
+  ${TOOLCHAIN}/bin/bjam -d2 --ignore-site-config \
+                          ${PKG_B2_PARAM} \
+                          --layout=system \
+                          --prefix=${SYSROOT_PREFIX}/usr \
+                          --with-chrono \
+                          --with-date_time \
+                          --with-filesystem \
+                          --with-iostreams \
+                          --with-program_options \
+                          --with-python \
+                          --with-locale \
+                          --with-random \
+                          --with-regex -sICU_PATH="${SYSROOT_PREFIX}/usr" \
+                          --with-serialization \
+                          --with-system \
+                          --with-thread \
+                          --with-nowide \
+			  --with-context \
+                          install
 }

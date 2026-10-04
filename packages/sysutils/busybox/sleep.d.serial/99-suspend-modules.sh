@@ -2,7 +2,6 @@
 
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2009-2014 Stephan Raue (stephan@openelec.tv)
-# Copyright (C) 2016-present Team LibreELEC (https://libreelec.tv)
 
 if [ -f /storage/.config/suspend-modules.conf ]; then
     . /storage/.config/suspend-modules.conf
@@ -52,7 +51,7 @@ modunload()
 _rmmod()
 {
     if modprobe -r "$1"; then
-        touch "/run/libreelec/suspend/module:$1"
+        touch "/run/portareos/suspend/module:$1"
         return 0
     else
         logger -t suspend-modules "# could not unload '$1', usage count was $2"
@@ -62,7 +61,7 @@ _rmmod()
 
 resume_modules()
 {
-    for x in /run/libreelec/suspend/module:* ; do
+    for x in /run/portareos/suspend/module:* ; do
         [ -O "${x}" ] || continue
         modprobe "${x##*:}" &>/dev/null && \
             logger -t resume-modules "Reloaded module ${x##*:}." || \
@@ -74,8 +73,8 @@ suspend_modules()
 {
     [ -z "$SUSPEND_MODULES" ] && return 0
     # clean up
-    rm -rf /run/libreelec/suspend
-    mkdir -p /run/libreelec/suspend
+    rm -rf /run/portareos/suspend
+    mkdir -p /run/portareos/suspend
     for x in $SUSPEND_MODULES ; do
         modunload $x && \
             logger -t suspend-modules "Unloading kernel module $x: Done" || \

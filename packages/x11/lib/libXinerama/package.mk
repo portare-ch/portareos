@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2009-2016 Stephan Raue (stephan@openelec.tv)
 # Copyright (C) 2018-present Team LibreELEC (https://libreelec.tv)
+# Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="libXinerama"
 PKG_VERSION="1.1.6"
@@ -12,3 +13,5 @@ PKG_DEPENDS_TARGET="toolchain util-macros libXext"
 PKG_LONGDESC="libXinerama is the Xinerama library."
 
 PKG_MESON_OPTS_TARGET="-Ddefault_library=static"
+
+PKG_MESON_OPTS_TARGET="${PKG_MESON_OPTS_TARGET/-Ddefault_library=static/-Ddefault_library=shared}"

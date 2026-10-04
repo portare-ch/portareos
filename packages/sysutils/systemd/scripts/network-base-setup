@@ -1,45 +1,25 @@
 #!/bin/sh
-# SPDX-License-Identifier: GPL-2.0-only
-# Copyright (C) 2019-present Team LibreELEC (https://libreelec.tv)
+. /etc/profile
+HOSTNAME=$(get_setting system.hostname)
+echo ${HOSTNAME} >/proc/sys/kernel/hostname
+hostnamectl --transient hostname ${HOSTNAME}
 
-check_hosts() {
-  grep -v "^#" /run/libreelec/hosts | grep "${1}"
-}
-
-# setup hostname
-if [ -f /storage/.cache/hostname ]; then
-  cat /storage/.cache/hostname >/proc/sys/kernel/hostname
-fi
-
-# setup /etc/hosts
-rm -f /run/libreelec/hosts
+rm -f /run/portareos/hosts
 if [ -f /storage/.config/hosts.conf ]; then
-  cat /storage/.config/hosts.conf >/run/libreelec/hosts
-  # add localhost to hosts if not present
-  LOCALHOST_HOSTS=$(check_hosts "localhost")
-  if [ -z "${LOCALHOST_HOSTS}" ]; then
-    {
-      echo "127.0.0.1 localhost"
-      echo "::1 localhost ip6-localhost ip6-loopback"
-    } >>/run/libreelec/hosts
-  fi
-  # add HOSTNAME to hosts if not present
-  HOSTNAME=$(cat /proc/sys/kernel/hostname)
-  HOSTNAME_HOSTS=$(check_hosts "${HOSTNAME}")
-  if [ -z "${HOSTNAME_HOSTS}" ]; then
-    echo "127.0.1.1 ${HOSTNAME}" >>/run/libreelec/hosts
-  fi
+  cat /storage/.config/hosts.conf > /run/portareos/hosts
 fi
 
-# setup /etc/resolv.conf
-rm -f /run/libreelec/resolv.conf
+# RESOLUTION ORDER:
+# 1. USER OVERRIDE: /storage/.config/resolv.conf exists -> Use it directly.
+# 2. DYNAMIC/STUB:  No override -> Symlink to systemd-resolved stub.
 if [ -f /storage/.config/resolv.conf ]; then
-  cat /storage/.config/resolv.conf >/run/libreelec/resolv.conf
-elif [ -f /dev/.kernel_ipconfig ] && [ -f /proc/net/pnp ]; then
-  cat /proc/net/pnp >/run/libreelec/resolv.conf
+  rm -f /run/portareos/resolv.conf
+  cat /storage/.config/resolv.conf > /run/portareos/resolv.conf
 else
-  cat <<EOF >/run/libreelec/resolv.conf
-nameserver 8.8.8.8
-nameserver 8.8.4.4
-EOF
+  TARGET="/run/systemd/resolve/stub-resolv.conf"
+  LINK="/run/portareos/resolv.conf"
+  if [ ! -L "$LINK" ] || [ "$(readlink "$LINK")" != "$TARGET" ]; then
+      rm -f "$LINK"
+      ln -sf "$TARGET" "$LINK"
+  fi
 fi

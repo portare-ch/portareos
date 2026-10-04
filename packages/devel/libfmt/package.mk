@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # Copyright (C) 2017-present Team LibreELEC (https://libreelec.tv)
+# Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="libfmt"
 PKG_VERSION="12.2.0"
@@ -33,3 +34,13 @@ configure_host() {
         ${PKG_CMAKE_OPTS_COMMON} \
         ..
 }
+
+case ${DEVICE} in
+  SM8250|SM8550|SM8650|SM8750|AMD64)
+    ;;
+  *)
+    PKG_VERSION="9.1.0"
+    PKG_SHA256=""
+    PKG_URL="https://github.com/fmtlib/fmt/archive/${PKG_VERSION}.tar.gz"
+    ;;
+esac

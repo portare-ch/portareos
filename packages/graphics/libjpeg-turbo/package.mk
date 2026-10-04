@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2009-2016 Stephan Raue (stephan@openelec.tv)
 # Copyright (C) 2018-present Team LibreELEC (https://libreelec.tv)
+# Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="libjpeg-turbo"
 PKG_VERSION="3.2.0"
@@ -36,3 +37,12 @@ fi
 post_makeinstall_target() {
   rm -rf ${INSTALL}/usr/bin
 }
+
+PKG_CMAKE_OPTS_TARGET="${PKG_CMAKE_OPTS_TARGET//-DENABLE_STATIC=ON/-DENABLE_STATIC=OFF}"
+PKG_CMAKE_OPTS_TARGET="${PKG_CMAKE_OPTS_TARGET//-DENABLE_SHARED=OFF/-DENABLE_SHARED=ON}"
+
+if [[ ${TARGET_ARCH} =~ i*86|x86_64 ]]; then
+  PKG_DEPENDS_HOST+=" nasm:host"
+  PKG_DEPENDS_TARGET+=" nasm:host"
+fi
+

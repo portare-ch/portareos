@@ -59,13 +59,12 @@ this tree.
 
 ## 4. Directory structure and package policy
 
-* **DO** put new work in `projects/PortareOS/packages` (project-wide) or
-  `projects/PortareOS/devices/SM8550/packages` (device-specific).
-* **DO** remove dead upstream packages from the top-level `packages/` tree.
-  Reducing the maintenance surface of the fork is the point; upstream's rule
-  against touching that tree does not apply to a fork that owns it. A global
-  recipe that a project recipe shadows never builds, and there are about a
-  hundred of them - #443.
+* **DO** put every recipe under `packages/`, in its category. There is no
+  project or device package layer: one tree, one recipe per name, and the
+  build stops on a second recipe of the same name. A recipe never sources
+  another one to inherit from it; it says what it builds itself.
+* **DO** remove dead packages from `packages/`. Reducing the maintenance
+  surface of the fork is the point.
 * **DO** isolate device-specific runtime behaviour in quirk files.
 * **DO** bump a package by hand: read what upstream released, set
   `PKG_VERSION` and `PKG_SHA256`, build it. Nothing imports upstream's

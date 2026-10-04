@@ -1,29 +1,35 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-# Copyright (C) 2009-2016 Stephan Raue (stephan@openelec.tv)
-# Copyright (C) 2019-present Team LibreELEC (https://libreelec.tv)
+# Copyright (C) 2022-present JELOS (https://github.com/JustEnoughLinuxOS)
 
 PKG_NAME="glew"
-PKG_VERSION="2.3.1"
-PKG_SHA256="b64790f94b926acd7e8f84c5d6000a86cb43967bd1e688b03089079799c9e889"
-PKG_LICENSE="MIT"
+PKG_VERSION="2.2.0"
+PKG_SHA256="d4fc82893cfb00109578d0a1a2337fb8ca335b3ceccf97b97e5cc7f08e4353e1"
+PKG_LICENSE="BSD"
 PKG_SITE="http://glew.sourceforge.net/"
-PKG_URL="https://downloads.sourceforge.net/project/glew/glew/${PKG_VERSION}/${PKG_NAME}-${PKG_VERSION}.tgz"
-PKG_DEPENDS_TARGET="toolchain libX11"
-PKG_LONGDESC="A cross-platform C/C++ extension loading library."
+PKG_URL="${SOURCEFORGE_SRC}/glew/glew/${PKG_VERSION}/${PKG_NAME}-${PKG_VERSION}.tgz"
+PKG_DEPENDS_TARGET="toolchain"
+PKG_LONGDESC="GLEW - The OpenGL Extension Wrangler Library"
+PKG_TOOLCHAIN="cmake"
 
-make_target() {
-  make CC="${CC}" LD="${CC}" AR="${AR}" \
-       POPT="${CFLAGS}" LDFLAGS.EXTRA="${LDFLAGS}" \
-       GLEW_DEST="/usr" LIBDIR="/usr/lib" lib/libGLEW.a glew.pc
+PKG_CMAKE_OPTS_TARGET="-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+
+if [ "${DISPLAYSERVER}" = "wl" ]; then
+  PKG_DEPENDS_TARGET+=" wayland ${WINDOWMANAGER} xwayland libXi libX11"
+  PKG_CMAKE_OPTS_TARGET+=" -DGLEW_X11=ON"
+fi
+
+if [ ! "${OPENGL}" = "no" ]; then
+  PKG_DEPENDS_TARGET+=" ${OPENGL} glu libglvnd"
+fi
+
+pre_configure() {
+  PKG_CMAKE_SCRIPT=${PKG_BUILD}/build/cmake/CMakeLists.txt
 }
 
-makeinstall_target() {
-  mkdir -p ${SYSROOT_PREFIX}/usr/lib
-    cp -PR lib/libGLEW.a ${SYSROOT_PREFIX}/usr/lib
-
-  mkdir -p ${SYSROOT_PREFIX}/usr/lib/pkgconfig
-    cp -PR glew.pc ${SYSROOT_PREFIX}/usr/lib/pkgconfig
-
-  mkdir -p ${SYSROOT_PREFIX}/usr/include
-    cp -PR include/GL ${SYSROOT_PREFIX}/usr/include
+pre_configure_target() {
+  PKG_CMAKE_OPTS_TARGET+="      -DBUILD_UTILS=OFF \
+				-DGLEW_REGAL=OFF \
+				-DGLEW_OSMESA=OFF \
+				-DGLEW_EGL=ON \
+				-DBUILD_SHARED_LIBS=ON"
 }

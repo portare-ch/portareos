@@ -71,9 +71,7 @@ acquire_update_lock image
 mkdir -p ${INSTALL}
 
 if [ "${TARGET}" = "target" ]; then
-  for PKG_TMP_DIR in ${PKG_DIR} \
-    ${PROJECT_DIR}/${PROJECT}/packages/${PKG_NAME} \
-    ${PROJECT_DIR}/${PROJECT}/devices/${DEVICE}/packages/${PKG_NAME}; do
+  for PKG_TMP_DIR in ${PKG_DIR}; do
 
     [ -d ${PKG_TMP_DIR} ] || continue
 

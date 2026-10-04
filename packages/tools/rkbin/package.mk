@@ -1,62 +1,31 @@
-# SPDX-License-Identifier: GPL-2.0-only
-# Copyright (C) 2017-present Team LibreELEC (https://libreelec.tv)
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2022-2024 JELOS (https://github.com/JustEnoughLinuxOS)
+# Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="rkbin"
-PKG_VERSION="74213af1e952c4683d2e35952507133b61394862" # linux-6.1-stan-rkr6
-PKG_SHA256="b565faeab846950262c07e6debbd6519ea9e7f34943dbb305b9cea6b1026e11a"
-PKG_ARCH="arm aarch64"
-PKG_LICENSE="LicenseRef-nonfree"
+PKG_LICENSE="nonfree"
 PKG_SITE="https://github.com/rockchip-linux/rkbin"
-PKG_URL="https://github.com/rockchip-linux/rkbin/archive/${PKG_VERSION}.tar.gz"
 PKG_LONGDESC="rkbin: Rockchip Firmware and Tool Binaries"
 PKG_TOOLCHAIN="manual"
-PKG_STAMP="$UBOOT_SYSTEM"
+
+case "${DEVICE}" in
+  RK3588)
+    # Pin rk3588 here until it hits mainline
+    PKG_VERSION="7c35e21a8529b3758d1f051d1a5dc62aae934b2b"
+    ;;
+  *)
+    PKG_VERSION="74213af1e952c4683d2e35952507133b61394862"
+    ;;
+esac
+
+PKG_URL="https://github.com/rockchip-linux/rkbin/archive/${PKG_VERSION}.tar.gz"
 
 post_unpack() {
-  cp -a "${PKG_BUILD}/RKBOOT/RK3566MINIALL.ini" "${PKG_BUILD}/RKBOOT/RK356XMINIALL.ini"
-  cp -a "${PKG_BUILD}/RKTRUST/RK3568TRUST.ini" "${PKG_BUILD}/RKTRUST/RK356XTRUST.ini"
-}
-
-make_target() {
-  if [ -n "${UBOOT_SYSTEM}" ]; then
-    PKG_SOC=$("${ROOT}/${SCRIPTS}/uboot_helper" "${PROJECT}" "${DEVICE}" "${UBOOT_SYSTEM}" soc)
-  fi
-  PKG_SOC=${PKG_SOC:-${DEVICE}}
-
-  PKG_BOOT_INI="RKBOOT/${PKG_SOC}MINIALL.ini"
-  if [ ! -f "${PKG_BOOT_INI}" ]; then
-    PKG_BOOT_INI="RKBOOT/${DEVICE}MINIALL.ini"
-  fi
-  if [ -f "${PKG_BOOT_INI}" ]; then
-    PKG_FILE=$(sed -nr "/^\[LOADER_OPTION\]/ { :l /^FlashData[ ]*=/ { s/[^=]*=[ ]*//; p; q;}; n; b l;}" "${PKG_BOOT_INI}")
-    if [ -f "${PKG_FILE}" ]; then
-      cp -av "${PKG_FILE}" ddr.bin
-
-      # Override sdram frequency
-      if [ "${PKG_SOC}" = "RK3328" ]; then
-        sed -s 's/\x4d\x1\x4d\x1\x4d\x1\x4d\x1\x4d\x1\x4d\x1/\x20\x3\x20\x3\x20\x3\x20\x3\x20\x3\x20\x3/g' -i ddr.bin
-        sed -s 's/\x90\x1\x90\x1\x90\x1\x90\x1\x90\x1\x90\x1/\x20\x3\x20\x3\x20\x3\x20\x3\x20\x3\x20\x3/g' -i ddr.bin
-      fi
-    fi
-  fi
-
-  PKG_TRUST_INI="RKTRUST/${PKG_SOC}TRUST.ini"
-  if [ ! -f "${PKG_TRUST_INI}" ]; then
-    PKG_TRUST_INI="RKTRUST/${DEVICE}TRUST.ini"
-  fi
-  if [ -f "${PKG_TRUST_INI}" ]; then
-    PKG_FILE=$(sed -nr "/^\[BL31_OPTION\]/ { :l /^PATH[ ]*=/ { s/[^=]*=[ ]*//; p; q;}; n; b l;}" "${PKG_TRUST_INI}")
-    if [ -f "${PKG_FILE}" ]; then
-      cp -av "${PKG_FILE}" bl31.elf
-    fi
-  fi
-}
-
-makeinstall_target() {
-  mkdir -p "${INSTALL}/.noinstall"
-  for PKG_FILE in ddr.bin bl31.elf; do
-    if [ -f "${PKG_FILE}" ]; then
-      cp -av "${PKG_FILE}" "${INSTALL}/.noinstall"
-    fi
-  done
+ if [ "${DEVICE}" == "RK3326" ]; then
+  # RK3326: tune TPL for UART5 used on K36 clones
+  cp -v ${PKG_BUILD}/bin/rk33/rk3326_ddr_333MHz_*.bin ${PKG_BUILD}/rk3326_ddr_uart5.bin
+  ${PKG_BUILD}/tools/ddrbin_tool.py rk3326 -g ${PKG_BUILD}/rk3326_ddr_uart5.txt ${PKG_BUILD}/rk3326_ddr_uart5.bin
+  sed -i 's|uart id=.*$|uart id=5|' ${PKG_BUILD}/rk3326_ddr_uart5.txt
+  ${PKG_BUILD}/tools/ddrbin_tool.py rk3326 ${PKG_BUILD}/rk3326_ddr_uart5.txt ${PKG_BUILD}/rk3326_ddr_uart5.bin >/dev/null
+ fi
 }

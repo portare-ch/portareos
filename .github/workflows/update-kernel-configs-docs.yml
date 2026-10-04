@@ -5,7 +5,7 @@ on:
   workflow_call:
   push:
     paths:
-      - 'projects/PortareOS/packages/linux/package.mk'
+      - 'packages/linux/package.mk'
     branches:
       - next
 

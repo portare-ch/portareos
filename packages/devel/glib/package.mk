@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2009-2016 Stephan Raue (stephan@openelec.tv)
 # Copyright (C) 2016-present Team LibreELEC (https://libreelec.tv)
+# Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="glib"
 PKG_VERSION="2.89.3"
@@ -41,3 +42,9 @@ post_makeinstall_target() {
   # glib binaries must be executed from toolchain
   sed -e "s#bindir=\${prefix}/bin#bindir=${TOOLCHAIN}/bin#" -i "${SYSROOT_PREFIX}/usr/lib/pkgconfig/"{gio,glib}-2.0.pc
 }
+
+PKG_MESON_OPTS_HOST="-Ddefault_library=shared \
+                     -Dinstalled_tests=false \
+                     -Dlibmount=disabled \
+                     -Dintrospection=disabled \
+                     -Dtests=false"

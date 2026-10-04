@@ -5,15 +5,15 @@
 # Based on work by ToKe79 and Shanti Gilbert
 
 OPTIONS="distributions/PortareOS/options"
-PACKAGES=("projects/PortareOS/packages/virtual/emulators/package.mk" \
-          "projects/PortareOS/packages/virtual/es-themes/package.mk" \
-          "projects/PortareOS/packages/virtual/gamesupport/package.mk" )
+PACKAGES=("packages/virtual/emulators/package.mk" \
+          "packages/virtual/es-themes/package.mk" \
+          "packages/virtual/gamesupport/package.mk" )
 BLOCKLIST="config/blocklist"
 
 update_packages() {
   for p in $PACKAGES_ALL
   do
-    PKG_PATH="./projects/PortareOS/packages"
+    PKG_PATH="./packages"
     echo "Operating on ${p}"
     f=$(find ${PKG_PATH} -type d -name "${p}")
     if [ "$(grep ${p} ${BLOCKLIST})" ]

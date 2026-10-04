@@ -39,7 +39,7 @@ All paths are in this repository; the patches apply to Linux 7.2.5.
 
 ### 1. The topology blob
 
-`projects/PortareOS/packages/linux-firmware/extra-firmware/sources/tplg-playback-rates.py`,
+`packages/linux-firmware/extra-firmware/sources/tplg-playback-rates.py`,
 run by `extra-firmware`'s `package.mk` on the shipped blob.
 
 The blob is ALSA topology: a sequence of blocks with a 36-byte header
@@ -73,7 +73,7 @@ port at `prepare`, so BCLK is up before the amps' PLL check).
 
 ### 3. PipeWire
 
-`projects/PortareOS/packages/audio/pipewire/patches/SM8550/002-graph-quantum.patch`:
+`packages/audio/pipewire/patches/SM8550/002-graph-quantum.patch`:
 `default.clock.allowed-rates = [ 48000 44100 32000 ]`. PipeWire then switches
 the graph, and the link, to the rate of the stream that opens it.
 

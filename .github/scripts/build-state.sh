@@ -257,15 +257,14 @@ cmd_save() {
 }
 
 # The files calculate_stamp (config/functions) would hash for one package: its
-# recipe directory - local and global, since a project recipe routinely sources
-# the global one - plus the project and device patch directories. Resolving
-# both copies rather than just the one that wins makes this a superset of what
-# the buildsystem hashes, which errs towards rebuilding and never away from it.
+# recipe directory plus the project and device patch directories. find can
+# also return a category directory that shares the package's name, which makes
+# this a superset of what the buildsystem hashes: it errs towards rebuilding
+# and never away from it.
 recipe_paths() {
   local name="$1" d
-  find "projects/${PROJECT}/packages" packages -type d -name "${name}" 2>/dev/null || true
+  find packages -type d -name "${name}" 2>/dev/null || true
   for d in "projects/${PROJECT}/patches/${name}" \
-           "projects/${PROJECT}/packages/${name}" \
            "projects/${PROJECT}/devices/${DEVICE}/patches/${name}"; do
     [ -d "${d}" ] && printf '%s\n' "${d}"
   done

@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # Copyright (C) 2021-present Team LibreELEC (https://libreelec.tv)
+# Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="libfreeaptx"
 PKG_VERSION="0.2.2"
@@ -38,3 +39,5 @@ Libs: -Wl,-rpath=\${libdir} -L\${libdir} -l${PKG_NAME##*lib}
 Cflags: -I\${includedir}
 EOF
 }
+
+PKG_SHA256="5ab5ebddf3f2eb7ce47a505b87460b00fc1ede99c70010796d3575ab31ea80bf"
