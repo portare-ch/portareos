@@ -1,0 +1,26 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] the NTSC rate from the exact master clock, not a rounded one
+
+The NTSC frame rate came from a master clock rounded to 21477272 Hz. The
+SNES's is 945/44 MHz = 21477272.727..., six times the NTSC subcarrier -
+the value the emulator itself runs at (Colorburst::NTSC * 6) - and the
+rounding leaves the reported rate 0.034 ppm low.
+
+The panel mode this core selects is cut to twice the exact rate,
+120.197628 Hz. Against the rounded clock it is +0.037 ppm, a frame of
+drift every 63 hours; against the exact one +0.003 ppm, every 824.
+
+--- a/bsnes/target-libretro/libretro.cpp
++++ b/bsnes/target-libretro/libretro.cpp
+@@ -775,7 +775,10 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
+ 	info->timing.sample_rate   = SAMPLERATE;
+ 
+ 	if (retro_get_region() == RETRO_REGION_NTSC) {
+-		info->timing.fps = 21477272.0 / 357366.0;
++		// 945/44 MHz, six times the colour subcarrier, over 357366 master
++		// clocks a frame. 21477272 rounds it 0.034 ppm low, enough to miss
++		// a panel mode cut to twice the true rate.
++		info->timing.fps = Emulator::Constants::Colorburst::NTSC * 6.0 / 357366.0;
+ 		audio_buffer_max = (SAMPLERATE/60) * 2;
+ 	}
+ 	else

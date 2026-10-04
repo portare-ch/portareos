@@ -19,7 +19,8 @@ that a later image can be tested against the same baseline.
 
 ## Every included emulator runs without crashes
 
-The README currently records successful tests for Snes9x and SwanStation,
+The README currently records successful tests for SwanStation (and did for
+Snes9x, which bsnes has since replaced),
 and a broken Dolphin path: hangs and no sound
 ([#463](https://github.com/portare-ch/portareos/issues/463)). The rest of the
 included systems need an explicit test record, not an assumption that a

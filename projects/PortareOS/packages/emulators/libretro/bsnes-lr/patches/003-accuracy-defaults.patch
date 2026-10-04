@@ -1,0 +1,62 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] accuracy defaults, and all 240 lines
+
+bsnes is shipped here for its accuracy, and its libretro defaults trade
+it for speed. The defaults are now the accurate paths: the cycle-based
+PPU instead of the scanline renderer, the exact DSP, coprocessors in
+lockstep, and the real coprocessor programs where the firmware is
+present (HLE stays the fallback without it).
+
+No overscan crop. bsnes draws a 224-line game on lines 8-231 of its
+240, so the picture is the same with or without the default crop of 8,
+but a game in the 239-line mode loses its edges to it, and the frame
+size stops changing when a game switches mode. The aspect ratio follows
+the lines shown: 8:7 pixels over 240 lines is 128/105.
+
+--- a/bsnes/target-libretro/libretro_core_options.h
++++ b/bsnes/target-libretro/libretro_core_options.h
+@@ -122,7 +122,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
+          { "16", "16 Lines" },
+          { NULL, NULL },
+       },
+-      "8"
++      "0"
+    },
+    {
+       "bsnes_blur_emulation",
+@@ -246,7 +246,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
+          { "OFF", "disabled" },
+          { NULL, NULL },
+       },
+-      "ON"
++      "OFF"
+    },
+    {
+       "bsnes_ppu_deinterlace",
+@@ -302,7 +302,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
+          { "OFF", "disabled" },
+          { NULL, NULL },
+       },
+-      "ON"
++      "OFF"
+    },
+    {
+       "bsnes_dsp_cubic",
+@@ -423,7 +423,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
+          { "OFF", "disabled" },
+          { NULL, NULL },
+       },
+-      "ON"
++      "OFF"
+    },
+    {
+       "bsnes_coprocessor_prefer_hle",
+@@ -437,7 +437,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
+          { "OFF", "disabled" },
+          { NULL, NULL },
+       },
+-      "ON"
++      "OFF"
+    },
+    {
+       "bsnes_hotfixes",

@@ -25,7 +25,7 @@ things may break along the way.
 
 | System | Emulator | Status |
 | --- | --- | --- |
-| Super Nintendo | Snes9x | ✅ Tested, full speed |
+| Super Nintendo | bsnes | 🚧 Replaced Snes9x; not yet tested on the device |
 | PlayStation | [SwanStation](documentation/emulators/SwanStation.md) | ✅ Tested |
 | PlayStation 2 | [ARMSX2 (libretro)](documentation/emulators/ARMSX2.md) | 🚧 Playable, optimization ongoing ([#477](https://github.com/portare-ch/portareos/issues/477)) |
 | GameCube | Dolphin (libretro) | ❌ Currently broken: hangs, no sound ([#463](https://github.com/portare-ch/portareos/issues/463)) |
@@ -145,7 +145,7 @@ together with the settings nobody had tuned for them. See
 | Game Boy, Game Boy Color | Gambatte |
 | Game Boy Advance | mGBA |
 | NES, Famicom, Famicom Disk System | MesenCE |
-| Super Nintendo | Snes9x |
+| Super Nintendo | bsnes |
 | Nintendo 64 | ParaLLEl N64 with ParaLLEl-RDP on Vulkan |
 | GameCube, Wii | Dolphin |
 | Master System, Game Gear, Mega Drive, Sega CD | Genesis Plus GX |

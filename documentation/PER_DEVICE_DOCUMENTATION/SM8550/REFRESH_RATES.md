@@ -10,7 +10,7 @@ The console modes use the same 1302 × 1001 total timings and change only the pi
 |---|---|---|
 | 119.880120 Hz | 156240 kHz | default (launcher, everything else) |
 | 119.455046 Hz | 155686 kHz | `gambatte`, `mgba` |
-| 120.197628 Hz | 174651 kHz, vtotal 1116 | `snes9x`, `mesen2` - exact, and the wide-blanking mode; see below |
+| 120.197628 Hz | 174651 kHz, vtotal 1116 | `bsnes`, `mesen2` - exact, and the wide-blanking mode; see below |
 | 119.652237 Hz | 155943 kHz | `parallel_n64`, `swanstation`, `mednafen_saturn` |
 | 119.845592 Hz | 156195 kHz | `genesis_plus_gx` |
 | 118.360134 Hz | 154259 kHz | `fbneo`, for `neogeo` only |
@@ -35,10 +35,10 @@ so the frontend has no correction to make and the cadence does not drift
 - a frame every 823 hours against every two.
 
 That holds only while both cores report the clock exactly, and neither
-does upstream: MesenCE and Snes9x both round the master clock to
+does upstream: MesenCE and bsnes both round the master clock to
 21477272 and come out 0.034 ppm low, which would leave this mode +0.037
 ppm against them. PortareOS patches both (`003-exact-ntsc-rate.patch`
-in mesence-lr, `001-exact-ntsc-rate.patch` in snes9x-lr).
+in mesence-lr, `001-exact-ntsc-rate.patch` in bsnes-lr).
 
 The cost is DSI bit clock, 1047.9MHz a lane against 939.9, up 11.5%.
 That was a test when the mode was added and it has passed: the panel
@@ -196,7 +196,7 @@ The PlayStation's line is 3412.5 GPU clocks, the broadcast line. SwanStation rou
 |---|---|---|
 | gb, gbh, gbc, gbch (Gambatte) | 59.7275 | 119.455 |
 | gba, gbah, gbav (mGBA) | 59.7275 | 119.455 |
-| snes, snesh, sfc, satellaview, sufami, snesmsu1 (Snes9x) | 60.0988 | 120.198 |
+| snes, snesh, sfc, satellaview, snesmsu1 (bsnes) | 60.0988 | 120.198 |
 | nes, famicom, fds (MesenCE) | 60.0988 | 120.198 |
 | psx (SwanStation) | 59.826 (480i too, see above) | 119.652 |
 | saturn (Beetle Saturn) | 59.826 (the core reports it exactly with our patch; in 480i the emulated fields alternate 262 and 263 lines, the reported rate stays) | 119.652 |
@@ -229,8 +229,8 @@ The first rate column is the console's own: the rate its sound hardware produces
 |---|---|---|---|
 | gb, gbh, gbc, gbch (Gambatte) | analog (the APU runs at 1,048,576) | 32,768 | 48,000 |
 | gba, gbah, gbav (mGBA) | 32,768 by default; a game can pick up to 262,144 | 65,536 | 48,000 |
-| snes, snesh, sfc, satellaview, sufami (Snes9x) | 32,000 nominal (about 32,040 on real consoles) | 32,040 | 32,000 |
-| snesmsu1 (Snes9x) | 32,000, plus the MSU-1's 44,100 | 44,100 (MSU-1 enhanced audio) | 44,100 |
+| snes, snesh, sfc, satellaview (bsnes) | 32,000 nominal (about 32,040 on real consoles) | 32,040 (the DSP's own; our patch, upstream resampled to 48,000) | 32,000 |
+| snesmsu1 (bsnes) | 32,000, plus the MSU-1's 44,100 | 44,100 when a `.msu` file is present (our patch) | 44,100 |
 | nes, famicom, fds (MesenCE) | analog (the APU's channels are mixed as analog signals) | 32,000 (mixed at the APU clock, lowpassed and resampled; our patch) | 32,000 |
 | psx (SwanStation) | 44,100 | 44,100 | 44,100 |
 | saturn (Beetle Saturn) | 44,100 (SCSP) | 44,100 | 44,100 |
