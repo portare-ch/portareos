@@ -375,6 +375,17 @@ migrate_integerscale_on() {
   done
 }
 
+# The NES shipped at 4/3, which stretches its 8:7 pixels to fill the panel,
+# 9% too wide. The original ratio is the core's, 128/105 with mesence-lr's
+# 002 patch: 1172x960 with integer scaling. Only 4/3 is moved.
+migrate_nes_ratio_core() {
+  local sys
+  for sys in nes famicom fds; do
+    [ "$(get_setting ${sys}.ratio)" = "4/3" ] && set_setting ${sys}.ratio core
+  done
+  return 0
+}
+
 # audiolatency shipped as 32 from upstream and 020-set_audio_latency only ever
 # writes it when unset, so an install that has booted once keeps 32. 24 keeps
 # RetroArch's ring more than two graph quanta deep at every link rate this
@@ -406,3 +417,4 @@ migrate n64-parallel-rdp migrate_n64_parallel_rdp
 migrate integerscale-on migrate_integerscale_on
 migrate ps2-cpu-layout migrate_ps2_cpu_layout
 migrate music-little-cores migrate_music_little_cores
+migrate nes-ratio-core migrate_nes_ratio_core
