@@ -1,0 +1,182 @@
+From: portare-ch <hello@portare.org>
+Subject: [PATCH] libretro: keep the frame-blend history across preemptive frames
+
+retro_unserialize zeroed the interframe-blending history on every state
+load. Preemptive frames load the state of a frame ago on every button
+press, so under lcd_ghosting, which blends the last four frames, each
+press darkened the picture for a few frames.
+
+For states taken under RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE,
+the history is kept per frontend state buffer when saving and put back
+when loading, and the audio resampler and frame pacing are left alone:
+the replayed frame is the timeline from there on. Any other load resets
+as before.
+---
+diff --git a/libgambatte/libretro/libretro.cpp b/libgambatte/libretro/libretro.cpp
+--- a/libgambatte/libretro/libretro.cpp
++++ b/libgambatte/libretro/libretro.cpp
+@@ -1130,8 +1130,136 @@ static void init_frame_blending(void)
+    }
+ }
+ 
++/* Frame-blend history per frontend state buffer, for the states the
++ * frontend takes for run-ahead and preemptive frames. Those are loaded
++ * back in this process a frame later, and zeroing the history on each
++ * load (as for any other state) darkened the picture for a few frames on
++ * every button press under lcd_ghosting. The frontend overwrites one
++ * buffer per frame, so the buffer address is the key. */
++#define BLEND_SNAPSHOTS 4
++struct blend_snapshot
++{
++   const void *key;
++   unsigned char *data;
++   size_t size;
++   unsigned lcd_ghost_oldest;
++   unsigned long long age;
++};
++static struct blend_snapshot blend_snapshots[BLEND_SNAPSHOTS];
++static unsigned long long blend_snapshot_clock = 0;
++
++static void free_blend_snapshots(void)
++{
++   unsigned i;
++   for (i = 0; i < BLEND_SNAPSHOTS; i++)
++   {
++      free(blend_snapshots[i].data);
++      memset(&blend_snapshots[i], 0, sizeof(blend_snapshots[i]));
++   }
++}
++
++/* The history buffers the current blend mode has, as (pointer, size). */
++static unsigned blend_history_parts(void **ptrs, size_t *sizes)
++{
++   const size_t acc_size = 256 * NUM_GAMEBOYS * VIDEO_HEIGHT * sizeof(float);
++   void *bufs[7]    = { video_buf_prev_1, video_buf_prev_2, video_buf_prev_3,
++                        video_buf_prev_4, video_buf_acc_r, video_buf_acc_g,
++                        video_buf_acc_b };
++   size_t lens[7]   = { VIDEO_BUFF_SIZE, VIDEO_BUFF_SIZE, VIDEO_BUFF_SIZE,
++                        VIDEO_BUFF_SIZE, acc_size, acc_size, acc_size };
++   unsigned i, n    = 0;
++   for (i = 0; i < 7; i++)
++   {
++      if (!bufs[i])
++         continue;
++      ptrs[n]  = bufs[i];
++      sizes[n] = lens[i];
++      n++;
++   }
++   return n;
++}
++
++static void save_blend_snapshot(const void *key)
++{
++   void *ptrs[7];
++   size_t sizes[7], total = 0, off = 0;
++   unsigned i, n = blend_history_parts(ptrs, sizes);
++   struct blend_snapshot *slot = NULL;
++
++   for (i = 0; i < n; i++)
++      total += sizes[i];
++   if (total == 0)
++      return;
++
++   for (i = 0; i < BLEND_SNAPSHOTS && !slot; i++)
++      if (blend_snapshots[i].key == key)
++         slot = &blend_snapshots[i];
++   if (!slot)
++   {
++      slot = &blend_snapshots[0];
++      for (i = 1; i < BLEND_SNAPSHOTS; i++)
++         if (blend_snapshots[i].age < slot->age)
++            slot = &blend_snapshots[i];
++   }
++
++   if (slot->size != total)
++   {
++      unsigned char *data = (unsigned char*)realloc(slot->data, total);
++      if (!data)
++         return;
++      slot->data = data;
++      slot->size = total;
++   }
++
++   for (i = 0; i < n; i++)
++   {
++      memcpy(slot->data + off, ptrs[i], sizes[i]);
++      off += sizes[i];
++   }
++   slot->key              = key;
++   slot->lcd_ghost_oldest = lcd_ghost_oldest;
++   slot->age              = ++blend_snapshot_clock;
++}
++
++/* False when there is no snapshot for this buffer or the blend mode has
++ * changed since; the caller then resets the history as before. */
++static bool load_blend_snapshot(const void *key)
++{
++   void *ptrs[7];
++   size_t sizes[7], total = 0, off = 0;
++   unsigned i, j, n = blend_history_parts(ptrs, sizes);
++
++   for (i = 0; i < n; i++)
++      total += sizes[i];
++
++   for (i = 0; i < BLEND_SNAPSHOTS; i++)
++   {
++      const struct blend_snapshot *slot = &blend_snapshots[i];
++      if (slot->key != key || !slot->data || slot->size != total)
++         continue;
++      for (j = 0; j < n; j++)
++      {
++         memcpy(ptrs[j], slot->data + off, sizes[j]);
++         off += sizes[j];
++      }
++      lcd_ghost_oldest = slot->lcd_ghost_oldest;
++      return true;
++   }
++   return false;
++}
++
++static bool runahead_same_instance(void)
++{
++   enum retro_savestate_context ctx = RETRO_SAVESTATE_CONTEXT_NORMAL;
++   return environ_cb &&
++          environ_cb(RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT, &ctx) &&
++          ctx == RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE;
++}
++
+ static void deinit_frame_blending(void)
+ {
++   free_blend_snapshots();
++
+    if (video_buf_prev_1)
+    {
+       free(video_buf_prev_1);
+@@ -1902,6 +2030,9 @@ bool retro_serialize(void *data, size_t size)
+       return false;
+ 
+    gb.saveState(data);
++
++   if (blend_frames && runahead_same_instance())
++      save_blend_snapshot(data);
+    return true;
+ }
+ 
+@@ -1918,6 +2049,17 @@ bool retro_unserialize(const void *data, size_t size)
+    if (!gb.loadState(data, size))
+       return false;
+ 
++   /* Run-ahead and preemptive frames load the state of a frame ago and
++    * replay it, so the history of that moment is the right one, and the
++    * resampler and pacing simply continue: the replayed frame is the
++    * timeline from here on. */
++   if (runahead_same_instance())
++   {
++      if (!load_blend_snapshot(data))
++         reset_frame_blending_buffers();
++      return true;
++   }
++
+    /* The audio resampler internal state (blipper integrator,
+     * CC accumulator/highpass) and the frame-blending history
+     * buffers are NOT part of the savestate. If we leave them
