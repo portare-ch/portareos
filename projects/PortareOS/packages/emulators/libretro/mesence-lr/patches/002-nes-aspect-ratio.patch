@@ -1,0 +1,21 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] the NES's aspect ratio for the 240 lines the core outputs
+
+The core reported 1.306 for the NES: 256 pixels of 8:7 over 224 lines,
+which is 64/49, the SNES's ratio - the value the SNES case below it
+uses. The NES picture here is 240 lines, since the overscan crop is not
+wired up in this port, so the same 8:7 pixels make 256 x 8/7 / 240 =
+128/105, 1.2190. With 1.306 the picture is 7% too wide.
+
+--- a/Libretro/libretro.cpp
++++ b/Libretro/libretro.cpp
+@@ -2884,7 +2884,8 @@ void libretro_probe_inputs(const char* tag)
+ 		if(_console) {
+ 			ConsoleType type = _console->GetConsoleType();
+ 			switch(type) {
+-				case ConsoleType::Nes: system_ar = 1.306; break;
++				// 8:7 pixels on all 240 lines; 1.306 is 8:7 on 224, the SNES's
++				case ConsoleType::Nes: system_ar = 128.0f / 105.0f; break;
+ 				case ConsoleType::Snes: system_ar = 64.0f / 49.0f; break;
+ 				case ConsoleType::Gameboy: system_ar = 10.0f / 9.0f; break;
+ 				case ConsoleType::Gba: system_ar = 3.0f / 2.0f; break;

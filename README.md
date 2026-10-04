@@ -144,7 +144,7 @@ together with the settings nobody had tuned for them. See
 | Neo Geo CD | NeoCD |
 | Game Boy, Game Boy Color | Gambatte |
 | Game Boy Advance | mGBA |
-| NES, Famicom, Famicom Disk System | Nestopia UE |
+| NES, Famicom, Famicom Disk System | MesenCE |
 | Super Nintendo | Snes9x |
 | Nintendo 64 | ParaLLEl N64 with ParaLLEl-RDP on Vulkan |
 | GameCube, Wii | Dolphin |
