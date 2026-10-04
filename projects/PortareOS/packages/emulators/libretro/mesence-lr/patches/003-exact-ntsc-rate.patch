@@ -1,0 +1,23 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] the NTSC rate from the exact master clock, not a rounded one
+
+60.0988118623484 is 21477272 / 357366: the master clock rounded down
+from 945/44 MHz, six times the NTSC subcarrier, and 0.034 ppm low. The
+panel mode this core selects is cut to twice the exact rate, so against
+the rounded one it drifts a frame every 63 hours instead of every 824.
+The NES shares the SNES's master clock and its 357366 clocks a frame,
+so the SNES core gets the same correction.
+
+--- a/Core/NES/NesConsole.cpp
++++ b/Core/NES/NesConsole.cpp
+@@ -360,7 +360,9 @@ double NesConsole::GetFps()
+ {
+ 	UpdateRegion();
+ 	if(_region == ConsoleRegion::Ntsc) {
+-		return 60.0988118623484;
++		//945/44 MHz, six times the colour subcarrier, over 357366 master
++		//clocks a frame; 60.0988118623484 was 21477272 Hz, 0.034 ppm low
++		return 945000000.0 / 44.0 / 357366.0;
+ 	} else {
+ 		return 50.0069789081886;
+ 	}
