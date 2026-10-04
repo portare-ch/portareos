@@ -559,14 +559,54 @@ then
   GAMESCOPE="systemd-run --scope --quiet --collect --slice=game.slice -p AllowedCPUs=${GAME_CPUS}"
 fi
 
+### Run the emulator as game, not root: system.gameuser=1, off by default
+### (documentation/CPU_ISOLATION.md, phase 3). It may write only an
+### allowlist, granted to the games group before each launch: game data
+### under /storage/roms, the emulators' own config directories, a cache of
+### its own and the RetroArch log. Nothing root sources or executes is on it
+### (system.cfg, profile.d, autostart, system.d), nor the backups root
+### restores. One switch for every system, because an emulator run as root
+### must not read a file another one could write as game.
+###
+### The grant runs as root over paths game can write, so it never follows a
+### symlink and touches only files with one link (directories cannot be
+### hard links): a link planted to system.cfg would otherwise hand
+### system.cfg to games.
+GAME_CACHE="/storage/.cache/game"
+GAME_WRITABLE="/storage/roms/* /storage/.config/retroarch /storage/.config/xemu
+               /storage/.config/mpv /storage/.config/portamp
+               /storage/.config/PortMaster /var/log/retroarch"
+
+grant_game_storage() {
+  local p
+  mkdir -p "${GAME_CACHE}"
+  chown -h game:games "${GAME_CACHE}"
+  for p in ${GAME_WRITABLE}; do
+    case "${p##*/}" in backup|backups) continue ;; esac
+    [ -d "${p}" ] && [ ! -L "${p}" ] || continue
+    find "${p}" ! -type l \( -type d -o -links 1 \) \( ! -group games -o ! -perm -g+w \) \
+      -exec chgrp -h games {} + -exec chmod g+rwX {} + 2>/dev/null
+    find "${p}" -type d ! -perm -g+s -exec chmod g+s {} + 2>/dev/null
+  done
+}
+
+GAMEUSER=""
+if [ "$(get_setting system.gameuser)" = "1" ] &&
+   command -v setpriv >/dev/null && id game >/dev/null 2>&1
+then
+  ${VERBOSE} && log $0 "Running as game"
+  grant_game_storage
+  GAMEUSER="setpriv --reuid=game --regid=games --init-groups -- env XDG_CACHE_HOME=${GAME_CACHE}"
+fi
+
 # If the rom is a shell script just execute it, useful for DOSBOX and ScummVM scan scripts
 if [[ "${ROMNAME}" == *".sh" ]] && [ ! "${PLATFORM}" = "ports" ] && [ ! "${PLATFORM}" = "windows" ]; then
         ${VERBOSE} && log $0 "Executing shell script ${ROMNAME}"
-        ${GAMESCOPE} "${ROMNAME}" &>>${OUTPUT_LOG}
+        ${GAMESCOPE} ${GAMEUSER} "${ROMNAME}" &>>${OUTPUT_LOG}
         ret_error=$?
 else
-        ${VERBOSE} && log $0 "Executing $(eval echo ${GAMESCOPE} ${RUNTHIS})"
-        eval ${GAMESCOPE} ${RUNTHIS} &>>${OUTPUT_LOG}
+        ${VERBOSE} && log $0 "Executing $(eval echo ${GAMESCOPE} ${GAMEUSER} ${RUNTHIS})"
+        eval ${GAMESCOPE} ${GAMEUSER} ${RUNTHIS} &>>${OUTPUT_LOG}
         ret_error=$?
 fi
 

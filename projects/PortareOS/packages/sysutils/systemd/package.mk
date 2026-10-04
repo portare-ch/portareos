@@ -302,10 +302,11 @@ post_install() {
   add_group utmp 22
   add_group tape 33
   add_group kvm 36
-  add_group video 39 pipewire
-  add_group audio 63 pipewire
-  add_group input 104
-  add_group render 105
+  # game: the user emulators run as with system.gameuser=1 (runemu)
+  add_group video 39 pipewire,game
+  add_group audio 63 pipewire,game
+  add_group input 104 game
+  add_group render 105 game
   add_group sgx 106
   add_group users 100
   add_group nogroup 65534
