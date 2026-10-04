@@ -11,7 +11,9 @@ PKG_DEPENDS_TARGET="toolchain"
 PKG_LONGDESC="MesenCE - the NES emulator of the nesdev community's Mesen continuation, at the console's exact 60.0988 Hz"
 PKG_TOOLCHAIN="make"
 
-PKG_MAKE_OPTS_TARGET="-f Makefile.libretro platform=unix"
+# STATICLINK=false: the Makefile links -static-libstdc++ on Linux, and the
+# toolchain builds libstdc++ shared only (gcc --disable-static).
+PKG_MAKE_OPTS_TARGET="-f Makefile.libretro platform=unix STATICLINK=false"
 
 makeinstall_target() {
   mkdir -p ${INSTALL}/usr/lib/libretro
