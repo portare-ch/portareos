@@ -26,7 +26,7 @@ The SNES and the Sega consoles also derive their clocks from the subcarrier, but
 |---|---|---|---|---|---|---|
 | Game Boy, Game Boy Color | 4.194304 MHz (2^22) | same | 456 dots | 154 | 59.7275 | 59.7275 (Gambatte) |
 | Game Boy Advance | 16.777216 MHz (2^24) | same | 1232 | 228 | 59.7275 | 59.7275 (mGBA) |
-| NES, Famicom | 21.477272 MHz (6 × subcarrier) | same | 1364 (341 dots of 4; one dot skipped every other frame) | 262 | 60.0988 | 60.0988 (Nestopia, computed from the clock) |
+| NES, Famicom | 21.477272 MHz (6 × subcarrier) | same | 1364 (341 dots of 4; one dot skipped every other frame) | 262 | 60.0988 | 60.0988 (MesenCE, `60.0988118623484`) |
 | SNES | 21.477272 MHz (6 × subcarrier) | same | 1364 (1360 once every other frame) | 262 | 60.0988 | 60.098814 (Snes9x with PortareOS's patch; upstream rounds the master clock to 21477272 and reports 0.034 ppm low) |
 | Master System, Game Gear, Mega Drive, Mega CD, 32X | 53.693175 MHz (15 × subcarrier) | same | 3420 | 262 | 59.9227 | 59.9227 (Genesis Plus GX); 60 (PicoDrive) |
 | PlayStation | 33.8688 MHz (768 × 44100) | 53.693175 MHz (× 715909/451584) | 3412.5 | 263 (240p), 262.5 (480i) | 59.826, 59.940 | 59.826 for both (SwanStation with PortareOS's patch; upstream 59.8173) |
@@ -66,10 +66,10 @@ The sound DACs are driven by a timer; the game chooses the rate (commonly 16384 
 
 The master clock is the SNES's, 21.477272 MHz = 6 × the subcarrier, and the PPU's dot clock is a quarter of it. A line is 341 dots, a frame 262 lines, and with rendering on, the pre-render line of every other frame is one dot short. So a frame averages 341 × 262 × 4 − 2 = 357366 master clocks, exactly the SNES's count, and the rate is the same **60.0988 Hz** (21477272 / 357366). PAL: 26.601712 MHz, 5 clocks per dot, 312 lines, 50.0070 Hz.
 
-Audio: the APU's channels are mixed as analog signals; there is no sample rate. Nestopia mixes at the APU clock and decimates to 48000 Hz.
+Audio: the APU's channels are mixed as analog signals; there is no sample rate. MesenCE mixes at the APU clock into 96000 Hz, then lowpasses and resamples to 32000 Hz (our patch; upstream reports 44100).
 
 - NESdev wiki, *Cycle reference chart* — "21.477272 MHz ± 40 Hz", 4 master clocks per dot, "341 × 262 = 89342" dots, "pre-render line is one dot shorter in every odd frame", "60.0988 Hz": https://www.nesdev.org/wiki/Cycle_reference_chart
-- Nestopia, `libretro/libretro.cpp`, `retro_get_system_av_info`: `Core::CLK_NTSC / (Core::CLK_NTSC_DIV * Core::PPU_RP2C02_HVSYNC)`; `source/core/NstBase.hpp`: `CLK_NTSC = 39375000UL * 6`, `CLK_NTSC_DIV = 11`, `PPU_RP2C02_HVSYNC = (HVSYNC_0 + HVSYNC_1) / 2` with `HVSYNC_0 = 262 * 1364` and `HVSYNC_1 = 262 * 1364 - 4`
+- MesenCE, `Core/NES/NesConsole.cpp`, `NesConsole::GetFps`: `60.0988118623484` for NTSC, which `Libretro/libretro.cpp` reports as `timing.fps`
 
 ### SNES
 

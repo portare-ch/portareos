@@ -10,8 +10,9 @@ was told never to bring back. Neither survives: the fork does not track
 upstream and nothing can restore these. The reasons are what is worth
 keeping, because they answer "why don't we ship X?".
 
-Two entries on that list were wrong, and are not below: `nestopia-lr` and
-`beetle-saturn-lr` are both in the tree and both shipped, for NES and Saturn.
+Two entries on that list were wrong at the time: `nestopia-lr` and
+`beetle-saturn-lr` were both in the tree and both shipped, for NES and
+Saturn. Nestopia has since been replaced, and has its row below.
 
 `documentation/PACKAGE_INVENTORY.md` covers the separate question of what was
 trimmed out of the image, with sizes.
@@ -29,6 +30,7 @@ trimmed out of the image, with sizes.
 | `bigpemu-sa` | A Jaguar emulator behind retroarch's own. |
 | `touchhle-sa` | An iOS app emulator. |
 | `vita3k-sa` | PS Vita is 960x544, exactly 16:9, so it letterboxes on this panel the way psp does. Removed with its system. |
+| `nestopia-lr` | Replaced for NES, Famicom and FDS by `mesence-lr`, the nesdev community's Mesen. It is more accurate, and the NES is cheap enough that the accuracy costs nothing that matters here. |
 | `skyemu-sa`, `nanoboyadvance-sa`, `hatarisa` | Alternatives nobody defaulted to, all covered by the retroarch core that was already the default. skyemu also remains as `skyemu-lr`. |
 | `sndio` | The only thing that pulled it in was `touchhle-sa`. |
 | `vlc` | Only emulationstation ever linked it, and that is libmpv now. |

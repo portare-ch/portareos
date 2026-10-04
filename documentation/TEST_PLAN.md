@@ -69,7 +69,7 @@ the same mode.
 | System (core) | Expected |
 |---|---|
 | gb, gbc, gba (gambatte, mgba) | 119.455 |
-| snes, nes (snes9x, nestopia) | 120.198 |
+| snes, nes (snes9x, mesen2) | 120.198 |
 | psx, n64, saturn | 119.652 |
 | genesis (genesis_plus_gx) | 119.846 |
 | neogeo (fbneo) | 118.360 |

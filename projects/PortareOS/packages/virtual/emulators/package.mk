@@ -21,7 +21,7 @@ PKG_EMUS=""
 # driver, and this image runs RetroArch on Vulkan, which takes slang only.
 PKG_RETROARCH="core-info libretro-database retroarch retroarch-assets retroarch-joypads slang-shaders"
 
-LIBRETRO_CORES=" beetle-saturn-lr fbneo-lr flycast-lr gambatte-lr genesis-plus-gx-lr mgba-lr neocd_lr nestopia-lr parallel-n64-lr picodrive-lr scummvm-lr snes9x-lr swanstation-lr"
+LIBRETRO_CORES=" beetle-saturn-lr fbneo-lr flycast-lr gambatte-lr genesis-plus-gx-lr mesence-lr mgba-lr neocd_lr parallel-n64-lr picodrive-lr scummvm-lr snes9x-lr swanstation-lr"
 
 if [ "${ARCH}" = "aarch64" ]; then
   LIBRETRO_CORES+=" ppsspp-lr"
@@ -308,11 +308,11 @@ makeinstall_target() {
   add_es_system neocd
 
   ### Nintendo NES, Famicom, Famicom Disk System
-  add_emu_core nes retroarch nestopia true
+  add_emu_core nes retroarch mesen2 true
   add_es_system nes
-  add_emu_core famicom retroarch nestopia true
+  add_emu_core famicom retroarch mesen2 true
   add_es_system famicom
-  add_emu_core fds retroarch nestopia true
+  add_emu_core fds retroarch mesen2 true
   add_es_system fds
 
   ### Nintendo 64

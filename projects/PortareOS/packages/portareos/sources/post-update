@@ -215,6 +215,12 @@ sed -i -e '/^ps2\(\[.*\]\)\?\.core=armsx2-sa$/d' \
        -e '/^ps2\(\[.*\]\)\?\.emulator=armsx2$/d' \
   /storage/.config/system/configs/system.cfg
 
+### The same for Nestopia, which MesenCE (mesen2) replaced for the NES.
+sed -i -e '/^nes\(\[.*\]\)\?\.core=nestopia$/d' \
+       -e '/^famicom\(\[.*\]\)\?\.core=nestopia$/d' \
+       -e '/^fds\(\[.*\]\)\?\.core=nestopia$/d' \
+  /storage/.config/system/configs/system.cfg
+
 # Set the flag to enable batteryplus capacity reporting if it doesn't already exist
 grep -q "^system\.batteryplus\.enabled=" /storage/.config/system/configs/system.cfg ||
     sed -i '$ a\system.batteryplus.enabled=1' /storage/.config/system/configs/system.cfg

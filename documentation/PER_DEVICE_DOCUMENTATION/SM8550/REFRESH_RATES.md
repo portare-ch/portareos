@@ -10,7 +10,7 @@ The console modes use the same 1302 × 1001 total timings and change only the pi
 |---|---|---|
 | 119.880120 Hz | 156240 kHz | default (launcher, everything else) |
 | 119.455046 Hz | 155686 kHz | `gambatte`, `mgba` |
-| 120.197628 Hz | 174651 kHz, vtotal 1116 | `snes9x`, `nestopia` - exact, and the wide-blanking mode; see below |
+| 120.197628 Hz | 174651 kHz, vtotal 1116 | `snes9x`, `mesen2` - exact, and the wide-blanking mode; see below |
 | 119.652237 Hz | 155943 kHz | `parallel_n64`, `swanstation`, `mednafen_saturn` |
 | 119.845592 Hz | 156195 kHz | `genesis_plus_gx` |
 | 118.360134 Hz | 154259 kHz | `fbneo`, for `neogeo` only |
@@ -34,7 +34,7 @@ is 2 x 60.0988 to the six figures a whole-kHz pixel clock can express,
 so the frontend has no correction to make and the cadence does not drift
 - a frame every 823 hours against every two.
 
-That holds only while both cores report the clock exactly. Nestopia
+That holds only while both cores report the clock exactly. MesenCE
 does. Snes9x rounds the master clock to 21477272 and comes out 0.034 ppm
 low, which would leave this mode +0.037 ppm against it - exact for the
 NES and a near miss for the SNES it is named after - so PortareOS
@@ -197,7 +197,7 @@ The PlayStation's line is 3412.5 GPU clocks, the broadcast line. SwanStation rou
 | gb, gbh, gbc, gbch (Gambatte) | 59.7275 | 119.455 |
 | gba, gbah, gbav (mGBA) | 59.7275 | 119.455 |
 | snes, snesh, sfc, satellaview, sufami, snesmsu1 (Snes9x) | 60.0988 | 120.198 |
-| nes, famicom, fds (Nestopia) | 60.0988 | 120.198 |
+| nes, famicom, fds (MesenCE) | 60.0988 | 120.198 |
 | psx (SwanStation) | 59.826 (480i too, see above) | 119.652 |
 | saturn (Beetle Saturn) | 59.826 (the core reports it exactly with our patch; in 480i the emulated fields alternate 262 and 263 lines, the reported rate stays) | 119.652 |
 | mastersystem, sg-1000, gamegear, ggh (Genesis Plus GX) | 59.9227 | 119.846 |
@@ -231,7 +231,7 @@ The first rate column is the console's own: the rate its sound hardware produces
 | gba, gbah, gbav (mGBA) | 32,768 by default; a game can pick up to 262,144 | 65,536 | 48,000 |
 | snes, snesh, sfc, satellaview, sufami (Snes9x) | 32,000 nominal (about 32,040 on real consoles) | 32,040 | 32,000 |
 | snesmsu1 (Snes9x) | 32,000, plus the MSU-1's 44,100 | 44,100 (MSU-1 enhanced audio) | 44,100 |
-| nes, famicom, fds (Nestopia) | analog (the APU's channels are mixed as analog signals) | 48,000 (mixed at the APU clock, decimated) | 48,000 |
+| nes, famicom, fds (MesenCE) | analog (the APU's channels are mixed as analog signals) | 32,000 (mixed at the APU clock, lowpassed and resampled; our patch) | 32,000 |
 | psx (SwanStation) | 44,100 | 44,100 | 44,100 |
 | saturn (Beetle Saturn) | 44,100 (SCSP) | 44,100 | 44,100 |
 | mastersystem, sg-1000, gamegear, ggh (Genesis Plus GX) | analog (SN76489, 223,722 per channel step) | 44,100 | 44,100 |
@@ -252,7 +252,7 @@ The first rate column is the console's own: the rate its sound hardware produces
 
 In short:
 
-- **No resampling needed:** the 44.1 kHz cores play at 44.1 kHz: PS1, Saturn, Dreamcast, NAOMI, Atomiswave, PSP, NeoCD and every other Sega system. Xbox, PS2, Dolphin and Nestopia already produce 48 kHz.
+- **No resampling needed:** the 44.1 kHz cores play at 44.1 kHz: PS1, Saturn, Dreamcast, NAOMI, Atomiswave, PSP, NeoCD and every other Sega system. Xbox, PS2 and Dolphin already produce 48 kHz, and the NES 32 kHz.
 - **Nearly native:** the SNES plays at 32 kHz. The 32,040 → 32,000 conversion (0.125 %) is smaller than what rate control adjusts anyway.
 - **Resampled as on any other device:** Game Boy, GBA and Neo Geo. Their rates match none of the link's rates, so they need resampling either way. The N64 is per game: ~32 kHz games get the 32 kHz link, ~22 kHz games an exact 2:1 into 44.1 kHz, 44.1 kHz games play native.
 
