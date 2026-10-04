@@ -152,29 +152,59 @@ Rendering is KMS only, with no compositor during a game, so the system has
 little left to run while a game is up. That is what makes taking cores 3-7
 away from it cheap.
 
-### Phase 3: a dedicated gaming user
+### Phase 3: a dedicated gaming user (opt-in)
 
-Everything runs as root today, systemd is built without PAM, and the only
-accounts are system ones. A `game` user that emulators run as would
-separate privileges: an emulator or a port could no longer write the system,
-change governors or read other users' data. It is not needed for phase 2: a
-scope puts a process in `game.slice` whatever its uid. With phase 2 in
-place, it adds security and makes the split structural rather than
-something runemu arranges.
+`system.gameuser=1` makes runemu start every emulator as the user `game`
+(uid 1000, group `games`) instead of root. It is off by default. It is one
+switch for every system on purpose: an emulator still run as root must not
+read a file another one could write as `game`.
 
-What it takes:
+What is in place:
 
-- **Privileges:** runemu stays root, since it writes governors and sysfs. It
-  drops to `game` only when it executes the emulator (`setpriv` with the
-  supplementary groups).
-- **Device access:** groups for DRM (`video`, `render`), input and sound.
-  udev rules must give those groups access to the nodes they need.
-- **Storage:** ownership of `/storage` paths emulators write: roms, saves,
-  config, cache. Mount options for removable media formatted vfat or exfat.
-- **Audio:** PipeWire access for that uid.
-- **Ports:** PortMaster and port scripts that assume root.
-- **Account creation:** a static user, since `sysusers` is off in the systemd
-  build.
+- **Accounts:** `game` and `games` (portareos package). `game` is a member of
+  `video`, `audio`, `input` and `render` (systemd), and of `pipewire`, for
+  the system socket (`SocketGroup=pipewire`).
+- **Privilege drop:** util-linux `setpriv --reuid=game --regid=games
+  --init-groups`, built against libcap-ng (static). It execs argv in place
+  and sets the supplementary groups. Two other tools fall short here:
+  - `systemd-run --uid=` sets uid and gid but not supplementary groups
+    (`run.c`), so the game could not open the device nodes.
+  - busybox's `setpriv` changes no uid at all.
+- **Writes, an allowlist,** granted to `games` before each launch (group
+  write, setgid on directories):
+  - Everything under `/storage/roms` except `backup`/`backups`. Root restores
+    those, so a planted archive could write anywhere.
+  - The emulators' own config directories: `retroarch`, `xemu`, `mpv`,
+    `portamp`, `PortMaster`.
+  - `/var/log/retroarch`.
+  - A cache of its own, `/storage/.cache/game`, as `XDG_CACHE_HOME`.
+    `/storage/.cache` itself holds the shadow file.
+- **What root keeps for itself:** nothing root sources or executes is on the
+  list, and none of it becomes writable: `system.cfg` (runemu executes
+  setting values such as `cpugovernor`), `profile.d`, `autostart`,
+  `system.d`.
+- **The grant cannot be turned against root:** it runs as root over paths
+  `game` can write. It never follows a symlink, and it touches only files
+  with one link, so a link planted to `system.cfg` cannot hand it over.
+- **SD cards:** FAT and exFAT are mounted `gid=1000,umask=0002`, files
+  group-writable for `games`. This applies whether or not the switch is on;
+  root's access is unchanged.
+
+What is not settled, and why it is opt-in:
+
+- **KMS:** a non-root process becomes DRM master only if no master exists
+  when it opens the device. The launcher drops master before runemu runs,
+  which should be enough. Not tried.
+- **Input:** `/dev/uinput` is root-only, so ports that use `gptokeyb` will
+  not get their key mapping. Rumble and LED sysfs writes, if any, likewise.
+- **Standalones:** xemu and Steam may write outside their config directory.
+- **Root-side readers:** scripts that read game-writable files have to treat
+  them as data. `setsettings.sh` edits `retroarch.cfg` and the core options
+  with `sed`; it needs an audit for `eval` and command substitution on
+  values read back.
+- **Not tried on the Nova at all.** Checklist: switch it on; then run a
+  RetroArch system, PS2, a port, xemu, mpv and portamp; save to internal
+  storage and to an SD card.
 
 ### Order and checks
 
