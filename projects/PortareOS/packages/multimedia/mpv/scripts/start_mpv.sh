@@ -48,6 +48,7 @@ mkdir -p /storage/.config/mpv/watch_later
 #   where the launcher ends mpv with SIGTERM, which quits without saving
 #   unless this is set.
 exec /usr/bin/mpv --no-config \
+  --script=/usr/config/mpv/seek-reinit.lua \
   ${VK} --vulkan-display-mode=$((10#${MODE})) \
   --video-sync=audio \
   --include=/usr/config/mpv/decode.conf \
