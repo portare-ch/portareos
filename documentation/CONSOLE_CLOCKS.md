@@ -26,7 +26,7 @@ The SNES and the Sega consoles also derive their clocks from the subcarrier, but
 |---|---|---|---|---|---|---|
 | Game Boy, Game Boy Color | 4.194304 MHz (2^22) | same | 456 dots | 154 | 59.7275 | 59.7275 (Gambatte) |
 | Game Boy Advance | 16.777216 MHz (2^24) | same | 1232 | 228 | 59.7275 | 59.7275 (mGBA) |
-| NES, Famicom | 21.477272 MHz (6 × subcarrier) | same | 1364 (341 dots of 4; one dot skipped every other frame) | 262 | 60.0988 | 60.0988 (MesenCE, `60.0988118623484`) |
+| NES, Famicom | 21.477272 MHz (6 × subcarrier) | same | 1364 (341 dots of 4; one dot skipped every other frame) | 262 | 60.0988 | 60.098814 (MesenCE with PortareOS's patch; upstream rounds the master clock to 21477272 Hz, 60.098812) |
 | SNES | 21.477272 MHz (6 × subcarrier) | same | 1364 (1360 once every other frame) | 262 | 60.0988 | 60.098814 (Snes9x with PortareOS's patch; upstream rounds the master clock to 21477272 and reports 0.034 ppm low) |
 | Master System, Game Gear, Mega Drive, Mega CD, 32X | 53.693175 MHz (15 × subcarrier) | same | 3420 | 262 | 59.9227 | 59.9227 (Genesis Plus GX); 60 (PicoDrive) |
 | PlayStation | 33.8688 MHz (768 × 44100) | 53.693175 MHz (× 715909/451584) | 3412.5 | 263 (240p), 262.5 (480i) | 59.826, 59.940 | 59.826 for both (SwanStation with PortareOS's patch; upstream 59.8173) |
@@ -69,7 +69,7 @@ The master clock is the SNES's, 21.477272 MHz = 6 × the subcarrier, and the PPU
 Audio: the APU's channels are mixed as analog signals; there is no sample rate. MesenCE mixes at the APU clock into 96000 Hz, then lowpasses and resamples to 32000 Hz (our patch; upstream reports 44100).
 
 - NESdev wiki, *Cycle reference chart* — "21.477272 MHz ± 40 Hz", 4 master clocks per dot, "341 × 262 = 89342" dots, "pre-render line is one dot shorter in every odd frame", "60.0988 Hz": https://www.nesdev.org/wiki/Cycle_reference_chart
-- MesenCE, `Core/NES/NesConsole.cpp`, `NesConsole::GetFps`: `60.0988118623484` for NTSC, which `Libretro/libretro.cpp` reports as `timing.fps`
+- MesenCE, `Core/NES/NesConsole.cpp`, `NesConsole::GetFps`: `60.0988118623484` for NTSC, 21477272 / 357366, which `Libretro/libretro.cpp` reports as `timing.fps`. PortareOS's `003-exact-ntsc-rate.patch` returns `945000000.0 / 44.0 / 357366.0`
 
 ### SNES
 

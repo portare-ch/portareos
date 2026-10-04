@@ -34,11 +34,11 @@ is 2 x 60.0988 to the six figures a whole-kHz pixel clock can express,
 so the frontend has no correction to make and the cadence does not drift
 - a frame every 823 hours against every two.
 
-That holds only while both cores report the clock exactly. MesenCE
-does. Snes9x rounds the master clock to 21477272 and comes out 0.034 ppm
-low, which would leave this mode +0.037 ppm against it - exact for the
-NES and a near miss for the SNES it is named after - so PortareOS
-patches it (`001-exact-ntsc-rate.patch`).
+That holds only while both cores report the clock exactly, and neither
+does upstream: MesenCE and Snes9x both round the master clock to
+21477272 and come out 0.034 ppm low, which would leave this mode +0.037
+ppm against them. PortareOS patches both (`003-exact-ntsc-rate.patch`
+in mesence-lr, `001-exact-ntsc-rate.patch` in snes9x-lr).
 
 The cost is DSI bit clock, 1047.9MHz a lane against 939.9, up 11.5%.
 That was a test when the mode was added and it has passed: the panel
