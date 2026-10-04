@@ -94,21 +94,21 @@ diff --git a/common/Threading.h b/common/Threading.h
 diff --git a/pcsx2/VMManager.cpp b/pcsx2/VMManager.cpp
 --- a/pcsx2/VMManager.cpp
 +++ b/pcsx2/VMManager.cpp
-@@ -4459,6 +4459,11 @@ void VMManager::SetEmuThreadAffinities()
- 		MTGS::GetThreadHandle().SetAffinity(0);
- 		vu1Thread.GetThreadHandle().SetAffinity(0);
- 		s_vm_thread_handle.SetAffinity(0);
+@@ -4957,6 +4957,11 @@ void VMManager::SetEmuThreadAffinities()
+ 		if (new_pin_enable)
+ 			ERROR_LOG("Insufficient processors for thread pinning.");
+ 
 +#if defined(__linux__)
 +		MTGS::GetThreadHandle().SetUtilClampMin(0);
 +		vu1Thread.GetThreadHandle().SetUtilClampMin(0);
 +		s_vm_thread_handle.SetUtilClampMin(0);
 +#endif
- 		s_software_renderer_processor_list = {};
- 		return;
- 	}
-@@ -4488,6 +4493,23 @@ void VMManager::SetEmuThreadAffinities()
- 	INFO_LOG("  GS thread is on processor {} (0x{:x})", gs_index, gs_affinity);
- 	MTGS::GetThreadHandle().SetAffinity(gs_affinity);
+ 		if (was_pinned)
+ 		{
+ 			vu1Thread.GetThreadHandle().SetAffinity(0);
+@@ -5017,6 +5022,23 @@ void VMManager::SetEmuThreadAffinities()
+ 	INFO_LOG("  GS back thread may run on 0x{:x}", gs_back_affinity);
+ 	SetGSBackThreadAffinityLocked(gs_back_affinity);
  
 +#if defined(__linux__)
 +	// A utilization floor of each pinned core's own capacity, so schedutil runs that core's
