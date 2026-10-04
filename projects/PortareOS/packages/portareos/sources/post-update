@@ -215,6 +215,14 @@ sed -i -e '/^ps2\(\[.*\]\)\?\.core=armsx2-sa$/d' \
        -e '/^ps2\(\[.*\]\)\?\.emulator=armsx2$/d' \
   /storage/.config/system/configs/system.cfg
 
+### And for snes9x, which bsnes replaced for the SNES.
+sed -i -e '/^snes\(\[.*\]\)\?\.core=snes9x$/d' \
+       -e '/^snesh\(\[.*\]\)\?\.core=snes9x$/d' \
+       -e '/^sfc\(\[.*\]\)\?\.core=snes9x$/d' \
+       -e '/^satellaview\(\[.*\]\)\?\.core=snes9x$/d' \
+       -e '/^snesmsu1\(\[.*\]\)\?\.core=snes9x$/d' \
+  /storage/.config/system/configs/system.cfg
+
 ### The same for Nestopia, which MesenCE (mesen2) replaced for the NES.
 sed -i -e '/^nes\(\[.*\]\)\?\.core=nestopia$/d' \
        -e '/^famicom\(\[.*\]\)\?\.core=nestopia$/d' \
@@ -386,6 +394,18 @@ migrate_nes_ratio_core() {
   return 0
 }
 
+# The SNES shipped at 4/3, 2% wider than its 8:7 pixels made the picture
+# on a CRT. bsnes reports that shape: 8:7 over 240 lines, 1172x960 with
+# integer scaling, a 224-line game centred in it at 1172x896. Only 4/3
+# is moved.
+migrate_snes_ratio_core() {
+  local sys
+  for sys in snes snesh sfc satellaview snesmsu1; do
+    [ "$(get_setting ${sys}.ratio)" = "4/3" ] && set_setting ${sys}.ratio core
+  done
+  return 0
+}
+
 # audiolatency shipped as 32 from upstream and 020-set_audio_latency only ever
 # writes it when unset, so an install that has booted once keeps 32. 24 keeps
 # RetroArch's ring more than two graph quanta deep at every link rate this
@@ -418,3 +438,4 @@ migrate integerscale-on migrate_integerscale_on
 migrate ps2-cpu-layout migrate_ps2_cpu_layout
 migrate music-little-cores migrate_music_little_cores
 migrate nes-ratio-core migrate_nes_ratio_core
+migrate snes-ratio-core migrate_snes_ratio_core

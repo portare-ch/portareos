@@ -30,6 +30,7 @@ trimmed out of the image, with sizes.
 | `bigpemu-sa` | A Jaguar emulator behind retroarch's own. |
 | `touchhle-sa` | An iOS app emulator. |
 | `vita3k-sa` | PS Vita is 960x544, exactly 16:9, so it letterboxes on this panel the way psp does. Removed with its system. |
+| `snes9x-lr` | Replaced for the SNES by `bsnes-lr`, more accurate and GPL instead of non-commercial. #410 had dropped bsnes because it resampled to 48 kHz; its 002 patch outputs the DSP's 32040 Hz. The `sufami` system went with it: bsnes's libretro layer has no Sufami Turbo loader. |
 | `nestopia-lr` | Replaced for NES, Famicom and FDS by `mesence-lr`, the nesdev community's Mesen. It is more accurate, and the NES is cheap enough that the accuracy costs nothing that matters here. |
 | `skyemu-sa`, `nanoboyadvance-sa`, `hatarisa` | Alternatives nobody defaulted to, all covered by the retroarch core that was already the default. skyemu also remains as `skyemu-lr`. |
 | `sndio` | The only thing that pulled it in was `touchhle-sa`. |
