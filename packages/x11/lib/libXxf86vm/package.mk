@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2009-2016 Stephan Raue (stephan@openelec.tv)
 # Copyright (C) 2018-present Team LibreELEC (https://libreelec.tv)
+# Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="libXxf86vm"
 PKG_VERSION="1.1.7"
@@ -13,3 +14,5 @@ PKG_LONGDESC="The libxxf86vm provides an interface to the server extension XFree
 PKG_BUILD_FLAGS="+pic"
 
 PKG_MESON_OPTS_TARGET="-Ddefault_library=static"
+
+PKG_MESON_OPTS_TARGET="${PKG_MESON_OPTS_TARGET/-Ddefault_library=static/-Ddefault_library=shared}"

@@ -3,69 +3,74 @@
 # Copyright (C) 2018-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="systemd"
-PKG_VERSION="261.2"
-PKG_SHA256="ed1059ff964f5df35b6056434cc17cc83f86dc913f10489948a0b19b6081c5ec"
-PKG_LICENSE="LGPL-2.1-or-later"
+PKG_VERSION="255.22"
+PKG_SHA256="182468df5d115075116341d3a668498a109bec722d782b0610263ff8c2dd3475"
+PKG_LICENSE="LGPL2.1+"
 PKG_SITE="http://www.freedesktop.org/wiki/Software/systemd"
-PKG_URL="https://github.com/systemd/systemd/archive/v${PKG_VERSION}.tar.gz"
-PKG_DEPENDS_TARGET="meson:host ninja:host gcc:host libcap kmod util-linux entropy libidn2 wait-time-sync Jinja2:host"
+PKG_URL="https://github.com/systemd/systemd-stable/archive/v${PKG_VERSION}.tar.gz"
+PKG_DEPENDS_TARGET="toolchain libcap kmod util-linux libidn2 Python3:host Jinja2:host pcre2 zstd libgcrypt openssl"
 PKG_LONGDESC="A system and session manager for Linux, compatible with SysV and LSB init scripts."
-PKG_BUILD_FLAGS="+lto"
 
+# The unified cgroup hierarchy, upstream's default: systemd confines a slice to
+# cores (AllowedCPUs=) only there, and the game slice depends on it
+# (documentation/CPU_ISOLATION.md). Hybrid was inherited, never chosen.
 PKG_MESON_OPTS_TARGET="--libdir=/usr/lib \
+                       -Drootprefix=/usr \
+                       -Dsplit-usr=false \
                        -Dsplit-bin=true \
+                       -Ddefault-hierarchy=unified \
                        -Dtty-gid=5 \
                        -Dtests=false \
-                       -Dseccomp=disabled \
-                       -Dselinux=disabled \
-                       -Dapparmor=disabled \
-                       -Dpolkit=disabled \
-                       -Dacl=disabled \
-                       -Daudit=disabled \
-                       -Dblkid=enabled \
-                       -Dfdisk=disabled \
-                       -Dkmod=enabled \
-                       -Dpam=disabled \
-                       -Dpwquality=disabled \
-                       -Dmicrohttpd=disabled \
-                       -Dlibcryptsetup=disabled \
-                       -Dlibcurl=disabled \
-                       -Dlibidn2=enabled \
-                       -Dqrencode=disabled \
-                       -Dgcrypt=disabled \
-                       -Dgnutls=disabled \
-                       -Dopenssl=disabled \
-                       -Dp11kit=disabled \
-                       -Delfutils=disabled \
-                       -Dzlib=disabled \
-                       -Dbzip2=disabled \
-                       -Dxz=disabled \
-                       -Dlz4=disabled \
-                       -Dzstd=disabled \
-                       -Dxkbcommon=disabled \
-                       -Dpcre2=disabled \
-                       -Dglib=disabled \
-                       -Ddbus=disabled \
+                       -Dseccomp=false \
+                       -Dselinux=false \
+                       -Dapparmor=false \
+                       -Dpolkit=false \
+                       -Dacl=false \
+                       -Daudit=false \
+                       -Dblkid=true \
+                       -Dfdisk=false \
+                       -Dkmod=true \
+                       -Dpam=false \
+                       -Dpwquality=false \
+                       -Dmicrohttpd=false \
+                       -Dlibcryptsetup=false \
+                       -Dlibcurl=false \
+                       -Dlibidn=false \
+                       -Dlibidn2=true \
+                       -Dlibiptc=false \
+                       -Dqrencode=false \
+                       -Dgcrypt=true \
+                       -Dgnutls=false \
+                       -Dopenssl=true \
+                       -Dp11kit=false \
+                       -Delfutils=false \
+                       -Dzlib=false \
+                       -Dbzip2=false \
+                       -Dxz=false \
+                       -Dlz4=false \
+                       -Dxkbcommon=false \
+                       -Dpcre2=true \
+                       -Dglib=false \
+                       -Ddbus=false \
                        -Ddefault-dnssec=no \
-                       -Dimportd=disabled \
-                       -Dremote=disabled \
+                       -Dimportd=false \
+                       -Dremote=false \
                        -Dutmp=true \
                        -Dhibernate=false \
                        -Denvironment-d=false \
-                       -Dbinfmt=false \
-                       -Drepart=disabled \
+                       -Dbinfmt=true \
+                       -Drepart=false \
                        -Dcoredump=false \
-                       -Dresolve=false \
+                       -Dresolve=true \
                        -Dlogind=true \
                        -Dhostnamed=true \
                        -Dlocaled=false \
                        -Dmachined=false \
                        -Dportabled=false \
-                       -Duserdb=true \
-                       -Dnologin-path=/usr/sbin/nologin \
-                       -Dhomed=disabled \
+                       -Duserdb=false \
+                       -Dhomed=false \
                        -Dnetworkd=false \
-                       -Dtimedated=false \
+                       -Dtimedated=true \
                        -Dtimesyncd=true \
                        -Dfirstboot=false \
                        -Drandomseed=false \
@@ -75,44 +80,48 @@ PKG_MESON_OPTS_TARGET="--libdir=/usr/lib \
                        -Dsysusers=false \
                        -Dtmpfiles=true \
                        -Dhwdb=true \
-                       -Drfkill=false \
+                       -Drfkill=true \
                        -Dldconfig=false \
+                       -Defi=false \
                        -Dtpm=false \
                        -Dima=false \
                        -Dsmack=false \
                        -Dgshadow=false \
                        -Didn=false \
                        -Dnss-myhostname=false \
-                       -Dnss-mymachines=disabled \
-                       -Dnss-resolve=disabled \
-                       -Dnss-systemd=true \
-                       -Dman=disabled \
-                       -Dhtml=disabled \
+                       -Dnss-mymachines=false \
+                       -Dnss-resolve=true \
+                       -Dnss-systemd=false \
+                       -Dman=false \
+                       -Dhtml=false \
                        -Dlink-udev-shared=true \
                        -Dlink-systemctl-shared=true \
                        -Dlink-networkd-shared=false \
-                       -Djournal-storage-default=auto \
                        -Dbashcompletiondir=no \
                        -Dzshcompletiondir=no \
                        -Dkmod-path=/usr/bin/kmod \
                        -Dmount-path=/usr/bin/mount \
                        -Dumount-path=/usr/bin/umount \
-                       -Ddebug-tty=${DEBUG_TTY} \
-                       -Dversion-tag=${PKG_VERSION}"
-
-if [ "${PROJECT}" = "Generic" ]; then
-  PKG_MESON_OPTS_TARGET+=" -Defi=true"
-else
-  PKG_MESON_OPTS_TARGET+=" -Defi=false"
+                       -Dversion-tag=${PKG_VERSION} \
+                       -Dc_args=-D__counted_by\(x\)\= \
+                       -Dcpp_args=-D__counted_by\(x\)\="
+if [ -n "${BUILD_WITH_DEBUG}" ]
+then
+  PKG_MESON_OPTS_TARGET+=" -Ddebug-tty=${DEBUG_TTY}"
 fi
 
 pre_configure_target() {
+  export TARGET_CFLAGS=$(echo ${TARGET_CFLAGS} | sed -e "s|-O.|-O3|g")
+
+  export TARGET_LDFLAGS=$(echo ${TARGET_LDFLAGS} | sed -e "s|-O.|-O3|g")
+
   export TARGET_CFLAGS="${TARGET_CFLAGS} -fno-schedule-insns -fno-schedule-insns2 -Wno-format-truncation"
   export LC_ALL=en_US.UTF-8
 }
 
 post_makeinstall_target() {
   # remove unneeded stuff
+  safe_remove ${INSTALL}/etc/init.d
   safe_remove ${INSTALL}/etc/systemd/system
   safe_remove ${INSTALL}/etc/xdg
   safe_remove ${INSTALL}/etc/X11
@@ -124,46 +133,37 @@ post_makeinstall_target() {
   safe_remove ${INSTALL}/usr/lib/tmpfiles.d/home.conf
   safe_remove ${INSTALL}/usr/share/factory
 
-  # remove Network adapter renaming rule, this is confusing
+  # remove Network adaper renaming rule, this is confusing
   safe_remove ${INSTALL}/usr/lib/udev/rules.d/80-net-setup-link.rules
 
   safe_remove ${INSTALL}/usr/lib/udev/rules.d/71-seat.rules
   safe_remove ${INSTALL}/usr/lib/udev/rules.d/73-seat-late.rules
 
-  if [ "${LOCAL_LOGIN}" = "no" ]; then
-    # remove getty units, we dont want a console
-    safe_remove ${INSTALL}/usr/lib/systemd/system/console-getty.service
-    safe_remove ${INSTALL}/usr/lib/systemd/system/container-getty@.service
-    safe_remove ${INSTALL}/usr/lib/systemd/system/getty.target
-    safe_remove ${INSTALL}/usr/lib/systemd/system/getty@.service
-    safe_remove ${INSTALL}/usr/lib/systemd/system/serial-getty@.service
-    safe_remove ${INSTALL}/usr/lib/systemd/system/*.target.wants/getty.target
-  fi
+  # remove getty units, we dont want a console
+  safe_remove ${INSTALL}/usr/lib/systemd/system/autovt@.service
+  safe_remove ${INSTALL}/usr/lib/systemd/system/console-getty.service
+  safe_remove ${INSTALL}/usr/lib/systemd/system/container-getty@.service
+  safe_remove ${INSTALL}/usr/lib/systemd/system/getty.target
+  safe_remove ${INSTALL}/usr/lib/systemd/system/getty@.service
+  safe_remove ${INSTALL}/usr/lib/systemd/system/serial-getty@.service
+  safe_remove ${INSTALL}/usr/lib/systemd/system/*.target.wants/getty.target
 
   # remove other notused or nonsense stuff (our /etc is ro)
   safe_remove ${INSTALL}/usr/lib/systemd/systemd-update-done
   safe_remove ${INSTALL}/usr/lib/systemd/system/systemd-update-done.service
   safe_remove ${INSTALL}/usr/lib/systemd/system/*.target.wants/systemd-update-done.service
-  #
+
   safe_remove ${INSTALL}/usr/lib/systemd/system/dev-hugepages.mount
   safe_remove ${INSTALL}/usr/lib/systemd/system/*.target.wants/dev-hugepages.mount
-  #
+
   safe_remove ${INSTALL}/usr/lib/systemd/system/systemd-journald-audit.socket
 
   # adjust systemd-hwdb-update (we have read-only /etc).
   sed '/^ConditionNeedsUpdate=.*$/d' -i ${INSTALL}/usr/lib/systemd/system/systemd-hwdb-update.service
 
-  # remove systemd-creds
-  safe_remove ${INSTALL}/usr/bin/systemd-creds
-  safe_remove ${INSTALL}/usr/lib/tmpfiles.d/credstore.conf
-  safe_remove ${INSTALL}/usr/lib/tmpfiles.d/provision.conf
-
   # remove nspawn
   safe_remove ${INSTALL}/usr/bin/systemd-nspawn
   safe_remove ${INSTALL}/usr/lib/systemd/system/systemd-nspawn@.service
-
-  # remove timedatectl
-  safe_remove ${INSTALL}/usr/bin/timedatectl
 
   # remove unneeded generators
   for gen in ${INSTALL}/usr/lib/systemd/system-generators/*; do
@@ -186,10 +186,10 @@ post_makeinstall_target() {
 
   # distro preset policy
   safe_remove ${INSTALL}/usr/lib/systemd/system-preset/*
-  echo "disable *" >${INSTALL}/usr/lib/systemd/system-preset/99-default.preset
+  echo "disable *" > ${INSTALL}/usr/lib/systemd/system-preset/99-default.preset
 
   safe_remove ${INSTALL}/usr/lib/systemd/user-preset/*
-  echo "disable *" >${INSTALL}/usr/lib/systemd/user-preset/90-systemd.preset
+  echo "disable *" > ${INSTALL}/usr/lib/systemd/user-preset/90-systemd.preset
 
   # remove networkd
   safe_remove ${INSTALL}/usr/lib/systemd/network
@@ -197,9 +197,6 @@ post_makeinstall_target() {
   # remove systemd-time-wait-sync (not detecting slew time updates, using package wait-time-sync)
   safe_remove ${INSTALL}/usr/lib/systemd/system/systemd-time-wait-sync.service
   safe_remove ${INSTALL}/usr/lib/systemd/systemd-time-wait-sync
-
-  # remove the userdbctl load-credentials script - no service (addon) require the creation of static users
-  safe_remove ${INSTALL}/usr/lib/systemd/system/systemd-userdb-load-credentials.service
 
   # tune journald.conf
   sed -e "s,^.*Compress=.*$,Compress=no,g" -i ${INSTALL}/etc/systemd/journald.conf
@@ -209,18 +206,19 @@ post_makeinstall_target() {
   sed -e "s,^.*RuntimeMaxFileSize=.*$,RuntimeMaxFileSize=128K,g" -i ${INSTALL}/etc/systemd/journald.conf
   sed -e "s,^.*SplitMode=.*$,SplitMode=none,g" -i ${INSTALL}/etc/systemd/journald.conf
   sed -e "s,^.*SystemMaxUse=.*$,SystemMaxUse=10M,g" -i ${INSTALL}/etc/systemd/journald.conf
+  if [ "${BUILD_WITH_DEBUG}" = "yes" ]; then
+    sed -e "s,^.*ForwardToConsole=.*$,ForwardToConsole=yes,g" -i ${INSTALL}/etc/systemd/journald.conf
+    sed -e "s,^.*TTYPath=.*$,TTYPath=${DEBUG_TTY},g" -i ${INSTALL}/etc/systemd/journald.conf
+  fi
 
   # tune logind.conf
-  if [ "${LOCAL_LOGIN}" = "yes" ]; then
-    sed -e "s,^.*NAutoVTs=.*$,NAutoVTs=2,g" -i ${INSTALL}/etc/systemd/logind.conf
-    sed -e "s,^.*ReserveVT=.*$,ReserveVT=6,g" -i ${INSTALL}/etc/systemd/logind.conf
-  fi
-  sed -e "s,^.*HandleLidSwitch=.*$,HandleLidSwitch=ignore,g" -i ${INSTALL}/etc/systemd/logind.conf
-  if [ "${DISPLAYSERVER}" = "no" ]; then
-    sed -e "s,^.*HandlePowerKey=.*$,HandlePowerKey=poweroff,g" -i ${INSTALL}/etc/systemd/logind.conf
-  else
-    sed -e "s,^.*HandlePowerKey=.*$,HandlePowerKey=ignore,g" -i ${INSTALL}/etc/systemd/logind.conf
-  fi
+  sed -e "s,^.*HandleLidSwitch=.*$,HandleLidSwitch=suspend,g" -i ${INSTALL}/etc/systemd/logind.conf
+  sed -e "s,^.*HandlePowerKey=.*$,HandlePowerKey=suspend,g" -i ${INSTALL}/etc/systemd/logind.conf
+
+  # SYSTEMD-RESOLVED CONFIGURATION
+  sed -i 's/^#MulticastDNS=yes/MulticastDNS=no/' ${INSTALL}/etc/systemd/resolved.conf || echo "MulticastDNS=no" >> ${INSTALL}/etc/systemd/resolved.conf
+  # FALLBACK DNS (Mixed Google/Cloudflare Anycast)
+  sed -i 's/^#FallbackDNS=.*/FallbackDNS=8.8.8.8 1.1.1.1 2001:4860:4860::8888 2606:4700:4700::1111/' ${INSTALL}/etc/systemd/resolved.conf || echo "FallbackDNS=8.8.8.8 1.1.1.1 2001:4860:4860::8888 2606:4700:4700::1111" >> ${INSTALL}/etc/systemd/resolved.conf
 
   # replace systemd-machine-id-setup with ours
   safe_remove ${INSTALL}/usr/lib/systemd/system/systemd-machine-id-commit.service
@@ -230,19 +228,14 @@ post_makeinstall_target() {
   cp ${PKG_DIR}/scripts/systemd-machine-id-setup ${INSTALL}/usr/bin
   cp ${PKG_DIR}/scripts/userconfig-setup ${INSTALL}/usr/bin
   cp ${PKG_DIR}/scripts/usercache-setup ${INSTALL}/usr/bin
-  cp ${PKG_DIR}/scripts/environment-setup ${INSTALL}/usr/bin
-
-  # use systemd to set cpufreq governor and tunables
-  find_file_path scripts/cpufreq && cp -PRv ${FOUND_PATH} ${INSTALL}/usr/bin
 
   mkdir -p ${INSTALL}/usr/sbin
   cp ${PKG_DIR}/scripts/network-base-setup ${INSTALL}/usr/sbin
   cp ${PKG_DIR}/scripts/systemd-timesyncd-setup ${INSTALL}/usr/sbin
 
   # /etc/resolv.conf and /etc/hosts must be writable
-  ln -sf /run/libreelec/resolv.conf ${INSTALL}/etc/resolv.conf
-  ln -sf /run/libreelec/hosts ${INSTALL}/etc/hosts
-  ln -sf /run/libreelec/environment ${INSTALL}/etc/environment
+  ln -sf /run/portareos/resolv.conf ${INSTALL}/etc/resolv.conf
+  ln -sf /run/portareos/hosts ${INSTALL}/etc/hosts
 
   # provide 'halt', 'shutdown', 'reboot' & co.
   ln -sf /usr/bin/systemctl ${INSTALL}/usr/sbin/halt
@@ -262,6 +255,7 @@ post_makeinstall_target() {
   safe_remove ${INSTALL}/etc/modules-load.d
   ln -sf /storage/.config/modules-load.d ${INSTALL}/etc/modules-load.d
   ln -sf /storage/.config/logind.conf.d ${INSTALL}/etc/systemd/logind.conf.d
+  ln -sf /storage/.config/resolved.conf.d ${INSTALL}/etc/systemd/resolved.conf.d
   ln -sf /storage/.config/sleep.conf.d ${INSTALL}/etc/systemd/sleep.conf.d
   ln -sf /storage/.config/timesyncd.conf.d ${INSTALL}/etc/systemd/timesyncd.conf.d
   safe_remove ${INSTALL}/etc/sysctl.d
@@ -273,7 +267,9 @@ post_makeinstall_target() {
   safe_remove ${INSTALL}/etc/udev/rules.d
   ln -sf /storage/.config/udev.rules.d ${INSTALL}/etc/udev/rules.d
 
-  ln -sf /storage/.cache/userdb ${INSTALL}/etc/userdb
+  # system manager timeout overrides
+  mkdir -p ${INSTALL}/etc/systemd/system.conf.d
+  cp -PR ${PKG_DIR}/config/system.conf.d/* ${INSTALL}/etc/systemd/system.conf.d/
 
   # journald
   ln -sf /storage/.cache/journald.conf.d ${INSTALL}/usr/lib/systemd/journald.conf.d
@@ -290,6 +286,9 @@ post_install() {
 
   add_group systemd-oom 194
   add_user systemd-oom x 194 194 "systemd Userspace OOM Killer" "/" "/bin/false"
+
+  add_group systemd-resolve 192
+  add_user systemd-resolve x 192 192 "systemd-resolve" "/" "/bin/false"
 
   add_group adm 4
   add_group tty 5
@@ -308,19 +307,17 @@ post_install() {
   add_group input 104
   add_group render 105
   add_group sgx 106
-  add_group clock 107
+  add_group users 100
+  add_group nogroup 65534
+  add_user nobody x 65534 65534 "nobody" "/" "/bin/false"
 
   enable_service machine-id.service
   enable_service debugconfig.service
   enable_service userconfig.service
   enable_service usercache.service
-  enable_service envconfig.service
-  enable_service cpufreq.service
   enable_service network-base.service
   enable_service systemd-timesyncd.service
   enable_service systemd-timesyncd-setup.service
-  enable_service systemd-userdbd.socket
-  if [ "${LOCAL_LOGIN}" = "yes" ]; then
-    enable_service getty@tty0.service
-  fi
+  enable_service systemd-resolved.service
+  enable_service debug-shell.service
 }

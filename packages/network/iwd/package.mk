@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2018-present Team LibreELEC (https://libreelec.tv)
+# Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="iwd"
 PKG_VERSION="3.12"
@@ -38,4 +39,20 @@ post_makeinstall_target() {
 
 post_install() {
   enable_service iwd.service
+}
+
+pre_configure_target() {
+  export LIBS="-lncurses -ltinfo"
+}
+
+post_makeinstall_target() {
+  rm -rf ${INSTALL}/usr/lib/systemd/system
+
+  mkdir -p ${INSTALL}/etc/iwd
+  case "${DEVICE}" in
+    *)      cp -P ${PKG_DIR}/sources/main.conf        ${INSTALL}/etc/iwd/main.conf ;;
+  esac
+
+  mkdir -p ${INSTALL}/usr/bin
+    cp -P ${PKG_DIR}/scripts/iwd_get-networks ${INSTALL}/usr/bin
 }

@@ -1,27 +1,37 @@
-# SPDX-License-Identifier: GPL-2.0-only
+# SPDX-License-Identifier: GPL-2.0
 # Copyright (C) 2021-present Team LibreELEC (https://libreelec.tv)
+# Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
 
 PKG_NAME="pipewire"
 PKG_VERSION="1.6.8"
 PKG_SHA256="8181172a1d95131f6af8bbc0b98f90b2a33349b042b84c3ce57dd5d11348cc58"
-PKG_LICENSE="MIT"
+PKG_LICENSE="LGPL"
 PKG_SITE="https://pipewire.org"
 PKG_URL="https://github.com/PipeWire/pipewire/archive/${PKG_VERSION}.tar.gz"
-PKG_DEPENDS_TARGET="toolchain alsa-lib dbus glib libpthread-stubs libsndfile libusb ncurses systemd"
+PKG_DEPENDS_TARGET="toolchain libpthread-stubs dbus ncurses alsa-lib systemd libsndfile libusb"
 PKG_LONGDESC="PipeWire is a server and user space API to deal with multimedia pipeline"
+PKG_PATCH_DIRS+=" ${DEVICE}"
 
 if [ "${BLUETOOTH_SUPPORT}" = "yes" ]; then
-  PKG_DEPENDS_TARGET+=" bluez fdk-aac sbc ldacBT libfreeaptx"
+  PKG_DEPENDS_TARGET+=" bluez sbc ldacBT libfreeaptx fdk-aac"
   PKG_PIPEWIRE_BLUETOOTH="-Dbluez5=enabled \
                           -Dbluez5-backend-hsp-native=disabled \
                           -Dbluez5-backend-hfp-native=disabled \
                           -Dbluez5-backend-ofono=disabled \
                           -Dbluez5-backend-hsphfpd=disabled \
                           -Dbluez5-codec-aptx=enabled \
+                          -Dbluez5-codec-lc3plus=disabled \
                           -Dbluez5-codec-ldac=enabled \
                           -Dbluez5-codec-aac=enabled"
 else
   PKG_PIPEWIRE_BLUETOOTH="-Dbluez5=disabled"
+fi
+
+if [ "${VULKAN_SUPPORT}" = "yes" ]; then
+  PKG_DEPENDS_TARGET+=" vulkan-loader vulkan-headers libdrm"
+  PKG_PIPEWIRE_VULKAN+="-Dvulkan=enabled \
+                        -Dx11=disabled \
+                        -Dx11-xfixes=disabled"
 fi
 
 PKG_MESON_OPTS_TARGET="-Ddocs=disabled \
@@ -56,7 +66,7 @@ PKG_MESON_OPTS_TARGET="-Ddocs=disabled \
                        -Dvideoconvert=disabled \
                        -Dvideotestsrc=disabled \
                        -Dvolume=enabled \
-                       -Dvulkan=disabled \
+                       ${PKG_PIPEWIRE_VULKAN} \
                        -Dpw-cat=enabled \
                        -Dudev=enabled \
                        -Dudevrulesdir=/usr/lib/udev/rules.d \
@@ -70,22 +80,22 @@ PKG_MESON_OPTS_TARGET="-Ddocs=disabled \
                        -Dsession-managers=[] \
                        -Draop=disabled \
                        -Dlv2=disabled \
-                       -Dx11=disabled \
-                       -Dx11-xfixes=disabled \
                        -Dlibcanberra=disabled \
                        -Dlegacy-rtkit=false"
 
-post_makeinstall_target() {
-  # connect to the system bus
-  sed '/^\[Service\]/a Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket' -i ${INSTALL}/usr/lib/systemd/system/pipewire.service
+pre_configure_target() {
+  export TARGET_CFLAGS="${TARGET_CFLAGS} -Wno-error=float-conversion"
+  export TARGET_LDFLAGS="${TARGET_LDFLAGS} -lncursesw -ltinfow"
 }
 
 post_install() {
   add_user pipewire x 982 980 "pipewire-daemon" "/var/run/pipewire" "/bin/sh"
   add_group pipewire 980
-  # note that the pipewire user is added to the audio and video groups in systemd/package.mk
-  # todo: maybe there is a better way to add users to groups in the future?
-
+  mkdir -p ${INSTALL}/etc/alsa/conf.d
+  ln -sf /usr/share/alsa/alsa.conf.d/50-pipewire.conf ${INSTALL}/etc/alsa/conf.d/50-pipewire.conf
+  ln -sf /usr/share/alsa/alsa.conf.d/99-pipewire-default.conf ${INSTALL}/etc/alsa/conf.d/99-pipewire-default.conf
   enable_service pipewire.socket
   enable_service pipewire.service
+  enable_service pipewire-pulse.socket
+  enable_service pipewire-pulse.service
 }

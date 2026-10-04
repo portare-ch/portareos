@@ -1,13 +1,13 @@
-# SPDX-License-Identifier: GPL-2.0-only
+# SPDX-License-Identifier: GPL-2.0
 # Copyright (C) 2022-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="wireplumber"
-PKG_VERSION="0.5.15"
-PKG_SHA256="baa121bc918df5fa0e0e70755bb1c99ffab0ab107225ecf99aa470e2c6ba5e7b"
+PKG_VERSION="0.5.17"
+PKG_SHA256="13d1e4456e64bcc81111ec5a4af75d0bd6316040c5718b388b14103a8a77cc6b"
 PKG_LICENSE="MIT"
 PKG_SITE="https://gitlab.freedesktop.org/pipewire/wireplumber"
 PKG_URL="https://gitlab.freedesktop.org/pipewire/wireplumber/-/archive/${PKG_VERSION}/${PKG_NAME}-${PKG_VERSION}.tar.gz"
-PKG_DEPENDS_TARGET="pipewire glib lua54"
+PKG_DEPENDS_TARGET="pipewire glib lua54 glib:host"
 PKG_LONGDESC="Session / policy manager implementation for PipeWire"
 
 PKG_MESON_OPTS_TARGET="-Dintrospection=disabled \
@@ -21,6 +21,9 @@ PKG_MESON_OPTS_TARGET="-Dintrospection=disabled \
                        -Dtests=false"
 
 post_makeinstall_target() {
+  mkdir -p ${INSTALL}/etc
+  ln -sf /storage/.config/wireplumber ${INSTALL}/etc/wireplumber
+
   # connect to the system bus
   sed '/^\[Service\]/a Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket' -i ${INSTALL}/usr/lib/systemd/system/wireplumber.service
 
@@ -50,6 +53,74 @@ monitor.bluez.properties = {
   bluez5.hfphsp-backend = "none"
 }
 EOF
+
+  cat > ${INSTALL}/usr/share/wireplumber/wireplumber.conf.d/89-disable-libcamera.conf << EOF
+wireplumber.profiles = {
+  main = {
+    monitor.libcamera = disabled
+  }
+}
+EOF
+
+  cat >${INSTALL}/usr/share/wireplumber/wireplumber.conf.d/89-bluez-auto-connect.conf <<EOF
+monitor.bluez.rules = [
+  {
+    matches = [
+      {
+        ## This matches all bluetooth devices.
+        device.name = "~bluez_card.*"
+      }
+    ]
+    actions = {
+      update-props = {
+        bluez5.auto-connect = [ hfp_hf hsp_hs a2dp_sink ]
+        bluez5.hw-volume = [ hfp_hf hsp_hs a2dp_sink ]
+      }
+    }
+  },
+  {
+    matches = [
+      {
+        ## This matches all bluetooth sinks.
+        node.name = "~bluez_output.*"
+      }
+    ]
+    actions = {
+      update-props = {
+        priority.driver = 2000
+        priority.session = 2000
+      }
+    }
+  }
+]
+EOF
+
+  # module-switch-on-connect carried blocklist="...|hdmi" so an external
+  # display never stole the default sink. Priority is how wireplumber says the
+  # same thing: below the internal speaker, so only hdmi_sense moves audio to a
+  # display, on a real plug event. Covers DP too, which is what USB-C alt mode
+  # gives this platform.
+  cat >${INSTALL}/usr/share/wireplumber/wireplumber.conf.d/89-external-display-audio.conf <<EOF
+monitor.alsa.rules = [
+  {
+    matches = [
+      { node.name = "~alsa_output.*[Hh][Dd][Mm][Ii].*" }
+      { node.name = "~alsa_output.*[Dd]isplay[Pp]ort.*" }
+    ]
+    actions = {
+      update-props = {
+        priority.driver = 100
+        priority.session = 100
+      }
+    }
+  }
+]
+EOF
+
+# Platform-specific config files
+if [ -d "${PKG_DIR}/config/${DEVICE}" ]; then 
+  cp -f ${PKG_DIR}/config/${DEVICE}/*.conf ${INSTALL}/usr/share/wireplumber/wireplumber.conf.d/
+fi
 }
 
 post_install() {

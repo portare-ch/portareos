@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # Copyright (C) 2020-present Team LibreELEC (https://libreelec.tv)
+# Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="wavpack"
 PKG_VERSION="5.9.0"
@@ -15,3 +16,7 @@ PKG_CMAKE_OPTS_TARGET="-DBUILD_TESTING=OFF \
                        -DWAVPACK_BUILD_PROGRAMS=OFF \
                        -DWAVPACK_ENABLE_ASM=OFF \
                        -DWAVPACK_INSTALL_DOCS=OFF"
+
+PKG_URL="https://github.com/dbry/WavPack/releases/download/${PKG_VERSION}/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+
+PKG_CMAKE_OPTS_TARGET+=" -DBUILD_SHARED_LIBS=ON"

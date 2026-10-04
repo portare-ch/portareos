@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2009-2016 Stephan Raue (stephan@openelec.tv)
 # Copyright (C) 2017-present Team LibreELEC (https://libreelec.tv)
+# Copyright (C) 2023 JELOS (https://github.com/JustEnoughLinuxOS)
 
 PKG_NAME="ncurses"
-PKG_VERSION="6.6"
-PKG_SHA256="355b4cbbed880b0381a04c46617b7656e362585d52e9cf84a67e2009b749ff11"
+PKG_VERSION="6.5"
+PKG_SHA256="136d91bc269a9a5785e5f9e980bc76ab57428f604ce3e5a5a90cebc767971cc6"
 PKG_LICENSE="MIT"
 PKG_SITE="http://www.gnu.org/software/ncurses/"
 PKG_URL="http://invisible-mirror.net/archives/ncurses/ncurses-${PKG_VERSION}.tar.gz"
@@ -20,11 +21,11 @@ PKG_CONFIGURE_OPTS_TARGET="--without-ada \
                            --without-manpages \
                            --without-progs \
                            --without-tests \
-                           --without-shared \
+                           --with-shared \
                            --with-normal \
                            --without-debug \
                            --without-profile \
-                           --without-termlib \
+                           --with-termlib \
                            --without-ticlib \
                            --without-gpm \
                            --without-dbmalloc \
@@ -43,20 +44,20 @@ PKG_CONFIGURE_OPTS_TARGET="--without-ada \
                            --enable-ext-funcs \
                            --disable-const \
                            --enable-no-padding \
-                           --disable-sigwinch \
                            --enable-pc-files \
                            --with-pkg-config-libdir=/usr/lib/pkgconfig \
-                           --disable-tcap-names \
+                           --enable-tcap-names \
                            --without-develop \
                            --disable-hard-tabs \
                            --disable-xmc-glitch \
-                           --enable-hashmap \
+                           --disable-hashmap \
                            --disable-safe-sprintf \
                            --disable-scroll-hints \
                            --enable-widec \
                            --disable-echo \
                            --disable-warnings \
-                           --disable-home-terminfo \
+                           --enable-home-terminfo \
+                           --enable-lib-suffixes \
                            --disable-assertions \
                            --enable-leaks \
                            --enable-sigwinch \
@@ -66,6 +67,7 @@ PKG_CONFIGURE_OPTS_HOST="--enable-termcap \
                          --with-termlib \
                          --with-shared \
                          --enable-pc-files \
+                         --without-tests \
                          --without-manpages"
 
 pre_configure_target() {
@@ -73,6 +75,8 @@ pre_configure_target() {
 cf_cv_builtin_bool=yes
 cf_cv_header_stdbool_h=yes
 EOF
+
+  CFLAGS="${CFLAGS} -std=gnu17"
 }
 
 post_makeinstall_target() {
@@ -85,8 +89,15 @@ post_makeinstall_target() {
   # create links to be compatible with any ncurses include path and lib names
   ln -sf . ${SYSROOT_PREFIX}/usr/include/ncursesw
   ln -sf . ${SYSROOT_PREFIX}/usr/include/ncurses
-  for f in form menu ncurses panel; do
+  for f in form menu ncurses panel tinfo; do
     ln -sf lib${f}w.a ${SYSROOT_PREFIX}/usr/lib/lib${f}.a
     ln -sf ${f}w.pc ${SYSROOT_PREFIX}/usr/lib/pkgconfig/${f}.pc
   done
+  cd ${INSTALL}/usr/lib
+  for LIB in *w*.so*
+  do
+    NOWLIB=$(echo ${LIB} | sed "s#w##g")
+    ln -sf ${LIB} ${INSTALL}/usr/lib/${NOWLIB}
+  done
+  cd -
 }

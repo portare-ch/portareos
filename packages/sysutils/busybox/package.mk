@@ -1,17 +1,35 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2009-2016 Stephan Raue (stephan@openelec.tv)
-# Copyright (C) 2018-present Team LibreELEC (https://libreelec.tv)
+# Copyright (C) 2018 Team LibreELEC (https://libreelec.tv)
+# Copyright (C) 2018-present Team CoreELEC (https://coreelec.org)
 
 PKG_NAME="busybox"
-PKG_VERSION="1.38.0"
-PKG_SHA256="34f9ea6ff8636f2c9241153b9114eefa9e65674a45318ae1ef95bb5f31c53bb2"
-PKG_LICENSE="GPL-2.0-only"
+PKG_VERSION="1.36.1"
+PKG_SHA256="b8cc24c9574d809e7279c3be349795c5d5ceb6fdf19ca709f80cde50e47de314"
+PKG_LICENSE="GPL"
 PKG_SITE="http://www.busybox.net"
-PKG_URL="https://busybox.net/downloads/${PKG_NAME}-${PKG_VERSION}.tar.bz2"
-PKG_DEPENDS_TARGET="toolchain libtirpc"
-PKG_DEPENDS_INIT="toolchain libtirpc"
+PKG_URL="http://busybox.net/downloads/${PKG_NAME}-${PKG_VERSION}.tar.bz2"
+PKG_DEPENDS_HOST="gcc:host"
+PKG_DEPENDS_TARGET="toolchain busybox:host dosfstools e2fsprogs usbutils parted procps-ng gptfdisk libtirpc"
+PKG_DEPENDS_INIT="toolchain libc:init glibc:init libtirpc"
 PKG_LONGDESC="BusyBox combines tiny versions of many common UNIX utilities into a single small executable."
-PKG_BUILD_FLAGS="-parallel +lto +size"
+# busybox fails to build with GOLD support enabled with binutils-2.25
+PKG_BUILD_FLAGS="-parallel -gold"
+PKG_NEED_UNPACK="${PROJECT_DIR}/${PROJECT}/initramfs"
+
+# nano text editor
+if [ "${NANO_EDITOR}" = "yes" ]; then
+  PKG_DEPENDS_TARGET="${PKG_DEPENDS_TARGET} nano"
+fi
+
+# nfs support
+if [ "${NFS_SUPPORT}" = yes ]; then
+  PKG_DEPENDS_TARGET="${PKG_DEPENDS_TARGET} rpcbind"
+fi
+
+if [ "${TARGET_ARCH}" = "x86_64" ]; then
+  PKG_DEPENDS_TARGET+=" pciutils"
+fi
 
 pre_build_target() {
   PKG_MAKE_OPTS_TARGET="ARCH=${TARGET_ARCH} \
@@ -22,6 +40,13 @@ pre_build_target() {
 
   mkdir -p ${PKG_BUILD}/.${TARGET_NAME}
   cp -RP ${PKG_BUILD}/* ${PKG_BUILD}/.${TARGET_NAME}
+}
+
+pre_build_host() {
+  PKG_MAKE_OPTS_HOST="ARCH=${TARGET_ARCH} CROSS_COMPILE= KBUILD_VERBOSE=1 install"
+
+  mkdir -p ${PKG_BUILD}/.${HOST_NAME}
+  cp -RP ${PKG_BUILD}/* ${PKG_BUILD}/.${HOST_NAME}
 }
 
 pre_build_init() {
@@ -35,94 +60,85 @@ pre_build_init() {
   cp -RP ${PKG_BUILD}/* ${PKG_BUILD}/.${TARGET_NAME}-init
 }
 
+configure_host() {
+  cd ${PKG_BUILD}/.${HOST_NAME}
+    cp ${PKG_DIR}/config/busybox-host.conf .config
+
+    # set install dir
+    sed -i -e "s|^CONFIG_PREFIX=.*$|CONFIG_PREFIX=\"${PKG_BUILD}/.install_host\"|" .config
+
+    make oldconfig
+}
+
 configure_target() {
   cd ${PKG_BUILD}/.${TARGET_NAME}
     find_file_path config/busybox-target.conf
-    cp ${FOUND_PATH} .config
+    cp $FOUND_PATH .config
 
     # set install dir
     sed -i -e "s|^CONFIG_PREFIX=.*$|CONFIG_PREFIX=\"${INSTALL}/usr\"|" .config
 
-    if [ ! "${CRON_SUPPORT}" = "yes" ]; then
+    if [ ! "$CRON_SUPPORT" = "yes" ] ; then
       sed -i -e "s|^CONFIG_CROND=.*$|# CONFIG_CROND is not set|" .config
       sed -i -e "s|^CONFIG_FEATURE_CROND_D=.*$|# CONFIG_FEATURE_CROND_D is not set|" .config
       sed -i -e "s|^CONFIG_CRONTAB=.*$|# CONFIG_CRONTAB is not set|" .config
       sed -i -e "s|^CONFIG_FEATURE_CROND_SPECIAL_TIMES=.*$|# CONFIG_FEATURE_CROND_SPECIAL_TIMES is not set|" .config
     fi
 
-    if [ ! "${SAMBA_SUPPORT}" = yes ]; then
+    if [ ! "$SAMBA_SUPPORT" = yes ]; then
       sed -i -e "s|^CONFIG_FEATURE_MOUNT_CIFS=.*$|# CONFIG_FEATURE_MOUNT_CIFS is not set|" .config
     fi
 
-    CFLAGS+=" -I${SYSROOT_PREFIX}/usr/include/tirpc"
+    #CFLAGS="${CFLAGS} -I${SYSROOT_PREFIX}/usr/include/tirpc"
 
-    LDFLAGS+=" -fwhole-program"
+    LDFLAGS="${LDFLAGS} -fwhole-program"
 
     make oldconfig
 }
 
 configure_init() {
   cd ${PKG_BUILD}/.${TARGET_NAME}-init
-    find_file_path config/busybox-init.conf
-    cp ${FOUND_PATH} .config
+  find_file_path config/busybox-init.conf
+  cp $FOUND_PATH .config
 
-    # set install dir
-    sed -i -e "s|^CONFIG_PREFIX=.*$|CONFIG_PREFIX=\"${INSTALL}/usr\"|" .config
+  # set install dir
+  sed -i -e "s|^CONFIG_PREFIX=.*$|CONFIG_PREFIX=\"${INSTALL}/usr\"|" .config
 
-    CFLAGS+=" -I${SYSROOT_PREFIX}/usr/include/tirpc"
+  #CFLAGS="${CFLAGS} -I${SYSROOT_PREFIX}/usr/include/tirpc"
 
-    LDFLAGS+=" -fwhole-program"
+  LDFLAGS="${LDFLAGS} -fwhole-program"
 
-    make oldconfig
+  make oldconfig
+}
+
+makeinstall_host() {
+  mkdir -p ${TOOLCHAIN}/bin
+  cp -R ${PKG_BUILD}/.install_host/bin/* ${TOOLCHAIN}/bin
 }
 
 makeinstall_target() {
   mkdir -p ${INSTALL}/usr/bin
-    if [ ${TARGET_ARCH} = x86_64 ]; then
-      cp ${PKG_DIR}/scripts/getedid ${INSTALL}/usr/bin
-    else
-      cp ${PKG_DIR}/scripts/dump-active-edids-drm ${INSTALL}/usr/bin/dump-active-edids
-    fi
-    cp ${PKG_DIR}/scripts/create-edid-cpio ${INSTALL}/usr/bin/
-    if [ "${PROJECT}" = "RPi" ]; then
-      cp ${PKG_DIR}/scripts/update-bootloader-edid-rpi ${INSTALL}/usr/bin/update-bootloader-edid
-      cp ${PKG_DIR}/scripts/getedid-drm ${INSTALL}/usr/bin/getedid
-    fi
-    if [ "${PROJECT}" = "Amlogic" ] || [ "${PROJECT}" = "Rockchip" ]; then
-      cp ${PKG_DIR}/scripts/update-bootloader-edid-extlinux ${INSTALL}/usr/bin/getedid
-    fi
-    cp ${PKG_DIR}/scripts/simple_zip.py ${INSTALL}/usr/bin/
-    cp ${PKG_DIR}/scripts/createlog ${INSTALL}/usr/bin/
+    [ ${TARGET_ARCH} = x86_64 ] && cp ${PKG_DIR}/scripts/getedid ${INSTALL}/usr/bin
     cp ${PKG_DIR}/scripts/dthelper ${INSTALL}/usr/bin
       ln -sf dthelper ${INSTALL}/usr/bin/dtfile
       ln -sf dthelper ${INSTALL}/usr/bin/dtflag
       ln -sf dthelper ${INSTALL}/usr/bin/dtname
       ln -sf dthelper ${INSTALL}/usr/bin/dtsoc
-    cp ${PKG_DIR}/scripts/ledfix ${INSTALL}/usr/bin
     cp ${PKG_DIR}/scripts/lsb_release ${INSTALL}/usr/bin/
-    cp ${PKG_DIR}/scripts/pkgapp ${INSTALL}/usr/bin/
-      ln -sf pkgapp ${INSTALL}/usr/bin/apt
-      ln -sf pkgapp ${INSTALL}/usr/bin/apt-get
-      ln -sf pkgapp ${INSTALL}/usr/bin/dnf
-      ln -sf pkgapp ${INSTALL}/usr/bin/rpm
-      ln -sf pkgapp ${INSTALL}/usr/bin/yum
-    cp ${PKG_DIR}/scripts/sudo ${INSTALL}/usr/bin/
 
   mkdir -p ${INSTALL}/usr/sbin
     cp ${PKG_DIR}/scripts/kernel-overlays-setup ${INSTALL}/usr/sbin
 
-  mkdir -p ${INSTALL}/usr/lib/libreelec
-    cp ${PKG_DIR}/scripts/functions ${INSTALL}/usr/lib/libreelec
-    cp ${PKG_DIR}/scripts/fs-resize ${INSTALL}/usr/lib/libreelec
+  mkdir -p ${INSTALL}/usr/lib/portareos/
+    cp ${PKG_DIR}/scripts/functions ${INSTALL}/usr/lib/portareos/
+    cp ${PKG_DIR}/scripts/fs-resize ${INSTALL}/usr/lib/portareos/
     sed -e "s/@DISTRONAME@/${DISTRONAME}/g" \
-        -i ${INSTALL}/usr/lib/libreelec/fs-resize
-
-  mkdir -p ${INSTALL}/usr/lib/systemd/system-generators/
-    cp ${PKG_DIR}/scripts/libreelec-target-generator ${INSTALL}/usr/lib/systemd/system-generators/
+        -i ${INSTALL}/usr/lib/portareos/fs-resize
 
   mkdir -p ${INSTALL}/etc
     cp ${PKG_DIR}/config/profile ${INSTALL}/etc
     cp ${PKG_DIR}/config/inputrc ${INSTALL}/etc
+    cp ${PKG_DIR}/config/httpd.conf ${INSTALL}/etc
     cp ${PKG_DIR}/config/suspend-modules.conf ${INSTALL}/etc
 
   # /etc/fstab is needed by...
@@ -136,11 +152,28 @@ makeinstall_target() {
 
   # create /etc/hostname
     ln -sf /proc/sys/kernel/hostname ${INSTALL}/etc/hostname
+
+  # create folder for named tables support
+    ln -sf /storage/.config/iproute2 ${INSTALL}/etc/iproute2
+
+  # add webroot
+    mkdir -p ${INSTALL}/usr/www
+      echo "It works" > ${INSTALL}/usr/www/index.html
+
+    mkdir -p ${INSTALL}/usr/www/error
+      echo "404" > ${INSTALL}/usr/www/error/404.html
 }
 
 post_install() {
-  echo "chmod 4755 ${INSTALL}/usr/bin/busybox" >>${FAKEROOT_SCRIPT}
-  echo "chmod 000 ${INSTALL}/usr/cache/shadow" >>${FAKEROOT_SCRIPT}
+  ### This resolves a conflict with the bash package.
+  if [ "$(readlink ${INSTALL}/usr/bin/sh)" = "busybox" ]
+  then
+    rm -f ${INSTALL}/usr/bin/sh
+    ln -s bash ${INSTALL}/usr/bin/sh
+  fi
+
+  echo "chmod 4755 ${INSTALL}/usr/bin/busybox" >> ${FAKEROOT_SCRIPT}
+  echo "chmod 000 ${INSTALL}/usr/cache/shadow" >> ${FAKEROOT_SCRIPT}
 
   add_user root "${ROOT_PASSWORD}" 0 0 "Root User" "/storage" "/bin/sh"
   add_group root 0
@@ -149,15 +182,13 @@ post_install() {
   add_user nobody x 65534 65534 "Nobody" "/" "/bin/sh"
   add_group nogroup 65534
 
-  enable_service fs-resize.service
-  enable_service ledfix.service
   enable_service shell.service
   enable_service show-version.service
   enable_service var.mount
-  enable_service locale.service
+  enable_service proc-sys-fs-binfmt_misc.mount
 
   # cron support
-  if [ "${CRON_SUPPORT}" = "yes" ]; then
+  if [ "$CRON_SUPPORT" = "yes" ] ; then
     mkdir -p ${INSTALL}/usr/lib/systemd/system
       cp ${PKG_DIR}/system.d.opt/cron.service ${INSTALL}/usr/lib/systemd/system
       enable_service cron.service
@@ -171,7 +202,12 @@ post_install() {
 makeinstall_init() {
   mkdir -p ${INSTALL}/bin
     ln -sf busybox ${INSTALL}/usr/bin/sh
+    ln -sf busybox ${INSTALL}/usr/bin/bash
+    ln -sf busybox ${INSTALL}/usr/bin/bc
     chmod 4755 ${INSTALL}/usr/bin/busybox
+
+  mkdir -p ${INSTALL}/usr/sbin
+    ln -sf /usr/bin/busybox ${INSTALL}/usr/sbin/blockdev
 
   mkdir -p ${INSTALL}/etc
     touch ${INSTALL}/etc/fstab
@@ -187,9 +223,18 @@ makeinstall_init() {
 
   cp ${PKG_DIR}/scripts/functions ${INSTALL}
   cp ${PKG_DIR}/scripts/init ${INSTALL}
+
+  if [ -e "${PROJECT_DIR}/${PROJECT}/devices/${DEVICE}/device.init" ]
+  then
+    cp ${PROJECT_DIR}/${PROJECT}/devices/${DEVICE}/device.init ${INSTALL}
+  else
+    touch ${INSTALL}/device.init
+  fi
+  chmod 755 ${INSTALL}/device.init
+
   sed -e "s/@DISTRONAME@/${DISTRONAME}/g" \
+      -e "s/@DEVICENAME@/${DEVICE}/g" \
       -e "s/@KERNEL_NAME@/${KERNEL_NAME}/g" \
-      -e "s/@SYSTEM_SIZE@/${SYSTEM_SIZE}/g" \
       -i ${INSTALL}/init
   chmod 755 ${INSTALL}/init
 }

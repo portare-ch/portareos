@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0
 # Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
-unset _CACHE_PACKAGE_LOCAL _CACHE_PACKAGE_GLOBAL _DEBUG_DEPENDS_LIST _DEBUG_PACKAGE_LIST
+unset _CACHE_PACKAGE _DEBUG_DEPENDS_LIST _DEBUG_PACKAGE_LIST
 
 . config/options ""
 . config/multithread

@@ -90,7 +90,7 @@ cores is phase 2 below.
 
 systemd confines a slice to cores with `AllowedCPUs=`, which works only on the
 unified cgroup hierarchy. The project's systemd 255.22 is built with
-`-Ddefault-hierarchy=hybrid` (`projects/PortareOS/packages/sysutils/systemd/package.mk`),
+`-Ddefault-hierarchy=hybrid` (`packages/sysutils/systemd/package.mk`),
 inherited from upstream without a stated reason. On the device the v1
 controllers are mounted under `/sys/fs/cgroup/*`, and the cgroup2 tree at
 `/sys/fs/cgroup/unified` offers `cpuset` and `memory` but is not managed. The

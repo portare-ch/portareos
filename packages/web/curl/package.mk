@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2009-2016 Stephan Raue (stephan@openelec.tv)
 # Copyright (C) 2018-present Team LibreELEC (https://libreelec.tv)
+# Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="curl"
 PKG_VERSION="8.21.0"
@@ -112,3 +113,5 @@ post_makeinstall_target() {
   sed -e "s:\(['= ]\)/usr:\\1${PKG_ORIG_SYSROOT_PREFIX}/usr:g" -i ${TOOLCHAIN}/bin/${PKG_NAME}-config
   chmod +x ${TOOLCHAIN}/bin/${PKG_NAME}-config
 }
+
+PKG_CMAKE_OPTS_TARGET="${PKG_CMAKE_OPTS_TARGET//\/run\/libreelec\/cacert.pem/\/run\/portareos\/cacert.pem}"

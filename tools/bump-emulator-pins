@@ -64,9 +64,9 @@ from pathlib import Path
 # Where emulator-ish recipes live. RetroArch and the shader/database
 # packages sit under libretro/ alongside the cores, so this covers them.
 ROOTS = [
-    "projects/PortareOS/packages/emulators/libretro",
-    "projects/PortareOS/packages/emulators/standalone",
-    "projects/PortareOS/packages/compat",
+    "packages/emulators/libretro",
+    "packages/emulators/standalone",
+    "packages/compat",
 ]
 
 SHA1 = re.compile(r"^[0-9a-f]{40}$")

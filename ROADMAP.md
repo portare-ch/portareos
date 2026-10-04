@@ -160,7 +160,7 @@ Those are estimates of installed space, not promised compressed-image savings.
 - Remove Python only after replacing its runtime users, including Bluetooth
   pairing, and checking the Steam dependency path.
 - Trace GStreamer's users and remove it if the retained features can run
-  without it. Continue removing unused packages and shadowed recipes.
+  without it. Continue removing unused packages.
 
 **Complete when:** each removal has a measured before/after size and passes
 its affected runtime checks. Publish the resulting image size; do not trade

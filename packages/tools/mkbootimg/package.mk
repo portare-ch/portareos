@@ -1,17 +1,18 @@
-# SPDX-License-Identifier: GPL-2.0-or-later
-# Copyright (C) 2009-2016 Stephan Raue (stephan@openelec.tv)
-# Copyright (C) 2019-present Team LibreELEC (https://libreelec.tv)
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2025-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="mkbootimg"
-PKG_VERSION="6668fc24a3130ab003aae9fda95bcd4110617de9"
-PKG_SHA256="d84870e055414d638a3e7eb4b7a3ebf415899841218f24cb3647d06ecf6ddb17"
-PKG_LICENSE="BSD-3-Clause"
-PKG_SITE="https://android.googlesource.com/platform/system/core/+/master/mkbootimg/"
-PKG_URL="https://github.com/codesnake/mkbootimg/archive/${PKG_VERSION}.tar.gz"
-PKG_DEPENDS_HOST="toolchain:host"
+PKG_VERSION="d2bb0af5ba6d3198a3e99529c97eda1be0b5a093"
+PKG_SHA256="418bb875c03d5c5844d6d289956d8294ae6a2bd5be78c7d912d797e7826ca3d9"
+PKG_LICENSE="GPL"
+PKG_SITE="https://android.googlesource.com/platform/system/tools/mkbootimg"
+PKG_URL="https://github.com/jbeich/platform_system_tools_mkbootimg/archive/${PKG_VERSION}.tar.gz"
 PKG_LONGDESC="mkbootimg: Creates kernel boot images for Android"
+PKG_TOOLCHAIN="manual"
+PKG_DEPENDS_HOST="toolchain Python3:host"
 
 makeinstall_host() {
-  mkdir -p ${SYSROOT_PREFIX}/usr/include
-  cp mkbootimg ${TOOLCHAIN}/bin/
+  mkdir -p ${TOOLCHAIN}/mkbootimg
+    cp -a gki/ mkbootimg.py $TOOLCHAIN/mkbootimg
 }
+

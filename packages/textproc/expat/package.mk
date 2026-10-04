@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2009-2016 Stephan Raue (stephan@openelec.tv)
 # Copyright (C) 2019-present Team LibreELEC (https://libreelec.tv)
+# Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="expat"
 PKG_VERSION="2.8.2"
@@ -23,3 +24,6 @@ PKG_CMAKE_OPTS_HOST="-DEXPAT_BUILD_DOCS=OFF \
                      -DEXPAT_BUILD_EXAMPLES=OFF \
                      -DEXPAT_BUILD_TESTS=OFF \
                      -DEXPAT_SHARED_LIBS=ON"
+
+PKG_CMAKE_OPTS_TARGET+=" -DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+PKG_CMAKE_OPTS_HOST=" -DCMAKE_POLICY_VERSION_MINIMUM=3.5"

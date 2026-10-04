@@ -1,18 +1,20 @@
-# SPDX-License-Identifier: GPL-2.0-only
+# SPDX-License-Identifier: GPL-2.0
 # Copyright (C) 2016-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="grub"
-PKG_VERSION="2.14"
-PKG_SHA256="bc8d3c73535b8838d8c8e2654d73edc4e6ae8c8acdb45d5df5dc9a1547446d43"
-PKG_ARCH="x86_64"
-PKG_LICENSE="GPL-3.0-or-later"
+PKG_VERSION="2.14-rc1"
+PKG_SHA256="49a6eefd1cfa0eb74a0ee9c844d6236341eefc161f6f2f04537a6acb62a4524a"
+PKG_LICENSE="GPLv3"
 PKG_SITE="https://www.gnu.org/software/grub/index.html"
-PKG_URL="https://ftp.gnu.org/gnu/grub/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_URL="http://git.savannah.gnu.org/cgit/grub.git/snapshot/${PKG_NAME}-${PKG_VERSION}.tar.gz"
 PKG_DEPENDS_HOST="toolchain:host"
 PKG_DEPENDS_TARGET="toolchain flex freetype:host gettext:host grub:host"
+PKG_DEPENDS_UNPACK="gnulib"
 PKG_LONGDESC="GRUB is a Multiboot boot loader."
 PKG_TOOLCHAIN="configure"
-PKG_BUILD_FLAGS="-cfg-libs -cfg-libs:host"
+
+PKG_NEED_UNPACK="${PROJECT_DIR}/${PROJECT}/bootloader ${PROJECT_DIR}/${PROJECT}/devices/${DEVICE}/bootloader"
+PKG_NEED_UNPACK+=" ${PROJECT_DIR}/${PROJECT}/options ${PROJECT_DIR}/${PROJECT}/devices/${DEVICE}/options"
 
 pre_configure_host() {
   unset CFLAGS
@@ -20,10 +22,21 @@ pre_configure_host() {
   unset CXXFLAGS
   unset LDFLAGS
   unset CPP
+
+  cd ${PKG_BUILD}
+    # keep grub synced with gnulib
+    ./bootstrap --gnulib-srcdir=$(get_build_dir gnulib) --copy --no-git --no-bootstrap-sync --skip-po
+
+  mkdir -p .${HOST_NAME}
+    cd .${HOST_NAME}
+
+  # GCC 15+ warns of character assignment that omits the terminal null
+  # character.  This flag disables the warning.  GCC<15 should be unaffected.
+  export CFLAGS="${CFLAGS} -Wno-unterminated-string-initialization"
 }
 
 pre_configure_target() {
-  PKG_CONFIGURE_OPTS_TARGET="--target=i386-pc-linux \
+  PKG_CONFIGURE_OPTS_TARGET="--target=arm64-pc-linux \
                              --disable-nls \
                              --with-platform=efi"
 
@@ -32,6 +45,13 @@ pre_configure_target() {
   unset CXXFLAGS
   unset LDFLAGS
   unset CPP
+
+  cd ${PKG_BUILD}
+    # keep grub synced with gnulib
+    ./bootstrap --gnulib-srcdir=$(get_build_dir gnulib) --copy --no-git --no-bootstrap-sync --skip-po
+
+  mkdir -p .${TARGET_NAME}
+    cd .${TARGET_NAME}
 
   # configure requires explicit TARGET_PREFIX binaries when cross compiling.
   export TARGET_CC="${TARGET_PREFIX}gcc"
@@ -50,13 +70,17 @@ make_target() {
 }
 
 makeinstall_target() {
-  ${PKG_BUILD}/.${HOST_NAME}/grub-mkimage -d grub-core -o bootia32.efi -O i386-efi -p /EFI/BOOT \
-    boot chain configfile ext2 fat linux search efi_gop \
-    efi_uga part_gpt gzio gettext loadenv loadbios memrw
+  ${PKG_BUILD}/.${HOST_NAME}/grub-mkimage -d grub-core -o bootaa64.efi -O arm64-efi -p /boot/grub \
+    boot linux ext2 fat squash4 part_msdos part_gpt normal search search_fs_file search_fs_uuid \
+    search_label chain reboot loadenv test gfxterm efi_gop
 
-  mkdir -p ${INSTALL}/usr/share/grub
-     cp -P bootia32.efi ${INSTALL}/usr/share/grub
+  mkdir -p ${INSTALL}/usr/share/bootloader/boot/grub
+    cp -av ${PKG_DIR}/config/* ${INSTALL}/usr/share/bootloader/boot/grub
 
-  mkdir -p ${TOOLCHAIN}/share/grub
-     cp -P bootia32.efi ${TOOLCHAIN}/share/grub
+  mkdir -p ${INSTALL}/usr/share/bootloader/EFI/BOOT
+    cp -av bootaa64.efi ${INSTALL}/usr/share/bootloader/EFI/BOOT
+
+  # Create grub configuration
+  generate_grub_cfg_body > "${INSTALL}/usr/share/bootloader/boot/grub/grub.cfg"
+
 }

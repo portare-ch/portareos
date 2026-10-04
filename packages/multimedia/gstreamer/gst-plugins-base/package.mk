@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # Copyright (C) 2022-present Team LibreELEC (https://libreelec.tv)
+# Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="gst-plugins-base"
 PKG_VERSION="1.29.2"
@@ -65,4 +66,11 @@ pre_configure_target() {
 post_makeinstall_target() {
   # clean up
   safe_remove ${INSTALL}
+}
+
+PKG_MESON_OPTS_TARGET="${PKG_MESON_OPTS_TARGET//-Dgl=disabled/-Dgl=enabled}"
+
+post_configure_target() {
+  find "${PKG_BUILD}" -path '*subprojects/graphene/include/graphene-config.h' -exec \
+    sed -i 's/^#\(\s*\)#define GRAPHENE_USE_AVX/#\1define GRAPHENE_USE_AVX/' {} +
 }

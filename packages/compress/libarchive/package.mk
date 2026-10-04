@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # Copyright (C) 2017-present Team LibreELEC (https://libreelec.tv)
+# Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="libarchive"
 PKG_VERSION="3.8.9"
@@ -45,3 +46,19 @@ PKG_CMAKE_OPTS_TARGET="-DCMAKE_POSITION_INDEPENDENT_CODE=1 \
                        -DENABLE_ZLIB=ON \
                        -DENABLE_ZSTD=ON \
                        -DPOSIX_REGEX_LIB=LIBPCRE2POSIX"
+
+PKG_CMAKE_OPTS_TARGET="${PKG_CMAKE_OPTS_TARGET/-DBUILD_SHARED_LIBS=OFF/-DBUILD_SHARED_LIBS=ON}"
+
+makeinstall_target() {
+  mkdir -p ${INSTALL}/usr/lib
+    cp -rf libarchive/libarchive.so* ${INSTALL}/usr/lib
+
+  mkdir -p ${SYSROOT_PREFIX}/usr/lib
+    cp -rf libarchive/libarchive.so* ${SYSROOT_PREFIX}/usr/lib
+
+  mkdir -p ${SYSROOT_PREFIX}/usr/lib/pkgconfig
+    cp build/pkgconfig/libarchive.pc ${SYSROOT_PREFIX}/usr/lib/pkgconfig
+
+  mkdir -p ${SYSROOT_PREFIX}/usr/include
+    cp ${PKG_BUILD}/libarchive/{archive.h,archive_entry.h} ${SYSROOT_PREFIX}/usr/include
+}

@@ -1,5 +1,5 @@
 # Kernel options asserted after oldconfig has run, by the check at the end of
-# projects/PortareOS/packages/linux/package.mk's pre_make_target.
+# packages/linux/package.mk's pre_make_target.
 #
 # This file exists because the failure mode it guards is silent. Kconfig drops
 # a symbol whose dependencies are unmet without printing anything: no warning,

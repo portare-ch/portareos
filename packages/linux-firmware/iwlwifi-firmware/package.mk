@@ -1,17 +1,14 @@
-# SPDX-License-Identifier: GPL-2.0-or-later
-# Copyright (C) 2009-2016 Stephan Raue (stephan@openelec.tv)
-# Copyright (C) 2017-present Team LibreELEC (https://libreelec.tv)
-
 PKG_NAME="iwlwifi-firmware"
-PKG_VERSION="05730dc6f1f4ccf0cee3999fe7bd856e261ac603"
-PKG_SHA256="5a3bf42ab33f2b9ea182d607741aaa57be7f430f622cbdf5d88a6c19c1764ca0"
-PKG_LICENSE="LicenseRef-Free-to-use"
-PKG_SITE="https://github.com/LibreELEC/iwlwifi-firmware"
-PKG_URL="https://github.com/LibreELEC/iwlwifi-firmware/archive/${PKG_VERSION}.tar.gz"
+PKG_VERSION="6faef0d76cff4f2f6082b6a22245341fcb4f469e"
+PKG_SHA256="7e4bc0763358f85e308ea0b4a46f08e84ae4e480c7665d5112fbee34200b5623"
+PKG_LICENSE="Apache"
+PKG_SITE="https://github.com/armbian/firmware"
+PKG_URL="${PKG_SITE}/archive/${PKG_VERSION}.tar.gz"
 PKG_DEPENDS_TARGET="toolchain"
-PKG_LONGDESC="iwlwifi-firmware: firmwares for various Intel WLAN drivers"
+PKG_LONGDESC="iwlwifi Linux firmware"
 PKG_TOOLCHAIN="manual"
 
 makeinstall_target() {
-  DESTDIR=${INSTALL}/$(get_kernel_overlay_dir) ./install
+  mkdir -p ${INSTALL}/$(get_kernel_overlay_dir)/lib/firmware
+    cp -av iwlwifi-*.ucode ${INSTALL}/$(get_kernel_overlay_dir)/lib/firmware
 }

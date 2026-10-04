@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # Copyright (C) 2016-present Team LibreELEC (https://libreelec.tv)
+# Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="opus"
 PKG_VERSION="1.6.1"
@@ -21,3 +22,7 @@ fi
 PKG_CONFIGURE_OPTS_TARGET="--enable-static \
                            --disable-shared \
                            ${PKG_FIXED_POINT}"
+
+PKG_VERSION="1.5.2"
+PKG_SHA256="65c1d2f78b9f2fb20082c38cbe47c951ad5839345876e46941612ee87f9a7ce1"
+PKG_URL="https://ftp.osuosl.org/pub/xiph/releases/opus/${PKG_NAME}-${PKG_VERSION}.tar.gz"

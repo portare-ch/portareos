@@ -3,12 +3,12 @@
 # Copyright (C) 2016-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="gdk-pixbuf"
-PKG_VERSION="2.44.7"
-PKG_SHA256="172f80e3626ec31520a970400f1a3694e04718f6c2cd2885f75250fb5a6995a4"
-PKG_LICENSE="LGPL-2.1-or-later"
+PKG_VERSION="2.42.10"
+PKG_SHA256="ee9b6c75d13ba096907a2e3c6b27b61bcd17f5c7ebeab5a5b439d2f2e39fe44b"
+PKG_LICENSE="OSS"
 PKG_SITE="http://www.gtk.org/"
-PKG_URL="https://ftp.gnome.org/pub/gnome/sources/gdk-pixbuf/${PKG_VERSION:0:4}/gdk-pixbuf-${PKG_VERSION}.tar.xz"
-PKG_DEPENDS_TARGET="toolchain glib libjpeg-turbo libpng jasper shared-mime-info tiff"
+PKG_URL="https://www.mirrorservice.org/sites/ftp.gnome.org//pub/GNOME/sources/gdk-pixbuf/${PKG_VERSION:0:4}/gdk-pixbuf-${PKG_VERSION}.tar.xz"
+PKG_DEPENDS_TARGET="toolchain glib libjpeg-turbo libpng jasper shared-mime-info tiff zlib"
 PKG_DEPENDS_CONFIG="shared-mime-info"
 PKG_LONGDESC="GdkPixbuf is a a GNOME library for image loading and manipulation."
 
@@ -19,15 +19,23 @@ configure_package() {
 }
 
 pre_configure_target() {
-  PKG_MESON_OPTS_TARGET="-Ddocumentation=false \
+  PKG_MESON_OPTS_TARGET="--wrap-mode=nodownload \
+                         -Dgtk_doc=false \
+                         -Ddocs=false \
                          -Dintrospection=disabled \
                          -Dman=false \
                          -Drelocatable=false \
                          -Dinstalled_tests=false \
-                         -Dglycin=disabled \
                          -Dtests=false"
 
   if [ "${DISPLAYSERVER}" != "x11" ]; then
     PKG_MESON_OPTS_TARGET+=" -Dbuiltin_loaders=all"
   fi
+
+  export TARGET_LDFLAGS="-L${SYSROOT_PREFIX}/usr/lib -lz"
+}
+
+post_makeinstall_target() {
+  mkdir -p ${INSTALL}/usr/lib/gdk-pixbuf-2.0/2.10.0/
+    cp ${PKG_DIR}/config/* ${INSTALL}/usr/lib/gdk-pixbuf-2.0/2.10.0/
 }

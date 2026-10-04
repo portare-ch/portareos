@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # Copyright (C) 2016-present Team LibreELEC (https://libreelec.tv)
+# Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="libiconv"
 PKG_VERSION="1.19"
@@ -19,6 +20,18 @@ PKG_CONFIGURE_OPTS_TARGET="--host=${TARGET_NAME} \
             --sysconfdir=/etc \
             --enable-static \
             --disable-shared \
+            --disable-nls \
+            --disable-extra-encodings \
+            --with-gnu-ld"
+
+PKG_CONFIGURE_OPTS_TARGET="--host=${TARGET_NAME} \
+            --build=${HOST_NAME} \
+            --prefix=/usr \
+            --includedir=/usr/include/iconv \
+            --libdir=/usr/lib/iconv \
+            --sysconfdir=/etc \
+            --enable-shared \
+            --disable-static \
             --disable-nls \
             --disable-extra-encodings \
             --with-gnu-ld"

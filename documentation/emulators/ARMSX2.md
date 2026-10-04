@@ -4,7 +4,7 @@
 
 - `armsx2-lr` 2.7.2, the ARMSX2 libretro core (`armsx2_libretro.so`), in
   RetroArch. It replaced the SDL standalone in #473.
-- Recipe: `projects/PortareOS/packages/emulators/libretro/armsx2-lr/`.
+- Recipe: `packages/emulators/libretro/armsx2-lr/`.
 - Patches:
   - `000-fix-arm-compilation.patch`: page and cache-line size when
     cross-compiling.

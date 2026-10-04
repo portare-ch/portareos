@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2009-2016 Stephan Raue (stephan@openelec.tv)
 # Copyright (C) 2019-present Team LibreELEC (https://libreelec.tv)
+# Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="readline"
 PKG_VERSION="8.3"
@@ -20,3 +21,8 @@ PKG_CONFIGURE_OPTS_TARGET="bash_cv_wcwidth_broken=no \
 post_makeinstall_target() {
   rm -rf ${INSTALL}/usr/share/readline
 }
+
+PKG_CONFIGURE_OPTS_TARGET="bash_cv_wcwidth_broken=no \
+                           --enable-shared \
+                           --disable-static \
+                           --with-curses"

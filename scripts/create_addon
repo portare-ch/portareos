@@ -58,17 +58,17 @@ get_addons() {
       paths="^${ROOT}/packages/addons/"
       ;;
     all)
-      paths="^${ROOT}/packages/|^${ROOT}/projects/.*/packages/"
+      paths="^${ROOT}/packages/"
       ;;
     *)
-      paths="^${ROOT}/packages/|^${ROOT}/projects/.*/packages/"
+      paths="^${ROOT}/packages/"
       filter="${1}"
       ;;
   esac
 
   exit() { exited=1; }
 
-  for pkgpath in $(cat "${_CACHE_PACKAGE_LOCAL}" "${_CACHE_PACKAGE_GLOBAL}" | grep -E "${paths}"); do
+  for pkgpath in $(grep -E "${paths}" "${_CACHE_PACKAGE}"); do
     if [ -n "${filter}" ]; then
       [[ ${pkgpath} =~ ^.*/${filter}@?+?@ ]] || continue
     fi

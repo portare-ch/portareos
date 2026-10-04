@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # Copyright (C) 2021-present Team LibreELEC (https://libreelec.tv)
+# Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="ldacBT"
 PKG_VERSION="2.0.2.6"
@@ -11,3 +12,6 @@ PKG_DEPENDS_TARGET="toolchain"
 PKG_LONGDESC="LDAC Bluetooth encoder library (build tools)"
 
 PKG_CMAKE_OPTS_TARGET="-DLDAC_SOFT_FLOAT=OFF"
+
+PKG_CMAKE_OPTS_TARGET="-DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+                       -DLDAC_SOFT_FLOAT=OFF"

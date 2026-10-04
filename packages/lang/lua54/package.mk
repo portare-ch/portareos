@@ -1,15 +1,14 @@
-# SPDX-License-Identifier: GPL-2.0-only
+# SPDX-License-Identifier: GPL-2.0
 # Copyright (C) 2022-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="lua54"
-PKG_VERSION="5.4.8"
-PKG_SHA256="4f18ddae154e793e46eeab727c59ef1c0c0c2b744e7b94219710d76f530629ae"
+PKG_VERSION="5.4.6"
+PKG_SHA256="7d5ea1b9cb6aa0b59ca3dde1c6adcb57ef83a1ba8e5432c0ecd06bf439b3ad88"
 PKG_LICENSE="MIT"
 PKG_SITE="https://www.lua.org"
 PKG_URL="http://www.lua.org/ftp/lua-${PKG_VERSION}.tar.gz"
 PKG_DEPENDS_TARGET="toolchain"
 PKG_LONGDESC="Lua is a powerful, efficient, lightweight, embeddable scripting language."
-PKG_BUILD_FLAGS="+pic"
 
 make_target() {
   make CC=${CC} AR="${AR} rcu" MYCFLAGS="-fPIC" posix
@@ -17,7 +16,7 @@ make_target() {
 
 makeinstall_target() {
   mkdir -p ${SYSROOT_PREFIX}/usr/include/lua$(get_pkg_version_maj_min)
-  cp src/lua.h src/luaconf.h src/lualib.h src/lauxlib.h ${SYSROOT_PREFIX}/usr/include/lua$(get_pkg_version_maj_min)
+  cp src/lua.hpp src/lua.h src/luaconf.h src/lualib.h src/lauxlib.h ${SYSROOT_PREFIX}/usr/include/lua$(get_pkg_version_maj_min)
 
   mkdir -p ${SYSROOT_PREFIX}/usr/lib
   cp src/liblua.a ${SYSROOT_PREFIX}/usr/lib/liblua$(get_pkg_version_maj_min).a

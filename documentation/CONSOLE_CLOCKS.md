@@ -101,7 +101,7 @@ Audio: the SPU's rate is the crystal / 768 = 44100 Hz exactly.
 
 - psx-spx, *GPU Timings* — "NTSC video clock = 53.693175 MHz", "263 scanlines per field for NTSC non-interlaced", "3413 video cycles per scanline", "Non-interlaced: 59.826 Hz", "Interlaced: 59.940 Hz": https://psx-spx.consoledev.net/graphicsprocessingunitgpu/#gpu-timings
 - Mednafen (Beetle PSX), `mednafen/psx/gpu.c`: `GPU.LineClockCounter = 3412 + GPU.PhaseChange - 200; … GPU.PhaseChange = !GPU.PhaseChange;`
-- PortareOS, `projects/PortareOS/packages/emulators/libretro/swanstation-lr/patches/001-ntsc-line-is-3412-5-ticks.patch`
+- PortareOS, `packages/emulators/libretro/swanstation-lr/patches/001-ntsc-line-is-3412-5-ticks.patch`
 - SwanStation, `src/core/system.h`: `MASTER_CLOCK = 44100 * 0x300; // 33868800Hz`; `src/core/gpu.h`: `NTSC_TICKS_PER_LINE = 3413, … NTSC_TOTAL_LINES = 263, PAL_TICKS_PER_LINE = 3406, … PAL_TOTAL_LINES = 314`; `src/core/gpu.cpp`, `SystemTicksToCRTCTicks`: × 715909 / 451584 (NTSC), × 709379 / 451584 (PAL)
 
 ### Saturn
@@ -113,7 +113,7 @@ Beetle Saturn emulates this chain (a 1746818182 Hz timestamp clock divided by 61
 Audio: the SCSP outputs 44100 Hz.
 
 - Beetle Saturn, `mednafen/ss/ss.c`: `MasterClock = PAL ? 1734687500 : 1746818182; /* NTSC: 1746818181.818... */`, `VDP2_StartFrame(espec, cur_clock_div == 61)`; `mednafen/ss/vdp2.c`: `HTimings[2][HPHASE__COUNT] = { { 0x140, 0x15B, 0x1AB }, { 0x160, 0x177, 0x1C7 } }` (427 and 455 units), `VTimings` NTSC total `0x107` (263) in all four modes; `libretro.c`, `retro_get_system_av_info`: the comment deriving 59.826105 and rejecting MAME's 59.764802
-- PortareOS, `projects/PortareOS/packages/emulators/libretro/beetle-saturn-lr/patches/001-exact-ntsc-rate.patch`
+- PortareOS, `packages/emulators/libretro/beetle-saturn-lr/patches/001-exact-ntsc-rate.patch`
 
 ### Nintendo 64
 
@@ -134,7 +134,7 @@ Audio: the AI's sample rate is VCLK / (`AI_DACRATE` + 1), so it is whatever divi
 - N64brew wiki, *Audio Interface* — the DAC rate register: https://n64brew.dev/wiki/Audio_Interface
 - awe444 in *Nintendo 64 De-blur*, videogameperfection.com forums, page 2 — the crystal is 4 × subcarrier, the MX8350 divides it, and 4500/286 kHz only holds for 525i: https://www.videogameperfection.com/forums/topic/nintendo-64-de-blur/page/2/
 - mupen64plus-core, `src/device/rcp/vi/vi_controller.c`: `vi_clock_from_tv_standard` returns 49656530 (PAL), 48628316 (MPAL), 48681812 (NTSC)
-- PortareOS, `projects/PortareOS/packages/emulators/libretro/parallel-n64-lr/patches/003-vi-frame-period-from-h-sync.patch`
+- PortareOS, `packages/emulators/libretro/parallel-n64-lr/patches/003-vi-frame-period-from-h-sync.patch`
 
 ### Neo Geo
 
