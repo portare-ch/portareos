@@ -69,6 +69,14 @@ fi
 log $0 "Enabling fan control."
 set_control 1 >/dev/null 2>&1
 
+# A step is left downwards only once the temperature is HYSTERESIS below
+# the threshold that brought the fan up to it. The averaged sensor sits
+# within a degree of a threshold for minutes under a steady load (75 to
+# 77 C in a Steam game, on the 75 C step), and without this the fan
+# changed speed every poll, which is heard long before the level is.
+HYSTERESIS=${HYSTERESIS:-3000}
+LASTINDEX=""
+
 while true
 do
   CPU_TEMP=$(awk '{total += $1; count++} END {printf "%d", total/count}' ${DEVICE_TEMP_SENSOR})
@@ -82,10 +90,18 @@ do
     fi
     INDEX=$(( $INDEX + 1 ))
   done
+  # A higher index is a lower speed. Stay on the current step until the
+  # temperature is clear of its threshold.
+  if [ -n "${LASTINDEX}" ] && (( INDEX > LASTINDEX )) &&
+     (( CPU_TEMP > TEMPS[LASTINDEX] - HYSTERESIS ))
+  then
+    INDEX=${LASTINDEX}
+  fi
+  LASTINDEX=${INDEX}
   FSPEED=${SPEEDS[${INDEX}]}
   if [ ! "${LASTSPEED}" = "${FSPEED}" ]
   then
-    $DEBUG && log $0 "Setting PWM FAN to ${FSPEED} (${TEMP})" 2>/dev/null
+    $DEBUG && log $0 "Setting PWM FAN to ${FSPEED} (${TEMPS[${INDEX}]})" 2>/dev/null
     echo ${FSPEED} >${FAN_PWM}
     LASTSPEED=${FSPEED}
   fi
