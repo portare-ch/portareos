@@ -29,6 +29,7 @@ things may break along the way.
 | PlayStation | [SwanStation](documentation/emulators/SwanStation.md) | ✅ Tested |
 | PlayStation 2 | [ARMSX2 (libretro)](documentation/emulators/ARMSX2.md) | 🚧 Playable, optimization ongoing ([#477](https://github.com/portare-ch/portareos/issues/477)) |
 | GameCube | Dolphin (libretro) | ❌ Currently broken: hangs, no sound ([#463](https://github.com/portare-ch/portareos/issues/463)) |
+| Steam (x86 games through FEX) | Steam on gamescope | ✅ Tested on 2026-10-05: launches from the launcher again ([#533](https://github.com/portare-ch/portareos/pull/533)), SUPERHOT runs with sound ([#535](https://github.com/portare-ch/portareos/pull/535), [#536](https://github.com/portare-ch/portareos/pull/536)), Big Picture at a readable 1.6 ([#534](https://github.com/portare-ch/portareos/pull/534)) |
 
 A linked emulator has its own page with what was measured and why it is set
 up the way it is: [documentation/emulators/](documentation/emulators/README.md).
