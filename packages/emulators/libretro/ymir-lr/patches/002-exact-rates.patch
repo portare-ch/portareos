@@ -1,0 +1,27 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] the NTSC and PAL rates the VDP times, not rounded ones
+
+The wrapper reported 59.82 Hz for NTSC and a flat 50 for PAL. The VDP
+times 455 x 4 master clocks a line and 263 lines (NTSC) or 313 (PAL),
+and in 320 mode the slower clock and the shorter line cancel to the same
+period: 59.826105 and 49.920128 Hz, the rates Beetle Saturn reports with
+its own patch. The panel mode this core selects is cut to twice the
+exact rate, 119.652237 Hz, and 59.82 missed it by 100 ppm - a repeated
+frame every 10 seconds.
+
+--- a/apps/ymir-libretro/src/libretro.cpp
++++ b/apps/ymir-libretro/src/libretro.cpp
+@@ -1178,7 +1178,12 @@ RETRO_API void retro_get_system_av_info(struct retro_system_av_info *info) {
+     info->geometry.max_height = ymir::vdp::kMaxResV;
+     info->geometry.aspect_ratio = 4.0f / 3.0f;
+ 
+-    info->timing.fps = core.is_pal ? 50.0 : 59.82;
++    // The rates the VDP times: 455 x 4 master clocks a line, 263 lines
++    // (NTSC) or 313 (PAL), over the 352-mode master clock - the 320-mode
++    // clock and line length cancel to the same period. 59.826105 and
++    // 49.920128 Hz; 59.82 missed the panel mode cut to twice the rate.
++    info->timing.fps = core.is_pal ? ymir::sys::kPALClock / (455.0 * 4 * 313)
++                                   : ymir::sys::kNTSCClock / (455.0 * 4 * 263);
+     info->timing.sample_rate = 44100.0;
+ }
+ 

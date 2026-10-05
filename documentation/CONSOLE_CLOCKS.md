@@ -114,6 +114,7 @@ Audio: the SCSP outputs 44100 Hz.
 
 - Beetle Saturn, `mednafen/ss/ss.c`: `MasterClock = PAL ? 1734687500 : 1746818182; /* NTSC: 1746818181.818... */`, `VDP2_StartFrame(espec, cur_clock_div == 61)`; `mednafen/ss/vdp2.c`: `HTimings[2][HPHASE__COUNT] = { { 0x140, 0x15B, 0x1AB }, { 0x160, 0x177, 0x1C7 } }` (427 and 455 units), `VTimings` NTSC total `0x107` (263) in all four modes; `libretro.c`, `retro_get_system_av_info`: the comment deriving 59.826105 and rejecting MAME's 59.764802
 - PortareOS, `packages/emulators/libretro/beetle-saturn-lr/patches/001-exact-ntsc-rate.patch`
+- Ymir, `libs/ymir-core/include/ymir/sys/clocks.hpp`: `kNTSCClock = 39375000.0 * 8.0 / 11.0` (the 352-mode master clock), and `vdp.cpp` times 455 x 4 clocks a line over 263 lines (240p) - the same chain, 59.826105 Hz. Its own `kNTSCFrameRate` constant is `kNTSCClock / (455 * 525 * 2)` = 59.94, the 525-line broadcast figure, used only by the SDL app's pacing and settings page; the libretro wrapper reported a rounded 59.82. PortareOS's `002-exact-rates.patch` reports the VDP's chain.
 
 ### Nintendo 64
 

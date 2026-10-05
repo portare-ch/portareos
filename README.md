@@ -152,7 +152,7 @@ together with the settings nobody had tuned for them. See
 | 32X | PicoDrive |
 | Dreamcast, NAOMI, Atomiswave | Flycast |
 | PlayStation | SwanStation |
-| Saturn | Beetle Saturn |
+| Saturn | Beetle Saturn; Ymir alongside it, under comparison |
 | PlayStation 2 | ARMSX2 |
 | PSP | PPSSPP |
 | Xbox | xemu |
