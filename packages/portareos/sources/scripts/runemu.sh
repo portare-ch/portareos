@@ -521,8 +521,15 @@ fi
 ### the device quirk has to name both sets. A cpuset bounds taskset, so a
 ### system set to the little cores is left alone rather than started on cores
 ### its mask excludes. --runtime and the EXIT trap: a killed run leaves
-### nothing a reboot does not clear, a normal one leaves nothing at all.
+### nothing a reboot does not clear.
+###
+### The release names every CPU rather than clearing AllowedCPUs. Clearing
+### it makes systemd drop the cpuset controller from the slice, and a cpuset
+### that goes away leaves its tasks with the mask they had: PipeWire,
+### journald, sshd and the launcher stayed on 0-2 until a reboot. Writing
+### the full set is a change the kernel propagates to every task.
 WQ_CPUMASK="/sys/devices/virtual/workqueue/cpumask"
+ALL_CPUS="$(cat /sys/devices/system/cpu/possible 2>/dev/null)"
 
 cpus_to_mask() {
   local part c mask=0
@@ -536,7 +543,7 @@ cpus_to_mask() {
 
 release_cpus() {
   [ "${CPUS_ISOLATED:-0}" = "1" ] || return 0
-  systemctl set-property --runtime system.slice AllowedCPUs= 2>/dev/null
+  systemctl set-property --runtime system.slice AllowedCPUs="${ALL_CPUS:-0-7}" 2>/dev/null
   [ -n "${WQ_SAVED:-}" ] && echo "${WQ_SAVED}" >"${WQ_CPUMASK}" 2>/dev/null
   CPUS_ISOLATED=0
 }
