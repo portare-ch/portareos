@@ -83,14 +83,27 @@ install_fex_config() {
   cp -r "/usr/config/fex-emu" "/storage/.config/" || die "Failed to copy FEX config."
 }
 
+# The RootFS in use is moved aside, not removed, until the new one is
+# extracted: a download that broke off at 450 of 1360 MB once left no
+# RootFS at all, and every x86 game then died on "RootFS path doesn't
+# exist" with nothing to say why. The fetcher extracts a truncated image
+# only as far as it goes, so the extracted tree is checked for the
+# dynamic loader before the old one is let go.
 ensure_fex_rootfs() {
-  rm -rf ${FEX_DATA}/RootFS/ArchLinux* || die "Failed to remove existing FEX RootFS."
-
-  if [ ! -d "${FEX_DATA}/RootFS/ArchLinux" ]; then
-    log_info "FEX needs to download rootfs before starting Steam. This may take a while..."
-    FEXRootFSFetcher --distro-name=arch --distro-version=rolling -y -x || die "Failed to fetch FEX RootFS."
-    rm -rf ${FEX_DATA}/RootFS/ArchLinux.sqsh || die "Failed to remove FEX RootFS sqsh."
+  local old="${FEX_ARCH_ROOT}.previous"
+  rm -rf "${old}" "${FEX_DATA}/RootFS/ArchLinux.sqsh" || die "Failed to clear the previous FEX RootFS."
+  if [ -d "${FEX_ARCH_ROOT}" ]; then
+    mv "${FEX_ARCH_ROOT}" "${old}" || die "Failed to move the FEX RootFS aside."
   fi
+
+  log_info "FEX needs to download rootfs before starting Steam. This may take a while..."
+  if ! FEXRootFSFetcher --distro-name=arch --distro-version=rolling -y -x ||
+     [ ! -e "${FEX_ARCH_ROOT}/usr/lib/ld-linux-x86-64.so.2" ]; then
+    rm -rf "${FEX_ARCH_ROOT}" "${FEX_DATA}/RootFS/ArchLinux.sqsh"
+    [ -d "${old}" ] && mv "${old}" "${FEX_ARCH_ROOT}"
+    die "Failed to fetch FEX RootFS. The previous one is back in place."
+  fi
+  rm -rf "${old}" "${FEX_DATA}/RootFS/ArchLinux.sqsh" || die "Failed to remove FEX RootFS sqsh."
 
   cp -f "/usr/lib/liblsfg-vk-layer.so" "${FEX_ARCH_USR_LIB}"  || die "Failed to copy liblsfg-vk-layer.so."
   cp -f "/usr/share/fex-emu/liblsfg-vk-layer-x86.so" "${FEX_ARCH_USR_LIB}"  || die "Failed to copy liblsfg-vk-layer-x86.so."
@@ -175,6 +188,9 @@ install_steam_client_arm64() {
   mkdir -p "${STEAM_DOT}"
   ln -sfn "${STEAM}" "${STEAM_DOT}/steam" || die "Failed to symlink STEAM_DOT/steam."
   ln -sfn "${STEAM}/linuxarm64" "${STEAM_DOT}/sdkarm64" || die "Failed to symlink STEAM_DOT/sdkarm64."
+  # What steam_api in an x86 game dlopens: ~/.steam/sdk64/steamclient.so.
+  ln -sfn "${STEAM}/linux64" "${STEAM_DOT}/sdk64" || die "Failed to symlink STEAM_DOT/sdk64."
+  ln -sfn "${STEAM}/linux32" "${STEAM_DOT}/sdk32" || die "Failed to symlink STEAM_DOT/sdk32."
   mkdir -p "${STEAM}/compatibilitytools.d/"
 }
 
