@@ -2,8 +2,8 @@
 # Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="glsl-shaders"
-PKG_VERSION="f8e23ff880668f0f0e837a05a316534d82a7f31b"
-PKG_SHA256="a4196a853e9eeacb41f875932ef2ddc4701beafca919347d3590360bbd7c65ed"
+PKG_VERSION="435612fe4f1023117b3aae48c88603fb413404a3"
+PKG_SHA256="16e89c0028d700e0475cb415c2ec5cc36b6319ca8454952db5bf6bcdafb25ec7"
 PKG_LICENSE=""
 PKG_SITE="https://github.com/libretro/glsl-shaders"
 PKG_URL="${PKG_SITE}/archive/${PKG_VERSION}.tar.gz"
