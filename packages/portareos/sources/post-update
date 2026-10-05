@@ -364,6 +364,13 @@ migrate_ps2_cpu_layout() {
   [ -n "$(get_setting ps2.cpugovernor)" ] || set_setting ps2.cpugovernor performance
 }
 
+# Beetle Saturn's single emulation thread wants the big cores at full
+# clock; the image ships saturn.cpugovernor=performance, as the PS2 has.
+# Only an unset value is filled in.
+migrate_saturn_governor() {
+  [ -n "$(get_setting saturn.cpugovernor)" ] || set_setting saturn.cpugovernor performance
+}
+
 # glide64 was the shipped N64 renderer until ParaLLEl-RDP replaced it. It
 # needs OpenGL, which here is zink, and RetroArch crashed within seconds of
 # every N64 launch on a device still carrying it. Only glide64 is moved.
@@ -436,6 +443,7 @@ migrate colorprofile-stock migrate_colorprofile_stock
 migrate n64-parallel-rdp migrate_n64_parallel_rdp
 migrate integerscale-on migrate_integerscale_on
 migrate ps2-cpu-layout migrate_ps2_cpu_layout
+migrate saturn-governor migrate_saturn_governor
 migrate music-little-cores migrate_music_little_cores
 migrate nes-ratio-core migrate_nes_ratio_core
 migrate snes-ratio-core migrate_snes_ratio_core

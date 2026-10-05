@@ -47,7 +47,9 @@ lightly loaded however full the frame is:
 
 Today's answer is a per-system governor. runemu applies `<system>.cpugovernor`
 at launch and restores `system.cpugovernor` on exit. `ps2.cpugovernor` ships
-as `performance`. The `performance` function sets every CPU cluster, not
+as `performance`, and so does `saturn.cpugovernor`: Beetle Saturn runs the
+console on one thread, and a tester reported Grandia well under speed on
+schedutil (not yet measured here; the governor is the first thing to test). The `performance` function sets every CPU cluster, not
 only the cores the game uses. It would also pin the memory bus, but
 `DMC_FREQ` is unset on this device (its only devfreq devices are the GPU and
 the UFS controller), so that part does nothing here.
