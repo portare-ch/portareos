@@ -418,6 +418,38 @@ the way in. Three pieces, in increasing order of how much is unknown:
 So: yes in principle, and the honest order is 1, then 2, and only then consider
 3. Item 1 may make the rest unnecessary.
 
+## RetroArch straight to the PCM: measured, and not a lever either
+
+2026-10-06. `audio_driver = alsa`, `audio_device = hw:0,0`, PipeWire idle so
+the device is free, the DSP period floor at 4 ms (patch 1077), and a 10 Hz
+sampler of the PCM state counting XRUN episodes, since RetroArch's ALSA
+driver recovers them without a log line.
+
+| core | rate | period / buffer | queue min / mean | XRUN episodes | run |
+|---|---|---|---|---|---|
+| bsnes | 32 kHz | 128 / 256 (8 ms) | 1.1 / 5.2 ms | 1 | 300 s |
+| bsnes | 32 kHz | 128 / 384 (12 ms) | 4.1 / 8.8 ms | 0 | 300 s |
+| gambatte | 44.1 kHz | 192 / 384 (8.7 ms) | 0.8 / 5.2 ms | 12 | 90 s |
+| mgba | 48 kHz | 192 / 384 (8 ms) | 0.02 / 5.0 ms | 3 | 90 s |
+| genesis_plus_gx | 44.1 kHz | 192 / 384 (8.7 ms) | 0.3 / 5.4 ms | 17 | 90 s |
+
+At the only setting that ran clean, the direct path's queue is 8.8 ms, the
+tuned PipeWire path's 8.9. The light cores underrun more than bsnes at a
+tenth of its CPU, so the cause is not frame time: RetroArch hands the
+device one emulated frame of audio at a time, 735 frames at 44.1 kHz,
+into a buffer that holds 384. The write blocks until half has drained,
+the buffer is full when it returns, and it has to last until the next
+frame's write; there is no margin at any core speed. A buffer that holds
+a frame plus margin is 12 ms and more, and that is the PipeWire figure.
+PipeWire's software ring absorbs exactly this burst, which is what it is
+for. An MMAP writer has the same queue structure and would reproduce the
+table. At the vendor's 10 ms floor the same path is 11.9 ms mean.
+
+The experiment is kept here because it closes the question: the software
+queue below RetroArch is about 9 ms either way, and the remaining distance
+to Android's 10 camera frames is in the DSP graph and in RetroArch's own
+frame-sized production, not in the transport.
+
 ## The DSP period floor, measured: not a lever
 
 2026-10-06, kernel patch 1077's `period_min_ms` swept on the device. With
