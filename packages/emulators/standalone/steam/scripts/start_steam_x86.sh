@@ -15,6 +15,7 @@ set_kill set "-9 FEX"
 steam_ensure_fex_config_template
 steam_prepare_storage_and_vdf
 steam_load_es_thunk_settings "$@"
+steam_seed_ui_scale
 steam_apply_lsfg_settings
 steam_apply_fps_limit
 steam_set_cpu_affinity
