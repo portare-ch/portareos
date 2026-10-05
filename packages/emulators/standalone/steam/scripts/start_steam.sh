@@ -149,12 +149,23 @@ steam_touch_calibration_end() {
   STEAM_TOUCH_EVENT=""
 }
 
+# runemu starts this in a scope in game.slice with the game's cpuset, and
+# puts system.slice on the little cores for the duration
+# (documentation/CPU_ISOLATION.md). A re-exec into system.slice landed
+# there, where taskset -c 3-7 is refused and gamescope never started. Stay
+# in the slice and the cpuset this was started in.
 steam_scope_reexec_if_needed() {
   if [ -z "$_STEAM_SCOPE" ]; then
+    local cgroup slice cpus
+    cgroup=$(awk -F: '/^0::/ { print $3 }' /proc/self/cgroup)
+    slice=${cgroup#/}; slice=${slice%%/*}
+    case "${slice}" in *.slice) ;; *) slice="system.slice" ;; esac
+    cpus=$(cat "/sys/fs/cgroup${cgroup}/cpuset.cpus.effective" 2>/dev/null)
     systemctl stop steam-bigpicture.scope 2>/dev/null || true
     exec systemd-run \
       --scope \
-      --slice=system.slice \
+      --slice="${slice}" \
+      ${cpus:+-p AllowedCPUs="${cpus}"} \
       --unit=steam-bigpicture \
       --collect \
       -E _STEAM_SCOPE=1 \
