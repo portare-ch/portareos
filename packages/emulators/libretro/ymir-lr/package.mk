@@ -27,6 +27,14 @@ PKG_BUILD_FLAGS="speed"
 # produces much slower code for it. The same clang ARMSX2 uses.
 
 make_target() {
+  # The Vulkan switch below hides a GPU renderer the day upstream adds one.
+  # Its D3D12 renderer lives in vdp_renderer_hw_d3d12.*; a Vulkan sibling
+  # means the shaders are wanted here, and the build says so instead of
+  # shipping a core with the renderer missing.
+  if ls "${PKG_BUILD}"/libs/ymir-core/include/ymir/hw/vdp/renderer/vdp_renderer_hw_vulkan* >/dev/null 2>&1; then
+    die "ymir-lr: Ymir has a Vulkan VDP renderer now. Drop CMAKE_DISABLE_FIND_PACKAGE_Vulkan, give the toolchain a SPIR-V shader compiler (DXC), and expose the renderer through the wrapper."
+  fi
+
   # The toolchain's flags are GCC's: clang has no -mabi=lp64 ("unknown
   # target ABI", the nightly's failure) and ARMSX2 drops -mtune with it.
   local _v
