@@ -61,7 +61,7 @@ Done in #334, from the lists above:
 | entware | 1 | out of `virtual/image`, with the `/opt` link |
 | btop | 1 | `BTOP_TOOL` gone from the options; htop stays |
 | xorg-launch-helper, its `xorg.service`, xrandr | 1 | xwayland listed the helper, glew the CLI; neither needed them |
-| the 310 `.info` files of cores we do not ship | 1 | `core-info` installs the fifteen we have, under their own names: Saturn's is `mednafen_saturn`, as the core file is, which the old rename to `beetle_` had broken |
+| the 310 `.info` files of cores we do not ship | 1 | `core-info` installs the fifteen we have, under their own names: Saturn's was `mednafen_saturn`, as the core file was, which the old rename to `beetle_` had broken; it is `ymir` now |
 
 Done in #351:
 

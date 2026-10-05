@@ -241,7 +241,7 @@ the launched config. Fail if every game picks 48000.
 
 Covered by A1's table; additionally `audio_out_rate` in the per-core
 config under `/storage/.config/retroarch/config/<core>/<core>.cfg` is
-44100 for SwanStation, Beetle Saturn, Flycast, PPSSPP, NeoCD, Genesis
+44100 for SwanStation, Ymir, Flycast, PPSSPP, NeoCD, Genesis
 Plus GX and PicoDrive, and the global file keeps `0`, which picks 32000
 for bsnes's 32040 and 44100 for an MSU-1 game.
 
