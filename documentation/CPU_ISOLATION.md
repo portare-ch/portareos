@@ -138,6 +138,11 @@ The quirk `040-affinity` names the two sets: `GAME_CPUS=3-7` and
     play once #485 was in.
     For the same reason the scope has to include every core an emulator pins
     to.
+  - A launch script that re-execs itself into a scope of its own must stay
+    in the slice and cpuset runemu started it in. Steam's did not: it went
+    to `system.slice`, which was on 0-2 by then, and its `taskset -c 3-7`
+    was refused; nothing started from the day the isolation landed until
+    `start_steam.sh` read its slice and cpuset from `/proc/self/cgroup`.
 - **Limits:** kernel threads bound to a core, and the scheduler's own work,
   stay where they are. That is as far as cpusets go without `isolcpus` or
   `nohz_full`, which would take cores from the system permanently.
