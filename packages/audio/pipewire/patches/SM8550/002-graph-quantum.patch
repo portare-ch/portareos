@@ -2,7 +2,7 @@ diff --git a/src/daemon/pipewire.conf.in b/src/daemon/pipewire.conf.in
 index 0d54cf9b90..bdea2ca072 100644
 --- a/src/daemon/pipewire.conf.in
 +++ b/src/daemon/pipewire.conf.in
-@@ -43,7 +43,7 @@ context.properties = {
+@@ -43,7 +43,13 @@ context.properties = {
      #default.clock.rate          = 48000
 -    #default.clock.allowed-rates = [ 48000 ]
 -    #default.clock.quantum       = 1024
@@ -10,7 +10,13 @@ index 0d54cf9b90..bdea2ca072 100644
 -    #default.clock.max-quantum   = 2048
 +    default.clock.allowed-rates = [ 48000 44100 32000 ]
 +    default.clock.quantum       = 1024
-+    default.clock.min-quantum   = 256
++    # 3 ms at 48 kHz, scaled to the graph's rate: 96 at 32 kHz, 133 at
++    # 44.1. The sink stops at 2 ms at every rate and 3 ms ran clean at
++    # all three on the Nova; a request below this is clamped up to it.
++    # Without the power-of-two rounding, since 96, 133 and 144 are not,
++    # and rounding them down lands on the 2 ms that stops the sink.
++    default.clock.min-quantum   = 144
 +    default.clock.max-quantum   = 2048
++    clock.power-of-two-quantum  = false
      #default.clock.quantum-limit = 8192
      #default.clock.quantum-floor = 4
