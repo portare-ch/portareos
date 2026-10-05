@@ -48,7 +48,7 @@ Not measured whether Turnip's display backend blocks inside the present.
 
 PS2 runs on the ARMSX2 team's own Turnip build, not the image's Mesa (#497).
 Package `armsx2-turnip` (SM8550 device package), currently release
-`axfl2-001` from [bmdhacks/armsx2-turnip](https://github.com/bmdhacks/armsx2-turnip):
+`axfl2-002` from [bmdhacks/armsx2-turnip](https://github.com/bmdhacks/armsx2-turnip) (`axfl2-002` differs from `axfl2-001` only on the Adreno 610; on the 740 the driver is the same, and upstream deleted the 001 release, which is why the pin moved. The log lines below were recorded with 001.):
 their prebuilt aarch64 driver, unmodified.
 
 **Why:**
