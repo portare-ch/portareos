@@ -406,6 +406,32 @@ the way in. Three pieces, in increasing order of how much is unknown:
 So: yes in principle, and the honest order is 1, then 2, and only then consider
 3. Item 1 may make the rest unnecessary.
 
+## The DSP period floor, measured: not a lever
+
+2026-10-06, kernel patch 1077's `period_min_ms` swept on the device. With
+`pcm-floor` on the bare PCM, PipeWire stopped: 160 frames at 32 kHz (5 ms)
+and 128 (4 ms) streamed clean, and at 48 kHz 160 frames (3.3 ms) did; the
+DSP runs well below the vendor's 10 ms. Then Super Mario World on bsnes,
+60 s a value, the PCM delay (`appl_ptr - hw_ptr`) read every second and
+the sink's xrun counter before and after:
+
+| `period_min_ms` | period PipeWire chose | delay min / mean / max | xruns |
+|---|---|---|---|
+| 10 | 960 frames | 128 / 204 / 256 frames (6.4 ms mean) | 0 |
+| 5 | 960 frames | 128 / 201 / 288 | 0 |
+| 4 | 1024 frames | 128 / 202 / 256 | 0 |
+
+All three sounded clean to the user. The delay did not move because the
+sink is timer-scheduled: PipeWire wakes by its own clock against the
+sample-accurate position pull mode gives it, tops the device up to the
+quantum, and takes its period from `api.alsa.period-size` (1024), which
+the floor only has to permit. The hardware period is the interrupt
+interval and nothing else. What sets the delay is the quantum, which is
+why 128 to 96 frames (patch 0017) moves it and this does not. The floor
+stays at 10; a smaller one would only matter in IRQ mode
+(`api.alsa.disable-tsched`), where the period becomes the wake, and that
+trade has not been measured.
+
 ## The experiment that settles it
 
 Read the two lines that state what was actually negotiated. From the journal,
