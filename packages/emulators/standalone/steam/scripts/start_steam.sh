@@ -30,6 +30,44 @@ steam_load_es_thunk_settings() {
   LSFG_PERFORMANCE_MODE=${LSFG_PERFORMANCE_MODE:-1}
   FPS_LIMIT=$(get_setting fps_limit "${PLATFORM}" "${GAME}")
   FPS_LIMIT=${FPS_LIMIT:-0}
+  UI_SCALE=$(get_setting ui_scale "${PLATFORM}" "${GAME}")
+  UI_SCALE=${UI_SCALE:-1.6}
+}
+
+# Big Picture takes its UI scale from Steam's own setting for the display,
+# the one behind the slider under Settings > Display, saved in config.vdf
+# under the display's name. Its automatic value is about 1.0 for the
+# display gamescope fakes, and 1.0 is the Steam Deck's layout at the
+# panel's 1280 pixels: on 91 mm that is text 1.7 times smaller than on a
+# Deck. Steam rewrites every other scale key at start. Seed the saved
+# entry once, when Steam has none for the display; the slider owns it
+# afterwards.
+# The diagonal, in inches, of the display gamescope fakes: four times the
+# panel's 4.5. Steam names the display by it, and files the saved scale
+# under that name.
+STEAM_FAKE_DIAGONAL=18
+
+steam_seed_ui_scale() {
+  local cfg="/storage/.local/share/Steam/config/config.vdf"
+  local name="External: gamescope ${STEAM_FAKE_DIAGONAL}\\\"|||Windowed"
+  local tab entry line
+  tab=$(printf '\t')
+  [ -f "${cfg}" ] || return 0
+  # The same string is a value in Steam's "Current" block; the saved entry
+  # is the line that is only the key. grep reads no \t, hence the variable.
+  grep -q "^[[:space:]]*\"External: gamescope ${STEAM_FAKE_DIAGONAL}[\\\\]\"|||Windowed\"\$" "${cfg}" && return 0
+  entry=$(mktemp /tmp/steam-ui-scale.XXXXXX)
+  if line=$(grep -n "^${tab}${tab}\"display\"\$" "${cfg}" | head -1 | cut -d: -f1) && [ -n "${line}" ]; then
+    printf '\t\t\t"%s"\n\t\t\t{\n\t\t\t\t"ScaleFactor"\t\t"%s"\n\t\t\t}\n' "${name}" "${UI_SCALE}" >"${entry}"
+  elif line=$(grep -n "^${tab}\"UI\"\$" "${cfg}" | head -1 | cut -d: -f1) && [ -n "${line}" ]; then
+    printf '\t\t"display"\n\t\t{\n\t\t\t"%s"\n\t\t\t{\n\t\t\t\t"ScaleFactor"\t\t"%s"\n\t\t\t}\n\t\t}\n' "${name}" "${UI_SCALE}" >"${entry}"
+  else
+    line=$(( $(wc -l <"${cfg}") - 2 ))
+    printf '\t"UI"\n\t{\n\t\t"display"\n\t\t{\n\t\t\t"%s"\n\t\t\t{\n\t\t\t\t"ScaleFactor"\t\t"%s"\n\t\t\t}\n\t\t}\n\t}\n' "${name}" "${UI_SCALE}" >"${entry}"
+  fi
+  # after the "{" that follows the key, or before the file's closing brace
+  sed -i "$((line + 1))r ${entry}" "${cfg}"
+  rm -f "${entry}"
 }
 
 steam_apply_fps_limit() {
@@ -97,6 +135,18 @@ steam_read_panel_geometry() {
     echo "start_steam: could not read the panel mode from modetest" >&2
     return 1
   fi
+  # The physical size gamescope reports, in place of the panel's 91x68 mm.
+  # Steam treats a display this small as built in: the Deck's fixed layout
+  # and no scaling slider. A monitor-sized display is external, with the
+  # slider and the brightness and FPS controls.
+  # Upstream's 508x286 was a 16:9 23-inch; on a 4:3 panel that claims
+  # pixels 1.33 times wider than tall, 64 dpi across and 85 down, for
+  # anything that reads DPI per axis. Take the panel's shape at
+  # STEAM_FAKE_DIAGONAL: 366x274 at 1280x960. The size is not how the UI
+  # is scaled: Steam's automatic scale barely moves with it, 1.0 at 23
+  # inches and 1.13 at 10 (steam_seed_ui_scale is).
+  FAKE_MM=$(awk -v w="${W}" -v h="${H}" -v d="${STEAM_FAKE_DIAGONAL}" \
+    'BEGIN { s = d * 25.4 / sqrt(w * w + h * h); printf "%dx%d", w * s + 0.5, h * s + 0.5 }')
 }
 
 steam_setup_environment() {
@@ -283,7 +333,7 @@ steam_launch_bigpicture() {
     trap steam_touch_calibration_end EXIT
     while true; do
       rm -f "${steam_exit_code_file}"
-      GAMESCOPE_MODE_SAVE_FILE="${gamescope_mode_file}" GAMESCOPE_FAKE_OUTPUT_MM=508x286 \
+      GAMESCOPE_MODE_SAVE_FILE="${gamescope_mode_file}" GAMESCOPE_FAKE_OUTPUT_MM="${FAKE_MM}" \
       env -u WAYLAND_DISPLAY LD_LIBRARY_PATH=/storage/.local/share/Steam/lib/aarch64-linux-gnu/ ${EMUPERF} \
       gamescope $PREFER_OUTPUT -W "$W" -H "$H" -r "$REFRESH_HZ" --xwayland-count 2 --mangoapp --backend drm --force-orientation "${force_orientation}" -e -- \
       /bin/bash -c '
@@ -312,7 +362,7 @@ steam_launch_bigpicture() {
     # the front-end never left.
     steam_touch_calibration_begin "${force_orientation}"
     trap steam_touch_calibration_end EXIT
-    GAMESCOPE_MODE_SAVE_FILE="${gamescope_mode_file}" GAMESCOPE_FAKE_OUTPUT_MM=508x286 env -u WAYLAND_DISPLAY ${EMUPERF} \
+    GAMESCOPE_MODE_SAVE_FILE="${gamescope_mode_file}" GAMESCOPE_FAKE_OUTPUT_MM="${FAKE_MM}" env -u WAYLAND_DISPLAY ${EMUPERF} \
       gamescope $PREFER_OUTPUT -W "$W" -H "$H" -r "$REFRESH_HZ" --xwayland-count 2 --backend drm --force-orientation "${force_orientation}" -- \
       FEX /usr/bin/steam -nobigpicture -noverifyfiles -nobootstrapupdate -skipinitialbootstrap -norepairfiles -noshaders ${game_uri:+"$game_uri"}
     steam_touch_calibration_end
