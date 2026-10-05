@@ -31,7 +31,13 @@
   # rsinput.frame_rate=3: the pad reports every 5 ms instead of the
   # vendor's 9 (#447). Safe here only with patch 1080, whose setter waits
   # for the driver to register.
-    EXTRA_CMDLINE="quiet rootwait console=tty0 allow_mismatched_32bit_el0 fw_devlink.strict=1 pcie_ports=compat irqaffinity=0-2 cgroup.memory=nokmem,nosocket nosoftlockup usbcore.interrupt_interval_override=045e:028e:2 ufshcd_core.uic_cmd_timeout=3000 mem_sleep_default=s2idle cpuidle.governor=teo rsinput.frame_rate=3"
+  # rsinput.stick_deadband=8: the MCU reports a stick only after it moved
+  # this many ADC counts of its +-1024. The vendor's 40 is 5 or 6 steps
+  # out of 255 at the pad every consumer sees, 23 levels from centre to
+  # the rail; fine aiming is impossible and the stick feels twitchy. At 8
+  # it is one step, 141 distinct values in a sweep against 67, and one
+  # event in 5 s at rest. The driver re-sends it to the MCU on resume.
+    EXTRA_CMDLINE="quiet rootwait console=tty0 allow_mismatched_32bit_el0 fw_devlink.strict=1 pcie_ports=compat irqaffinity=0-2 cgroup.memory=nokmem,nosocket nosoftlockup usbcore.interrupt_interval_override=045e:028e:2 ufshcd_core.uic_cmd_timeout=3000 mem_sleep_default=s2idle cpuidle.governor=teo rsinput.frame_rate=3 rsinput.stick_deadband=8"
 
   # Bootloader to use (syslinux / u-boot)
     BOOTLOADER="qcom-abl"
