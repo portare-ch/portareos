@@ -1,0 +1,26 @@
+From: portare-ch <hello@portare.org>
+Subject: [PATCH] ao_pipewire: block for the buffer lock in the process callback
+
+The process callback took the AO buffer lock with a trylock and, when
+the core held it, queued nothing: one cycle of silence, 512 samples at
+44.1 kHz, and no message anywhere. The core takes that lock for a few
+microseconds every playloop iteration, so on a three-core A510 cluster
+playing music with a video filter graph the collision came about once a
+minute, as an audible tick.
+
+JACK, CoreAudio and SDL already block here. The lock is held for a
+memcpy and a queue count, never across I/O, so the wait is bounded by
+that and by a preempted core thread; a late cycle PipeWire can absorb,
+a missing one it cannot.
+---
+--- a/audio/out/ao_pipewire.c
++++ b/audio/out/ao_pipewire.c
+@@ -199,7 +199,7 @@ static void on_process(void *userdata)
+     end_time += MP_TIME_S_TO_NS(time.buffered) / ao->samplerate;
+     end_time -= pw_stream_get_nsec(p->stream) - time.now;
+ 
+-    int samples = ao_read_data(ao, data, nframes, end_time, NULL, false, false);
++    int samples = ao_read_data(ao, data, nframes, end_time, NULL, false, true);
+     b->size = samples;
+ 
+     for (int i = 0; i < buf->n_datas; i++) {
