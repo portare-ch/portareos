@@ -126,7 +126,15 @@ The quirk `040-affinity` names the two sets: `GAME_CPUS=3-7` and
     `/sys/devices/virtual/workqueue/cpumask`.
 - **Restore:** on exit, and from an `EXIT` trap, so a run killed with TERM
   restores too. A KILL leaves only `--runtime` state, which a reboot clears;
-  the next game's exit also restores it.
+  the next game's exit also restores it. The restore sets `AllowedCPUs` to
+  every CPU (`/sys/devices/system/cpu/possible`) rather than clearing it:
+  clearing makes systemd remove the cpuset controller from the slice, and
+  tasks of a cpuset that disappears keep the mask they had. Measured
+  2026-10-05: after one game, PipeWire, WirePlumber, journald, sshd and
+  the launcher were still on 0-2 three hours later, and
+  `AllowedCPUs=0-7` from that state did not move them either, since the
+  new cpuset's effective CPUs equal the parent's and nothing changes. Only
+  a transition between two explicit masks propagates.
 - **When it is skipped:**
   - On the hybrid hierarchy, or when the quirk names no sets.
   - With `<system>.cpuisolation=0`, per system or per game.
