@@ -445,10 +445,14 @@ PipeWire's software ring absorbs exactly this burst, which is what it is
 for. An MMAP writer has the same queue structure and would reproduce the
 table. At the vendor's 10 ms floor the same path is 11.9 ms mean.
 
-The experiment is kept here because it closes the question: the software
-queue below RetroArch is about 9 ms either way, and the remaining distance
-to Android's 10 camera frames is in the DSP graph and in RetroArch's own
-frame-sized production, not in the transport.
+The experiment is kept here because it closes the transport question: the
+software queue below RetroArch is about 9 ms either way, and replacing
+PipeWire with direct ALSA does not explain Android's advantage. Android's
+RetroArch receives the same frame-sized batches, so what is left to find is
+how Android buffers them downstream, OpenSL or AAudio, fast track or MMAP,
+frame counts, and what its DSP graph does after that: `dumpsys
+media.audio_flinger` and `dumpsys media.audio_policy` on the Android Nova
+while a game runs, against the 8.9 ms measured here.
 
 ## The DSP period floor, measured: not a lever
 
