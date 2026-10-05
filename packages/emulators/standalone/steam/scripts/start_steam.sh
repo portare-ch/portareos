@@ -7,6 +7,26 @@ steam_ensure_fex_config_template() {
   if [ ! -d "/storage/.config/fex-emu" ]; then
     cp -r "/usr/config/fex-emu" "/storage/.config/"
   fi
+  # Steam itself is arm64 and starts without it; every x86 game then dies
+  # at once with FEX's "RootFS path doesn't exist", which Steam shows as a
+  # return to its own screen. Say so where runemu logs.
+  if [ ! -e "/storage/.local/share/fex-emu/RootFS/ArchLinux/usr/lib/ld-linux-x86-64.so.2" ]; then
+    echo "start_steam: no FEX RootFS at /storage/.local/share/fex-emu/RootFS/ArchLinux - x86 games will not start; run Install Steam" >&2
+  fi
+}
+
+# Valve's steam.sh makes these when it bootstraps the client; the arm64
+# client is started directly here, and the installer made only sdkarm64.
+# steam_api in an x86 game dlopens ~/.steam/sdk64/steamclient.so, and a
+# game whose SteamAPI_Init fails quits before it draws anything: SUPERHOT
+# was back in Steam six seconds after launch.
+steam_ensure_sdk_links() {
+  local steam="/storage/.local/share/Steam" dot="/storage/.steam"
+  mkdir -p "${dot}"
+  local arch
+  for arch in 32 64 arm64; do
+    [ -d "${steam}/linux${arch}" ] && ln -sfn "${steam}/linux${arch}" "${dot}/sdk${arch}"
+  done
 }
 
 steam_prepare_storage_and_vdf() {
