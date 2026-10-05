@@ -16,11 +16,25 @@ PKG_BUILD_FLAGS="speed"
 # branch libretro), rebased onto the pinned upstream commit. A bump is a pin
 # move and a rebase of that patch.
 #
+# No Vulkan: with the sysroot's Vulkan found, CMake makes the GPU backend's
+# shaders mandatory and wants DXC to compile them to SPIR-V, which the
+# toolchain has not got. The libretro core renders in software; its GPU
+# renderer is Direct3D 12 only today. Without Vulkan the shaders are
+# skipped, as they were in the build this was verified in.
+#
 # clang, as upstream builds it: the NEON renderer leans on clang's implicit
 # vector conversions, which GCC rejects, and upstream's CI notes GCC also
 # produces much slower code for it. The same clang ARMSX2 uses.
 
 make_target() {
+  # The Vulkan switch below hides a GPU renderer the day upstream adds one.
+  # Its D3D12 renderer lives in vdp_renderer_hw_d3d12.*; a Vulkan sibling
+  # means the shaders are wanted here, and the build says so instead of
+  # shipping a core with the renderer missing.
+  if ls "${PKG_BUILD}"/libs/ymir-core/include/ymir/hw/vdp/renderer/vdp_renderer_hw_vulkan* >/dev/null 2>&1; then
+    die "ymir-lr: Ymir has a Vulkan VDP renderer now. Drop CMAKE_DISABLE_FIND_PACKAGE_Vulkan, give the toolchain a SPIR-V shader compiler (DXC), and expose the renderer through the wrapper."
+  fi
+
   # The toolchain's flags are GCC's: clang has no -mabi=lp64 ("unknown
   # target ABI", the nightly's failure) and ARMSX2 drops -mtune with it.
   local _v
@@ -57,6 +71,7 @@ make_target() {
     -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
     -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY \
     -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
+    -DCMAKE_DISABLE_FIND_PACKAGE_Vulkan=ON \
     -DYmir_ENABLE_LIBRETRO=ON \
     -DYmir_DEV_BUILD=OFF \
     -DYmir_ENABLE_IPO=ON \
