@@ -21,6 +21,19 @@ PKG_BUILD_FLAGS="speed"
 # produces much slower code for it. The same clang ARMSX2 uses.
 
 make_target() {
+  # The toolchain's flags are GCC's: clang has no -mabi=lp64 ("unknown
+  # target ABI", the nightly's failure) and ARMSX2 drops -mtune with it.
+  local _v
+  for _v in CFLAGS CXXFLAGS LDFLAGS; do
+    export ${_v}="$(echo ${!_v} | sed 's/-mabi=lp64//g; s/-mtune=[^ ]*//g')"
+  done
+  # As ARMSX2 does before linking with lld.
+  local _f
+  for _f in "${SYSROOT_PREFIX}"/usr/lib/*.o "${SYSROOT_PREFIX}"/usr/lib/*.a; do
+    [ -f "${_f}" ] || continue
+    "${TOOLCHAIN}/bin/llvm-strip" --strip-debug "${_f}" 2>/dev/null || true
+  done
+
   mkdir -p "${PKG_BUILD}/.${TARGET_NAME}"
   cmake -G Ninja -S "${PKG_BUILD}" -B "${PKG_BUILD}/.${TARGET_NAME}" \
     -DCMAKE_BUILD_TYPE=Release \
