@@ -215,6 +215,10 @@ sed -i -e '/^ps2\(\[.*\]\)\?\.core=armsx2-sa$/d' \
        -e '/^ps2\(\[.*\]\)\?\.emulator=armsx2$/d' \
   /storage/.config/system/configs/system.cfg
 
+### And for Beetle Saturn, which Ymir replaced.
+sed -i -e '/^saturn\(\[.*\]\)\?\.core=mednafen_saturn$/d' \
+  /storage/.config/system/configs/system.cfg
+
 ### And for snes9x, which bsnes replaced for the SNES.
 sed -i -e '/^snes\(\[.*\]\)\?\.core=snes9x$/d' \
        -e '/^snesh\(\[.*\]\)\?\.core=snes9x$/d' \

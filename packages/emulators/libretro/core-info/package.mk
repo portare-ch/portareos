@@ -15,7 +15,7 @@ PKG_TOOLCHAIN="manual"
 # other three hundred files described cores that are not there.
 PKG_CORE_INFO="bsnes dolphin fbneo flycast gambatte genesis_plus_gx mesen2 mgba \
                neocd parallel_n64 picodrive ppsspp scummvm \
-               swanstation mednafen_saturn"
+               swanstation ymir"
 
 makeinstall_target() {
   mkdir -p ${INSTALL}/usr/lib/libretro

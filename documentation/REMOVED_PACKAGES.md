@@ -12,7 +12,7 @@ keeping, because they answer "why don't we ship X?".
 
 Two entries on that list were wrong at the time: `nestopia-lr` and
 `beetle-saturn-lr` were both in the tree and both shipped, for NES and
-Saturn. Nestopia has since been replaced, and has its row below.
+Saturn. Both have since been replaced, and have their rows below.
 
 `documentation/PACKAGE_INVENTORY.md` covers the separate question of what was
 trimmed out of the image, with sizes.
@@ -31,6 +31,7 @@ trimmed out of the image, with sizes.
 | `touchhle-sa` | An iOS app emulator. |
 | `vita3k-sa` | PS Vita is 960x544, exactly 16:9, so it letterboxes on this panel the way psp does. Removed with its system. |
 | `snes9x-lr` | Replaced for the SNES by `bsnes-lr`, more accurate and GPL instead of non-commercial. #410 had dropped bsnes because it resampled to 48 kHz; its 002 patch outputs the DSP's 32040 Hz. The `sufami` system went with it: bsnes's libretro layer has no Sufami Turbo loader. |
+| `beetle-saturn-lr` | Replaced for the Saturn by `ymir-lr`: Ymir is more accurate, and it runs the VDPs and the SCSP on their own threads where Beetle Saturn ran the console on one, which on this device was the difference a tester saw in Grandia. Ymir is also the one Saturn emulator with a GPU renderer in the making. |
 | `nestopia-lr` | Replaced for NES, Famicom and FDS by `mesence-lr`, the nesdev community's Mesen. It is more accurate, and the NES is cheap enough that the accuracy costs nothing that matters here. |
 | `skyemu-sa`, `nanoboyadvance-sa`, `hatarisa` | Alternatives nobody defaulted to, all covered by the retroarch core that was already the default. skyemu also remains as `skyemu-lr`. |
 | `sndio` | The only thing that pulled it in was `touchhle-sa`. |

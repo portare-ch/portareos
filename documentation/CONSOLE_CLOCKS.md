@@ -108,12 +108,11 @@ Audio: the SPU's rate is the crystal / 768 = 44100 Hz exactly.
 
 The Saturn has two dot clocks and switches between them with the horizontal resolution: 28.636364 MHz, 8 × the subcarrier, for the 352-wide modes, and 61/65 of it, 26.874126 MHz, for the 320-wide ones. A line is 1820 dots in the first and 1708 in the second, and both come to the broadcast line, 15734.26 Hz. A frame is 263 lines in 240p (VDP2 `TVSTAT` counts 0x107 lines in every NTSC mode): 28636363.6 / (1820 × 263) = **59.826 Hz**, the PlayStation's and the N64's rate; 480i alternates 262- and 263-line fields, 59.940 Hz. PAL: 28.4375 MHz, 313 lines, 49.920 Hz.
 
-Beetle Saturn emulates this chain (a 1746818182 Hz timestamp clock divided by 61 or 65, 455 or 427 counter units of 4 per line, 263 lines) and upstream reports a hard-coded 59.8265, 0.0007 % above it; PortareOS patches it (`beetle-saturn-lr/patches/001-exact-ntsc-rate.patch`) to report the exact chain, 59.826105, so the Saturn shares the PS1/N64 panel mode. MAME's 59.7648 comes from pinning both modes to 26.8466 MHz, which is not what the hardware does. Interlaced games run at the reported 240p rate, as on the PlayStation.
+Ymir emulates this chain: its 352-mode master clock is the exact 39375000 x 8/11 Hz, a line is 455 x 4 of those clocks, a 240p frame 263 lines. The libretro wrapper reported a rounded 59.82; PortareOS patches it (`ymir-lr/patches/002-exact-rates.patch`) to the chain, 59.826105 Hz.
 
 Audio: the SCSP outputs 44100 Hz.
 
-- Beetle Saturn, `mednafen/ss/ss.c`: `MasterClock = PAL ? 1734687500 : 1746818182; /* NTSC: 1746818181.818... */`, `VDP2_StartFrame(espec, cur_clock_div == 61)`; `mednafen/ss/vdp2.c`: `HTimings[2][HPHASE__COUNT] = { { 0x140, 0x15B, 0x1AB }, { 0x160, 0x177, 0x1C7 } }` (427 and 455 units), `VTimings` NTSC total `0x107` (263) in all four modes; `libretro.c`, `retro_get_system_av_info`: the comment deriving 59.826105 and rejecting MAME's 59.764802
-- PortareOS, `packages/emulators/libretro/beetle-saturn-lr/patches/001-exact-ntsc-rate.patch`
+- Ymir, `libs/ymir-core/include/ymir/sys/clocks.hpp`: `kNTSCClock = 39375000.0 * 8.0 / 11.0` (the 352-mode master clock), and `vdp.cpp` times 455 x 4 clocks a line over 263 lines (240p) - the same chain, 59.826105 Hz. Its own `kNTSCFrameRate` constant is `kNTSCClock / (455 * 525 * 2)` = 59.94, the 525-line broadcast figure, used only by the SDL app's pacing and settings page; the libretro wrapper reported a rounded 59.82. PortareOS's `002-exact-rates.patch` reports the VDP's chain. Beetle Saturn, which Ymir replaced, emulated the same chain and reported 59.8265 upstream.
 
 ### Nintendo 64
 

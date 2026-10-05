@@ -807,7 +807,7 @@ function set_ra_refresh_rate() {
                 gambatte|mgba)   WANT=119.4550; WHY="2 x 59.7275" ;;
                 bsnes)           WANT=120.1976; WHY="2 x 60.0988" ;;
                 mesen2)          WANT=120.1976; WHY="2 x 60.0988" ;;
-                mednafen_saturn) WANT=119.6522; WHY="2 x 59.8261" ;;
+                ymir)            WANT=119.6522; WHY="2 x 59.8261" ;;
                 parallel_n64)    WANT=119.6522; WHY="2 x 59.8261" ;;
                 genesis_plus_gx) WANT=119.8455; WHY="2 x 59.9227" ;;
                 neocd)           WANT=119.1998; WHY="2 x 59.5999" ;;

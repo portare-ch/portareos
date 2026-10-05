@@ -21,7 +21,7 @@ PKG_EMUS=""
 # driver, and this image runs RetroArch on Vulkan, which takes slang only.
 PKG_RETROARCH="core-info libretro-database retroarch retroarch-assets retroarch-joypads slang-shaders"
 
-LIBRETRO_CORES=" beetle-saturn-lr bsnes-lr fbneo-lr flycast-lr gambatte-lr genesis-plus-gx-lr mesence-lr mgba-lr neocd_lr parallel-n64-lr picodrive-lr scummvm-lr swanstation-lr"
+LIBRETRO_CORES=" bsnes-lr ymir-lr fbneo-lr flycast-lr gambatte-lr genesis-plus-gx-lr mesence-lr mgba-lr neocd_lr parallel-n64-lr picodrive-lr scummvm-lr swanstation-lr"
 
 if [ "${ARCH}" = "aarch64" ]; then
   LIBRETRO_CORES+=" ppsspp-lr"
@@ -350,7 +350,7 @@ makeinstall_target() {
   install_script "Start ScummVM.sh"
 
   ### Sega Saturn
-  add_emu_core saturn retroarch mednafen_saturn true
+  add_emu_core saturn retroarch ymir true
   add_es_system saturn
 
   ### Sega 32X

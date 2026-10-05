@@ -11,7 +11,7 @@ The console modes use the same 1302 × 1001 total timings and change only the pi
 | 119.880120 Hz | 156240 kHz | default (launcher, everything else) |
 | 119.455046 Hz | 155686 kHz | `gambatte`, `mgba` |
 | 120.197628 Hz | 174651 kHz, vtotal 1116 | `bsnes`, `mesen2` - exact, and the wide-blanking mode; see below |
-| 119.652237 Hz | 155943 kHz | `parallel_n64`, `swanstation`, `mednafen_saturn` |
+| 119.652237 Hz | 155943 kHz | `parallel_n64`, `swanstation`, `ymir` |
 | 119.845592 Hz | 156195 kHz | `genesis_plus_gx` |
 | 118.360134 Hz | 154259 kHz | `fbneo`, for `neogeo` only |
 | 119.199541 Hz | 155353 kHz | `neocd` |
@@ -199,7 +199,7 @@ The PlayStation's line is 3412.5 GPU clocks, the broadcast line. SwanStation rou
 | snes, snesh, sfc, satellaview, snesmsu1 (bsnes) | 60.0988 | 120.198 |
 | nes, famicom, fds (MesenCE) | 60.0988 | 120.198 |
 | psx (SwanStation) | 59.826 (480i too, see above) | 119.652 |
-| saturn (Beetle Saturn) | 59.826 (the core reports it exactly with our patch; in 480i the emulated fields alternate 262 and 263 lines, the reported rate stays) | 119.652 |
+| saturn (Ymir) | 59.826 (455 x 4 master clocks a line, 263 lines; the core reports it exactly with our patch) | 119.652 |
 | mastersystem, sg-1000, gamegear, ggh (Genesis Plus GX) | 59.9227 | 119.846 |
 | megadrive, megadrive-japan, megadriveh, genesis, genh (Genesis Plus GX) | 59.9227 | 119.846 |
 | segacd, megacd (Genesis Plus GX) | 59.9227 | 119.846 |
@@ -233,7 +233,7 @@ The first rate column is the console's own: the rate its sound hardware produces
 | snesmsu1 (bsnes) | 32,000, plus the MSU-1's 44,100 | 44,100 when a `.msu` file is present (our patch) | 44,100 |
 | nes, famicom, fds (MesenCE) | analog (the APU's channels are mixed as analog signals) | 32,000 (mixed at the APU clock, lowpassed and resampled; our patch) | 32,000 |
 | psx (SwanStation) | 44,100 | 44,100 | 44,100 |
-| saturn (Beetle Saturn) | 44,100 (SCSP) | 44,100 | 44,100 |
+| saturn (Ymir) | 44,100 (SCSP) | 44,100 | 44,100 |
 | mastersystem, sg-1000, gamegear, ggh (Genesis Plus GX) | analog (SN76489, 223,722 per channel step) | 44,100 | 44,100 |
 | megadrive, megadrive-japan, megadriveh, genesis, genh (Genesis Plus GX) | 53,267 (YM2612), plus the SN76489 | 44,100 | 44,100 |
 | segacd, megacd (Genesis Plus GX) | as the Mega Drive, plus 32,552 (RF5C164 PCM) and 44,100 (CD audio) | 44,100 | 44,100 |
