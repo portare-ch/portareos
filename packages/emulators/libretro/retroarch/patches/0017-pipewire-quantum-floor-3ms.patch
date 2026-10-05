@@ -1,0 +1,36 @@
+From: portare-ch <hello@portare.org>
+Subject: [PATCH] pipewire: floor the requested quantum at 3 ms, not 128 frames
+
+128 frames is 4 ms at 32 kHz and 2.67 ms at 48, and the device's sink
+stops at 2 ms at either rate. A sweep with clock.force-quantum found
+3 ms the lowest clean at both rates with RetroArch in the graph, ten
+minutes of play without an xrun. It takes the PCM's mean delay from
+6.5 to 4.9 ms at 32 kHz. docs/audio-latency.md has the tables.
+---
+--- a/audio/drivers/pipewire.c
++++ b/audio/drivers/pipewire.c
+@@ -842,15 +842,21 @@
+     * measures and holds half full, and the graph's own lead of a
+     * quantum or more behind it, which the process callback pulls a
+     * quantum of from the ring each cycle. The quantum asked for is a
+-    * quarter of the setting, floored at 128 frames; the ring, sized
++    * quarter of the setting, floored at 3 ms; the ring, sized
+     * below, holds the setting and is what is reported. Asking for a
+     * quantum of the whole setting, as was done, had each cycle drain
+     * the whole ring - rate control sampling a full-scale sawtooth - and
+     * put a whole setting's worth in the graph on top of the ring. The
+     * quantum is a request; the graph may hold to its own. */
++   /* The floor is a time, not 128 frames: 128 is 4 ms at 32 kHz and
++    * 2.67 ms at 48, and the device's sink stops at 2 ms at either rate.
++    * Swept with clock.force-quantum on the Nova, 60 s a value, 3 ms was
++    * the lowest clean at both rates with this frontend in the graph and
++    * ran ten minutes under play without an xrun; it takes the PCM's mean
++    * delay from 6.5 to 4.9 ms at 32 kHz. */
+    buf_samples = (uint64_t)latency * rate / 4000;
+-   if (buf_samples < 128)
+-      buf_samples = 128;
++   if (buf_samples < (uint64_t)rate * 3 / 1000)
++      buf_samples = (uint64_t)rate * 3 / 1000;
+    pw_properties_setf(props, PW_KEY_NODE_LATENCY, "%" PRIu64 "/%u", buf_samples, rate);
+    pw_properties_setf(props, PW_KEY_NODE_RATE, "1/%d", rate);
+    audio->stream = pw_stream_new(audio->pw->core, PW_RARCH_APPNAME, props);

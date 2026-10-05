@@ -100,6 +100,11 @@ recovers the moment it is.
 
 ### The floor is not 128 frames, and it is a time
 
+**Shipped as RetroArch patch 0017 (2026-10-05): the requested quantum is
+floored at 3 ms of frames at the stream's rate, 96 at 32 kHz and 144 at
+48, instead of 128 frames.** The 8 ms ring is unchanged; the two-quanta
+floor under it is now 6 ms, so the setting names the ring at every rate.
+
 The table above jumps from 128 to 64, and this document concluded from it
 that 128 was the floor. It was only the first power of two that held.
 `clock.force-quantum` is exempt from PipeWire's power-of-two rounding -
