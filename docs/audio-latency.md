@@ -101,9 +101,21 @@ recovers the moment it is.
 ### The floor is not 128 frames, and it is a time
 
 **Shipped as RetroArch patch 0017 (2026-10-05): the requested quantum is
-floored at 3 ms of frames at the stream's rate, 96 at 32 kHz and 144 at
-48, instead of 128 frames.** The 8 ms ring is unchanged; the two-quanta
-floor under it is now 6 ms, so the setting names the ring at every rate.
+floored at 3 ms of frames at the stream's rate, rounded up: 96 at 32 kHz,
+133 at 44.1, 144 at 48, instead of 128 frames.** The floor is a duration,
+not a fixed frame count. The 8 ms ring is unchanged; the two-quanta floor
+under it is now 6 ms, so the setting names the ring at every rate.
+
+**The request alone changes nothing, measured 2026-10-06.** PipeWire
+clamps a node's request to the graph's `min-quantum` (256 at 48 kHz, scaled
+to 170 at 32) and then, with `clock.power-of-two-quantum` on by default,
+rounds it down to a power of two. A 96-frame request ran the sink at 128;
+at 48 kHz both 128 and 144 ran it at 256. Lowering only the floor is worse:
+96 rounded down to 64, the 2 ms that stops the sink, and threw xruns at
+once. With the rounding off and the floor at 144/48000 (pipewire patch
+002), the graph grants 96, 133 and 144 exactly and a 64 request is clamped
+up to 96; each ran 30 s with the sink already running and 0 xruns on sink
+and client, at all three rates.
 
 The table above jumps from 128 to 64, and this document concluded from it
 that 128 was the floor. It was only the first power of two that held.
