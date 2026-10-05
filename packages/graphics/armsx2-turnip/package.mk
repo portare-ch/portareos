@@ -2,8 +2,8 @@
 # Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
 
 PKG_NAME="armsx2-turnip"
-PKG_VERSION="axfl2-001"
-PKG_SHA256="4fd58e440d282981a639218d21ca52fe4dbed9981b4bc1f81697ee9d6e800d9b"
+PKG_VERSION="axfl2-002"
+PKG_SHA256="687e72824c653efc5dbd5b650ae6223ddb0aa0c52d687f6f7fade9c7d95dc5bf"
 PKG_LICENSE="MIT"
 PKG_SITE="https://github.com/bmdhacks/armsx2-turnip"
 PKG_URL="${PKG_SITE}/releases/download/${PKG_VERSION}/turnip-${PKG_VERSION}-aarch64.tar.gz"
