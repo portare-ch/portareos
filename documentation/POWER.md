@@ -200,7 +200,40 @@ which is a driver project, or to make suspend not need the link at all:
 radio fully off and the PCIe root port powered down, so that there is no
 link for the firmware to lose and the vote can go. The tree already notes
 that the radio is down in suspend for the driver's own reasons; whether
-the root port can go with it, and the vote after it, is the experiment.
+the root port can go with it, and the vote after it, was the experiment.
+
+**Done, 2026-10-06, and the link is not what the firmware needs.** Build
+`82d5282`, kernel 7.2.9, on battery, three s2idle suspends of 120 s each
+with an RTC alarm, back to back, run detached and logged to `/storage`:
+
+| Arm | PCIe state | Suspend floor vote | Resumed | `cxsd`/`aosd`/`ddr` |
+|---|---|---|---|---|
+| A | shipped: root port and Wi-Fi card present | kept | yes | 0 / 0 / 0 |
+| B | Wi-Fi card removed, its power sequencer unbound, root port removed: no PCI devices at all | kept | yes | 0 / 0 / 0 |
+| C | as B | dropped (`pcie_qcom.suspend_floor=N`) | **no, the device restarted** | boot counters, 0 |
+
+The radio was taken down through `pci-pwrctrl-pwrseq` (unbind of
+`1c00000.pcie:pcie@0:wifi@0`), which cuts the WCN7850 rails; two
+regulators fewer were enabled afterwards. `qcom-pcie` itself cannot be
+unbound, so the controller stayed probed with an empty bus. Rebinding and a
+PCI rescan would have brought Wi-Fi back; the restart did it instead.
+
+So the firmware's dependence on the suspend OPP vote has nothing to do with
+a PCIe link: with no endpoint, no root port and the radio unpowered, dropping
+the vote still lost the device in `cluster_sleep_1`. The vote is a 250 MB/s
+DDR and LLCC sleep-set bandwidth and a `low_svs` request on CX (patch 1049),
+and the next question is which of those the firmware actually needs. That is
+a kernel change either way (a variant of the suspend OPP without
+`required-opps`, and one with no bandwidth), not a runtime switch.
+
+Two things the result does not say. It does not say whether the kernel
+resumed and crashed or the firmware never came back: there is no ramoops on
+this device, so a resume-side panic would leave nothing behind. The kernel
+has `CONFIG_PSTORE_RAM=m`, and Android's device tree reserves a 2 MB
+`ramoops` region, so adding one to ours is the cheap way to settle that
+before changing the vote. And it does not say what arm B saved: the battery
+gauge's `charge_counter` did not move at all across arm A and dropped 3.2 mAh
+across arm B, which is the gauge updating late, not a measurement.
 
 ## Measuring
 
