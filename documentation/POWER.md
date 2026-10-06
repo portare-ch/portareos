@@ -232,9 +232,9 @@ Two things the result does not say. It does not say whether the kernel
 resumed and crashed or the firmware never came back: until that build there
 was no ramoops on this device, so a resume-side panic left nothing behind.
 The Nova DTS now reserves 2 MB at `0xc0000000` for one (`CONFIG_PSTORE_RAM`
-and `CONFIG_PSTORE_CONSOLE` built in), and after a warm restart
-`/sys/fs/pstore/` holds the last console lines and any panic. For the
-restart below it held nothing; see there. And it does not say what arm B saved: the battery gauge's
+and `CONFIG_PSTORE_CONSOLE` built in) for exactly that. It held nothing,
+after the restart or after a plain reboot, and was removed again; see
+below. And it does not say what arm B saved: the battery gauge's
 `charge_counter` did not move at all across arm A and dropped 3.2 mAh across
 arm B, which is the gauge updating late, not a measurement.
 
@@ -274,13 +274,22 @@ Two more things the run settled:
 
 - **The retention backport (1090) did not make the drop survivable.** Arm C
   restarted on a build that carries it.
-- **ramoops in DDR does not survive this restart.** The region registered
-  at boot and the console was logging to it, and after the restart
-  `/sys/fs/pstore/` was empty with no "found existing buffer" line: the
-  memory did not come back with its contents, which points at a cold reset
-  rather than a warm reboot. ramoops stays useful for a kernel panic that
-  reboots warm, and says nothing about this failure. What would is the
-  minidump path through always-on SRAM that 7.3 adds for SM8550.
+- **ramoops in DDR does not survive any reset on this device.** The
+  region registered at boot and the console was logging to it, and after
+  the restart `/sys/fs/pstore/` was empty with no "found existing buffer"
+  line. The same after a plain `reboot` with the console zone full: the
+  bootloader does not hand DDR back with its contents, warm or cold, so
+  nothing written to RAM before a reset can be read after it. The ramoops
+  node and the built-in pstore options went back out (they cost a
+  non-cached write per console line for nothing). Two more facts from the
+  attempt: a deliberate panic with `kernel.panic=5` did not restart the
+  device, it hung until the power key was held; and 7.3's minidump
+  addition is only the always-on SRAM word that tells the boot firmware
+  where to deliver a minidump, while the driver that fills the minidump
+  table is not in mainline, so backporting the word points at nothing.
+  7.2.9 already has `qcom_scm.download_mode` with the TCSR cookie for a
+  full dump into download mode; whether this bootloader honours it is
+  untested, and a device parked in download mode needs the power key.
 
 The same four arms were also run through `/sys/power/state` on this build
 first, before the hook problem was found. All four resumed, including the
