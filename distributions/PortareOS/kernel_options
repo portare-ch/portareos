@@ -66,3 +66,8 @@ CONFIG_NTFS3_FS=n
 # built in so a panic before modules load is kept too. Added for #505.
 CONFIG_PSTORE_RAM=y
 CONFIG_PSTORE_CONSOLE=y
+# The PMK8550's ADC and its thermal monitor (kernel patches 1094-1096), which
+# read the Nova's three board thermistors. ADC5_GEN3 depends on THERMAL and
+# SPMI; TM5_GEN3 on ADC5_GEN3 - both vanish silently if either is lost.
+CONFIG_QCOM_SPMI_ADC5_GEN3=y
+CONFIG_QCOM_SPMI_ADC_TM5_GEN3=y
