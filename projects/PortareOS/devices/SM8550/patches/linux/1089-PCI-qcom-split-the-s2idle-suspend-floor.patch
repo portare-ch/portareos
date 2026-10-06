@@ -1,0 +1,72 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] PCI: qcom: split the s2idle suspend floor into its two votes
+
+The suspend OPP that 1048 keeps through s2idle is a 250 MB/s DDR/LLCC
+bandwidth vote and a CX low_svs performance state. Dropping both
+restarts the device, with the Wi-Fi link up (#505) and with the radio
+unpowered and no PCI device on the bus at all (POWER.md, 2026-10-06),
+so the firmware needs the vote itself, not the link. Which half is the
+next question.
+
+pcie_qcom.suspend_floor_bw=N keeps only the CX state: the OPP is
+dropped as upstream does and the required performance state requested
+by hand. pcie_qcom.suspend_floor_cx=N keeps only the bandwidth: the
+suspend OPP is set and the performance state then released. Both
+default to Y, are runtime-writable and not persisted; the next active
+OPP on resume restores everything.
+---
+
+--- a/drivers/pci/controller/dwc/pcie-qcom.c
++++ b/drivers/pci/controller/dwc/pcie-qcom.c
+@@ -25,6 +25,7 @@
+ #include <linux/pci.h>
+ #include <linux/pci-ecam.h>
+ #include <linux/pci-pwrctrl.h>
++#include <linux/pm_domain.h>
+ #include <linux/pm_opp.h>
+ #include <linux/pm_runtime.h>
+ #include <linux/platform_device.h>
+@@ -2254,6 +2255,21 @@
+ MODULE_PARM_DESC(suspend_floor,
+ 		 "Keep the suspend OPP's DDR/LLCC vote through s2idle (default: Y). N lets DDR and CX collapse, and may not resume.");
+ 
++/*
++ * The suspend OPP is two votes: a DDR/LLCC bandwidth floor and a CX
++ * performance state (its required-opps). These keep one without the other,
++ * to find which of the two the firmware needs to return from cluster sleep.
++ */
++static bool suspend_floor_bw = true;
++module_param(suspend_floor_bw, bool, 0644);
++MODULE_PARM_DESC(suspend_floor_bw,
++		 "With suspend_floor: keep the suspend OPP's DDR/LLCC bandwidth vote (default: Y)");
++
++static bool suspend_floor_cx = true;
++module_param(suspend_floor_cx, bool, 0644);
++MODULE_PARM_DESC(suspend_floor_cx,
++		 "With suspend_floor: keep the suspend OPP's CX performance state (default: Y)");
++
+ static int qcom_pcie_set_suspend_opp(struct qcom_pcie *pcie)
+ {
+ 	struct device *dev = pcie->pci->dev;
+@@ -2269,7 +2285,20 @@
+ 	if (IS_ERR(opp))
+ 		return PTR_ERR(opp);
+ 
+-	ret = dev_pm_opp_set_opp(dev, opp);
++	if (suspend_floor_bw) {
++		ret = dev_pm_opp_set_opp(dev, opp);
++		if (!ret && !suspend_floor_cx)
++			ret = dev_pm_genpd_set_performance_state(dev, 0);
++	} else {
++		/*
++		 * Drop the OPP as upstream does, then ask for its CX state by
++		 * hand; the next active OPP on resume sets everything again.
++		 */
++		ret = dev_pm_opp_set_opp(dev, NULL);
++		if (!ret && suspend_floor_cx)
++			ret = dev_pm_genpd_set_performance_state(dev,
++					dev_pm_opp_get_required_pstate(opp, 0));
++	}
+ 	dev_pm_opp_put(opp);
+ 
+ 	return ret;

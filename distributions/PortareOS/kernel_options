@@ -62,3 +62,7 @@ CONFIG_BTRFS_FS=n
 # the legacy driver and ntfs3 are separate.
 CONFIG_NTFS_FS=n
 CONFIG_NTFS3_FS=n
+# Crash and console log in RAM across a restart (ramoops in the Nova DTS),
+# built in so a panic before modules load is kept too. Added for #505.
+CONFIG_PSTORE_RAM=y
+CONFIG_PSTORE_CONSOLE=y

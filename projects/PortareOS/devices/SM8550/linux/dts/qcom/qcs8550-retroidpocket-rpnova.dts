@@ -18,6 +18,25 @@
  * RP6 tree names. The ADSP runs the audio graph and the charger
  * interface; the amplifiers' tuning is the Nova speakers' own.
  */
+/*
+ * Crash and console log that survives a restart, read back from
+ * /sys/fs/pstore. 2 MB of plain RAM the firmware does not touch: 1 MB of
+ * console, the rest in 128 KB oops/panic records. Non-cached so the last
+ * lines are in DRAM when the device goes down. Android's tree reserves the
+ * same size for the same purpose; this one is at a fixed address so the
+ * next boot finds it. Added for #505: a resume that the firmware never
+ * completes and a kernel panic on resume look the same without it.
+ */
+&reserved_memory {
+	ramoops@c0000000 {
+		compatible = "ramoops";
+		reg = <0 0xc0000000 0 0x200000>;
+		record-size = <0x20000>;
+		console-size = <0x100000>;
+		mem-type = <2>;
+	};
+};
+
 &remoteproc_adsp {
 	firmware-name = "qcom/sm8550/retroidpocket/rpnova/adsp.mbn",
 			"qcom/sm8550/retroidpocket/rpnova/adsp_dtb.mbn";

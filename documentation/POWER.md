@@ -222,18 +222,27 @@ So the firmware's dependence on the suspend OPP vote has nothing to do with
 a PCIe link: with no endpoint, no root port and the radio unpowered, dropping
 the vote still lost the device in `cluster_sleep_1`. The vote is a 250 MB/s
 DDR and LLCC sleep-set bandwidth and a `low_svs` request on CX (patch 1049),
-and the next question is which of those the firmware actually needs. That is
-a kernel change either way (a variant of the suspend OPP without
-`required-opps`, and one with no bandwidth), not a runtime switch.
+and the next question is which of those the firmware actually needs. Kernel
+patch 1089 splits the switch for that: `pcie_qcom.suspend_floor_bw=N` keeps
+only the CX state, `pcie_qcom.suspend_floor_cx=N` only the bandwidth. Both
+are runtime-writable under `/sys/module/pcie_qcom/parameters/` and not
+persisted, so a failed resume costs a restart and nothing else.
 
 Two things the result does not say. It does not say whether the kernel
-resumed and crashed or the firmware never came back: there is no ramoops on
-this device, so a resume-side panic would leave nothing behind. The kernel
-has `CONFIG_PSTORE_RAM=m`, and Android's device tree reserves a 2 MB
-`ramoops` region, so adding one to ours is the cheap way to settle that
-before changing the vote. And it does not say what arm B saved: the battery
-gauge's `charge_counter` did not move at all across arm A and dropped 3.2 mAh
-across arm B, which is the gauge updating late, not a measurement.
+resumed and crashed or the firmware never came back: until that build there
+was no ramoops on this device, so a resume-side panic left nothing behind.
+The Nova DTS now reserves 2 MB at `0xc0000000` for one (`CONFIG_PSTORE_RAM`
+and `CONFIG_PSTORE_CONSOLE` built in), and after a restart `/sys/fs/pstore/`
+holds the last console lines and any panic. Read that first on the next
+failed resume. And it does not say what arm B saved: the battery gauge's
+`charge_counter` did not move at all across arm A and dropped 3.2 mAh across
+arm B, which is the gauge updating late, not a measurement.
+
+The next run, on a build with 1089 and the ramoops region, is the two
+single-vote arms, each a 120 s s2idle from a detached script that logs to
+`/storage` first: `suspend_floor_cx=N` (bandwidth only), then
+`suspend_floor_bw=N` (CX only), each followed by a read of `qcom_stats` and,
+after any restart, of `/sys/fs/pstore/`.
 
 ## Measuring
 
