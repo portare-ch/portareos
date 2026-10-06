@@ -165,6 +165,33 @@ What they settle, and what they cannot:
   pm_v6e_l1_ao(1) pm_v6e_l3(3)`. The same read on PortareOS, idle with the
   panel blanked, is the next comparison to make.
 
+**The same reads on PortareOS**, 2026-10-06, just booted, launcher idle,
+`/sys/power/mem_sleep` = `[s2idle] deep`. Enabled regulators, 14 of 43:
+`vdd_fan_5v0(1) vdd_disp_1v8(1) vdd_mcu_3v3(3) ts_vddio_1v8(1)
+ts_avdd_3v0(1) vreg_bob1(1) vreg_bob2(1) vreg_s4e_0p95(3) vreg_l1e_0p88(2)
+vreg_l3e_1p2(3) vreg_s2g_0p8(1) vreg_l15b_1p8(4) vreg_l17b_2p5(1)
+vreg_l1d_0p88(1)`. Against Android's list by PMIC resource: `s4e`, `l1e`,
+`l3e`, `l15b`, `l17b`, `l1d` and `bob1` are on in both. Ours also holds
+`bob2` and `s2g_0p8`, and `s2g` is one of the rails Android's PDC map
+drives for the WLAN (`"s2g" "bb"`), so on Android it follows the radio's
+sleep state and here it is simply on. Android also shows `l5` and `l11`
+on, which here are off or absent, and its `*_level` entries are power
+domains, not regulators, so they do not compare. The five fixed GPIO
+regulators (fan, display 1.8 V, MCU, touch) are ours alone; what the
+suspend hooks do with them is the next thing to read, since this list is
+the awake state.
+
+Idle states: our tree has one rail-power-collapse state per cluster and
+two domain states, `cluster-sleep-0` and `cluster-sleep-1`, against
+Android's `rail-pc`, `l3-off` and `llcc-off` ladder. `cluster-sleep-1` is
+the one the firmware would not return from without the PCIe vote (#505).
+`qcom_stats` at boot: `apss` 1, `cxsd`, `aosd`, `ddr` 0, as before.
+
+Charger: PortareOS reports `voltage_max` 4.40 V where Android charges to
+4.50 V with a 5191 mAh design and 5060 mAh learned capacity; ours exposes
+no design capacity. Whether the 4.40 V is a deliberate margin or a
+default is not recorded anywhere in the tree.
+
 What this means for #62: the gap is not a missing tweak. Android keeps
 Wi-Fi alive through two pieces of hardware-assisted sleep that mainline
 does not have, PDC-driven rails and PCIe DRV, and that is what lets its
