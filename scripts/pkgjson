@@ -7,9 +7,10 @@
 
 # Source one package.mk and print its dependencies as JSON. Run in a
 # subshell by json_worker: source_package resets PKG_* between recipes but
-# nothing else, and a recipe that sets an ordinary variable (SDL2_glesonly
-# sets OPENGL_SUPPORT=no before inheriting SDL2's recipe) would otherwise
-# leak into every recipe sourced after it in the same worker. Which recipes
+# nothing else, and a recipe that sets an ordinary variable before
+# inheriting another recipe (SDL2_glesonly once set OPENGL_SUPPORT=no that
+# way) would otherwise leak into every recipe sourced after it in the same
+# worker. Which recipes
 # those are depends on how the 64-per-worker batches happen to fall, so the
 # plan changed with the directory listing: SDL2 lost its glu dependency
 # when packages/linux was removed and the batch boundaries shifted.
