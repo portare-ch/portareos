@@ -299,6 +299,23 @@ The one restart that does not fit is the previous day's arm C, which also
 bypassed the hooks and still restarted when the vote was dropped with no
 PCIe device on the bus. That case is recorded as unexplained.
 
+**Wake sources are not what holds CX.** Checked 2026-10-06 on the same
+build: the eleven optional wake sources (the Wi-Fi card's MHI, both
+remoteprocs, the three tsens, the pmic-glink supplies, the gamepad battery)
+disabled, the power key, RTC and gpio-keys left, one 60 s `systemctl
+suspend`. The cluster slept (`apss` 0 to 1) and `cxsd`, `aosd`, `ddr`
+stayed 0. So it is not a device kept awake for wake; it is a vote still in
+the sleep set when the last CPU goes down.
+
+What remains is to read that sleep set. There is no debugfs for it, but
+`rpmh` has tracepoints (`rpmh:rpmh_send_msg`, with the state, the resource
+address and the value), and the kernel now builds with event tracing for
+exactly this: enable the event under `/sys/kernel/tracing`, suspend through
+systemd, read the trace after resume and map the `cx.lvl`, `mmcx.lvl`,
+`ebi.lvl` and bandwidth addresses with `cmd-db` debugfs. The holders are then
+the genpd devices whose domain is still on at that point; `pm_genpd_summary`
+awake gives the candidates, `gcc` with no runtime PM first.
+
 Suspend experiments from a script must go through `systemctl suspend`, or
 run `sleep.d/pre/004-cpuidle-state1` by hand; `/sys/power/suspend_stats/
 success` is the signal that the sleep completed, and the cluster count in

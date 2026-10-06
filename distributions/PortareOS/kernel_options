@@ -67,3 +67,11 @@ CONFIG_NTFS3_FS=n
 # SPMI; TM5_GEN3 on ADC5_GEN3 - both vanish silently if either is lost.
 CONFIG_QCOM_SPMI_ADC5_GEN3=y
 CONFIG_QCOM_SPMI_ADC_TM5_GEN3=y
+# Event tracing without the function tracer: the rpmh:rpmh_send_msg events
+# are the only view of what the RPMh sleep set holds when the cluster goes
+# down (POWER.md). TRACEPOINTS and EVENT_TRACING are selected, not set.
+CONFIG_FTRACE=y
+CONFIG_ENABLE_DEFAULT_TRACERS=y
+CONFIG_EVENT_TRACING=y
+CONFIG_TRACEPOINTS=y
+CONFIG_FUNCTION_TRACER=n
