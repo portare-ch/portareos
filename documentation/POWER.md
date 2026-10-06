@@ -120,6 +120,88 @@ stays and CX and DDR collapse in s2idle is out of reach with this firmware
 Awake, the CPU subsystem itself never reaches its system-level idle (`apss`
 stays 0), so the platform cannot collapse whatever the votes.
 
+## What Android does on the same board
+
+2026-10-06, the Nova booted into its stock Android 13 (kernel 5.15.123,
+Qualcomm's downstream), read over adb without root. The dumps and the
+decompiled device tree are kept outside the tree in `~/1234/android/power`.
+What they settle, and what they cannot:
+
+- **Android suspends with `s2idle` too**, `/sys/power/mem_sleep` =
+  `[s2idle] deep`. The sleep mode is not the difference.
+- **Android's Wi-Fi is not a PCIe device the CPU owns.** It runs under
+  Qualcomm's CNSS driver (`qcom,cnss-qca-converged`), and its rails are
+  handed to the PDC: `qcom,vreg_pdc_map = "s4e" "rf", "l15B" "rf", "l3g"
+  "rf", "s4g" "rf", "s6g" "rf", "s2g" "bb", "s5g" "bb"`, with
+  `qcom,pdc_init_table` giving each an up and down value per sleep state.
+  `s4g` and `s6g` are the same RPMh rails our `wcn7850-pmu` names as
+  `vreg_s4g_1p3` and `vreg_s6g_1p8`. On Android the hardware sequences
+  them with the WLAN's own sleep state; on ours the CPU does, through
+  regulator calls, and a rail the CPU must hold is a rail that keeps CX up.
+- **Android's PCIe controller runs PCIe DRV.** `qcom,pci-msm` with
+  `qcom,drv-name = "lpass"` and `qcom,drv-l1ss-timeout-us = <5000>`: in
+  suspend the audio DSP takes the link and parks it in L1ss, and the CPU
+  subsystem collapses underneath it. That is the mechanism our suspend
+  OPP vote stands in for. Mainline `pcie-qcom` has no DRV, so the vote
+  (patches 1048, 1049) is what keeps the firmware from losing the link,
+  and dropping it restarts the device (#505). The vote holds DDR and CX
+  up for the whole sleep. Android does not pay that.
+- **Its cluster idle tree has `llcc-off`** (`arm,psci-suspend-param
+  0x4100c344`) above `l3-off` and `rail-pc`. Whether our tree offers the
+  same states is a device-tree diff worth making when the device is back
+  in PortareOS; the live tree can be read from
+  `/sys/firmware/devicetree/base` the same way.
+- **Not readable without root:** the SoC sleep counters. The devices exist
+  (`c3f0000.soc-sleep-stats`, `c3f0000.subsystem-sleep-stats`,
+  `17800054.cpuss-sleep-stats`) but expose nothing in sysfs, and
+  `adb root` is refused on this production build. Whether Android reaches
+  `cxsd` has to be inferred from its sleep current instead: the battery
+  charge counter across an unplugged, screen-off period. Baseline taken,
+  measurement pending.
+- **Regulators enabled at idle on Android:** 13 of 95, read from
+  `/sys/class/regulator`: `pm_v6e_s3_level(6) pm_v8_s5_level(1)
+  pm_humu_l1(1) pm_humu_l5(1) pm_humu_l11(1) pm_humu_l15(4) pm_humu_l17(1)
+  pm_humu_bob1(1) pm_v6e_s6_level(3) pm_v6e_s4(1) pm_v6e_l1(2)
+  pm_v6e_l1_ao(1) pm_v6e_l3(3)`. The same read on PortareOS, idle with the
+  panel blanked, is the next comparison to make.
+
+**The same reads on PortareOS**, 2026-10-06, just booted, launcher idle,
+`/sys/power/mem_sleep` = `[s2idle] deep`. Enabled regulators, 14 of 43:
+`vdd_fan_5v0(1) vdd_disp_1v8(1) vdd_mcu_3v3(3) ts_vddio_1v8(1)
+ts_avdd_3v0(1) vreg_bob1(1) vreg_bob2(1) vreg_s4e_0p95(3) vreg_l1e_0p88(2)
+vreg_l3e_1p2(3) vreg_s2g_0p8(1) vreg_l15b_1p8(4) vreg_l17b_2p5(1)
+vreg_l1d_0p88(1)`. Against Android's list by PMIC resource: `s4e`, `l1e`,
+`l3e`, `l15b`, `l17b`, `l1d` and `bob1` are on in both. Ours also holds
+`bob2` and `s2g_0p8`, and `s2g` is one of the rails Android's PDC map
+drives for the WLAN (`"s2g" "bb"`), so on Android it follows the radio's
+sleep state and here it is simply on. Android also shows `l5` and `l11`
+on, which here are off or absent, and its `*_level` entries are power
+domains, not regulators, so they do not compare. The five fixed GPIO
+regulators (fan, display 1.8 V, MCU, touch) are ours alone; what the
+suspend hooks do with them is the next thing to read, since this list is
+the awake state.
+
+Idle states: our tree has one rail-power-collapse state per cluster and
+two domain states, `cluster-sleep-0` and `cluster-sleep-1`, against
+Android's `rail-pc`, `l3-off` and `llcc-off` ladder. `cluster-sleep-1` is
+the one the firmware would not return from without the PCIe vote (#505).
+`qcom_stats` at boot: `apss` 1, `cxsd`, `aosd`, `ddr` 0, as before.
+
+Charger: PortareOS reports `voltage_max` 4.40 V where Android charges to
+4.50 V with a 5191 mAh design and 5060 mAh learned capacity; ours exposes
+no design capacity. Whether the 4.40 V is a deliberate margin or a
+default is not recorded anywhere in the tree.
+
+What this means for #62: the gap is not a missing tweak. Android keeps
+Wi-Fi alive through two pieces of hardware-assisted sleep that mainline
+does not have, PDC-driven rails and PCIe DRV, and that is what lets its
+SoC collapse with the radio up. Our options are to carry that machinery,
+which is a driver project, or to make suspend not need the link at all:
+radio fully off and the PCIe root port powered down, so that there is no
+link for the firmware to lose and the vote can go. The tree already notes
+that the radio is down in suspend for the driver's own reasons; whether
+the root port can go with it, and the vote after it, is the experiment.
+
 ## Measuring
 
     idle-probe [seconds]      on the device, default 300
