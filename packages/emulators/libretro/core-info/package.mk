@@ -13,8 +13,8 @@ PKG_TOOLCHAIN="manual"
 
 # Only the cores the image ships (virtual/emulators, LIBRETRO_CORES); the
 # other three hundred files described cores that are not there.
-PKG_CORE_INFO="bsnes dolphin fbneo flycast gambatte genesis_plus_gx mesen2 mgba \
-               neocd parallel_n64 picodrive ppsspp scummvm \
+PKG_CORE_INFO="dolphin fbneo flycast gambatte genesis_plus_gx mesen2 mgba \
+               neocd parallel_n64 picodrive ppsspp scummvm snes9x \
                swanstation ymir"
 
 makeinstall_target() {

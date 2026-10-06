@@ -21,7 +21,7 @@ PKG_EMUS=""
 # driver, and this image runs RetroArch on Vulkan, which takes slang only.
 PKG_RETROARCH="core-info libretro-database retroarch retroarch-assets retroarch-joypads slang-shaders"
 
-LIBRETRO_CORES=" bsnes-lr ymir-lr fbneo-lr flycast-lr gambatte-lr genesis-plus-gx-lr mesence-lr mgba-lr neocd_lr parallel-n64-lr picodrive-lr scummvm-lr swanstation-lr"
+LIBRETRO_CORES=" snes9x-lr ymir-lr fbneo-lr flycast-lr gambatte-lr genesis-plus-gx-lr mesence-lr mgba-lr neocd_lr parallel-n64-lr picodrive-lr scummvm-lr swanstation-lr"
 
 if [ "${ARCH}" = "aarch64" ]; then
   LIBRETRO_CORES+=" ppsspp-lr"
@@ -286,7 +286,7 @@ makeinstall_target() {
   add_es_system megadrive-japan
 
   ### Nintendo MSU-1
-  add_emu_core snesmsu1 retroarch bsnes true
+  add_emu_core snesmsu1 retroarch snes9x true
   add_es_system snesmsu1
 
   ### Sega Naomi
@@ -445,19 +445,19 @@ makeinstall_target() {
   esac
 
   ### Nintendo SNES
-  add_emu_core snes retroarch bsnes true
+  add_emu_core snes retroarch snes9x true
   add_es_system snes
 
   ### Nintendo SNES Hacks
-  add_emu_core snesh retroarch bsnes true
+  add_emu_core snesh retroarch snes9x true
   add_es_system snesh
 
   ### Nintendo Super Famicom
-  add_emu_core sfc retroarch bsnes true
+  add_emu_core sfc retroarch snes9x true
   add_es_system sfc
 
   ### Nintendo Stellaview
-  add_emu_core satellaview retroarch bsnes true
+  add_emu_core satellaview retroarch snes9x true
   add_es_system satellaview
 
 

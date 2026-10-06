@@ -69,7 +69,7 @@ the same mode.
 | System (core) | Expected |
 |---|---|
 | gb, gbc, gba (gambatte, mgba) | 119.455 |
-| snes, nes (bsnes, mesen2) | 120.198 |
+| snes, nes (snes9x, mesen2) | 120.198 |
 | psx, n64, saturn | 119.652 |
 | genesis (genesis_plus_gx) | 119.846 |
 | neogeo (fbneo) | 118.360 |
@@ -243,7 +243,7 @@ Covered by A1's table; additionally `audio_out_rate` in the per-core
 config under `/storage/.config/retroarch/config/<core>/<core>.cfg` is
 44100 for SwanStation, Ymir, Flycast, PPSSPP, NeoCD, Genesis
 Plus GX and PicoDrive, and the global file keeps `0`, which picks 32000
-for bsnes's 32040 and 44100 for an MSU-1 game.
+for Snes9x's 32040 and 44100 for an MSU-1 game.
 
 ### A4 PipeWire only, 256-frame quantum (auto)
 

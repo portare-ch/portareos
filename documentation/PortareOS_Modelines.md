@@ -8,7 +8,7 @@ The rate that matters is the one the emulator reports, because that is what Retr
 |---|---|---|---|
 | Game Boy, Game Boy Color (Gambatte) | 59.7275 | 119.455 | done |
 | Game Boy Advance (mGBA) | 59.7275 | 119.455 | done |
-| SNES, Satellaview, MSU-1 (bsnes) | 60.0988 | 120.198 | done |
+| SNES, Satellaview, MSU-1 (snes9x) | 60.0988 | 120.198 | done |
 | NES, Famicom, Famicom Disk System (MesenCE) | 60.0988 | 120.198 | done, shares the SNES mode |
 | PlayStation (SwanStation) | 59.826 (patched; upstream 59.8173) | 119.652 | done, shares the N64 mode; 480i runs on it too (0.19 % slow), accepted |
 | Saturn (Ymir) | 59.8261 (patched; the wrapper said 59.82) | 119.652 | done, shares the PS1/N64 mode |

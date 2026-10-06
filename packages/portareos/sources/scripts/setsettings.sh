@@ -549,8 +549,8 @@ EOF
                         echo -n " --host"
                     ;;
 
-                    bsnes)
-                        log "Configure bsnes multitap."
+                    snes9x)
+                        log "Configure snes9x multitap."
                         add_setting "none" "input_libretro_device_p2" "257"
                         echo -n " --host"
                     ;;
@@ -805,7 +805,7 @@ function set_ra_refresh_rate() {
             case "${CORE}" in
                 swanstation)     WANT=119.6522; WHY="2 x 59.8261" ;;
                 gambatte|mgba)   WANT=119.4550; WHY="2 x 59.7275" ;;
-                bsnes)           WANT=120.1976; WHY="2 x 60.0988" ;;
+                snes9x)          WANT=120.1976; WHY="2 x 60.0988" ;;
                 mesen2)          WANT=120.1976; WHY="2 x 60.0988" ;;
                 ymir)            WANT=119.6522; WHY="2 x 59.8261" ;;
                 parallel_n64)    WANT=119.6522; WHY="2 x 59.8261" ;;

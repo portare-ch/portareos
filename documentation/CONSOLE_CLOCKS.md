@@ -27,7 +27,7 @@ The SNES and the Sega consoles also derive their clocks from the subcarrier, but
 | Game Boy, Game Boy Color | 4.194304 MHz (2^22) | same | 456 dots | 154 | 59.7275 | 59.7275 (Gambatte) |
 | Game Boy Advance | 16.777216 MHz (2^24) | same | 1232 | 228 | 59.7275 | 59.7275 (mGBA) |
 | NES, Famicom | 21.477272 MHz (6 × subcarrier) | same | 1364 (341 dots of 4; one dot skipped every other frame) | 262 | 60.0988 | 60.098814 (MesenCE with PortareOS's patch; upstream rounds the master clock to 21477272 Hz, 60.098812) |
-| SNES | 21.477272 MHz (6 × subcarrier) | same | 1364 (1360 once every other frame) | 262 | 60.0988 | 60.098814 (bsnes with PortareOS's patch; upstream rounds the master clock to 21477272 and reports 0.034 ppm low) |
+| SNES | 21.477272 MHz (6 × subcarrier) | same | 1364 (1360 once every other frame) | 262 | 60.0988 | 60.098814 (Snes9x with PortareOS's patch; upstream rounds the master clock to 21477272 and reports 0.034 ppm low) |
 | Master System, Game Gear, Mega Drive, Mega CD, 32X | 53.693175 MHz (15 × subcarrier) | same | 3420 | 262 | 59.9227 | 59.9227 (Genesis Plus GX); 60 (PicoDrive) |
 | PlayStation | 33.8688 MHz (768 × 44100) | 53.693175 MHz (× 715909/451584) | 3412.5 | 263 (240p), 262.5 (480i) | 59.826, 59.940 | 59.826 for both (SwanStation with PortareOS's patch; upstream 59.8173) |
 | Saturn | 28.636364 MHz (8 × subcarrier), or × 61/65 = 26.874126 MHz in the 320-wide modes | same | 1820 dots, or 1708 (both the broadcast line) | 263 (240p), 262.5 (480i) | 59.826, 59.940 | 59.8261 (Beetle Saturn with PortareOS's patch; upstream 59.8265) |
@@ -75,10 +75,10 @@ Audio: the APU's channels are mixed as analog signals; there is no sample rate. 
 
 The master clock is 945/44 MHz = 21.477272 MHz, six times the NTSC subcarrier. A line is 1364 master clocks (341 dots of 4 clocks): 15745.8 Hz, 0.07 % above the broadcast line. A frame is 262 lines. With interlace off, line 240 of every other frame is 4 clocks short (1360), so the average frame is 1364 × 262 − 2 = 357366 clocks, and 21477272 / 357366 = **60.0988 Hz**. PAL: 21.281370 MHz, 312 lines, 50.007 Hz.
 
-Audio: the S-DSP runs from its own 24.576 MHz ceramic resonator and outputs a sample every 768 clocks, 32000 Hz by specification. Real units measure about 32040 Hz, because the resonator is a little fast, and bsnes uses 32040.
+Audio: the S-DSP runs from its own 24.576 MHz ceramic resonator and outputs a sample every 768 clocks, 32000 Hz by specification. Real units measure about 32040 Hz, because the resonator is a little fast, and Snes9x outputs 32040.
 
 - SNESdev wiki, *Timing* — master clock "945/44 MHz ≈ 21.4773 MHz (6 times chroma)", "1364 master clocks = 341 dot cycles", short scanline 1360, "S-DSP clock: 24.576MHz", "DAC samplerate: 32000 Hz by specification (÷(24×32))": https://snes.nesdev.org/wiki/Timing
-- bsnes, `bsnes/target-libretro/libretro.cpp`: `info->timing.fps = 21477272.0 / 357366.0` for NTSC, `21281370.0 / 425568.0` for PAL; `bsnes/sfc/system/system.hpp`: `cpuFrequency = Colorburst::NTSC * 6.0`, the exact clock the emulation runs at, and `apuFrequency = 32040.0 * 768.0`. PortareOS reports the NTSC rate from that clock (`001-exact-ntsc-rate.patch`); the rounded constant is 0.034 ppm low, which is the difference between the 120.198 mode being exact and being a near miss. PAL's 21281370 is already exact.
+- Snes9x, `libretro/libretro.cpp`: `info->timing.fps = 21477272.0 / 357366.0` for NTSC, `21281370.0 / 425568.0` for PAL, and `S9xGetAudioSampleRate()` 32040. PortareOS reports the NTSC rate from the exact 945/44 MHz clock (`001-exact-ntsc-rate.patch` in snes9x-lr); the rounded constant is 0.034 ppm low, which is the difference between the 120.198 mode being exact and being a near miss. PAL's 21281370 is already exact.
 
 ### Master System, Game Gear, Mega Drive, Mega CD, 32X
 

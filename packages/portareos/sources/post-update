@@ -219,12 +219,12 @@ sed -i -e '/^ps2\(\[.*\]\)\?\.core=armsx2-sa$/d' \
 sed -i -e '/^saturn\(\[.*\]\)\?\.core=mednafen_saturn$/d' \
   /storage/.config/system/configs/system.cfg
 
-### And for snes9x, which bsnes replaced for the SNES.
-sed -i -e '/^snes\(\[.*\]\)\?\.core=snes9x$/d' \
-       -e '/^snesh\(\[.*\]\)\?\.core=snes9x$/d' \
-       -e '/^sfc\(\[.*\]\)\?\.core=snes9x$/d' \
-       -e '/^satellaview\(\[.*\]\)\?\.core=snes9x$/d' \
-       -e '/^snesmsu1\(\[.*\]\)\?\.core=snes9x$/d' \
+### And for bsnes, which stood in for Snes9x on the SNES for a while.
+sed -i -e '/^snes\(\[.*\]\)\?\.core=bsnes$/d' \
+       -e '/^snesh\(\[.*\]\)\?\.core=bsnes$/d' \
+       -e '/^sfc\(\[.*\]\)\?\.core=bsnes$/d' \
+       -e '/^satellaview\(\[.*\]\)\?\.core=bsnes$/d' \
+       -e '/^snesmsu1\(\[.*\]\)\?\.core=bsnes$/d' \
   /storage/.config/system/configs/system.cfg
 
 ### The same for Nestopia, which MesenCE (mesen2) replaced for the NES.
@@ -399,9 +399,9 @@ migrate_nes_ratio_core() {
 }
 
 # The SNES shipped at 4/3, 2% wider than its 8:7 pixels made the picture
-# on a CRT. bsnes reports that shape: 8:7 over 240 lines, 1172x960 with
-# integer scaling, a 224-line game centred in it at 1172x896. Only 4/3
-# is moved.
+# on a CRT. Snes9x's "auto" aspect reports that shape (as bsnes did
+# before it): 224 lines at 1172x896 with integer scaling. Only 4/3 is
+# moved.
 migrate_snes_ratio_core() {
   local sys
   for sys in snes snesh sfc satellaview snesmsu1; do
