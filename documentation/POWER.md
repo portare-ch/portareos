@@ -232,17 +232,68 @@ Two things the result does not say. It does not say whether the kernel
 resumed and crashed or the firmware never came back: until that build there
 was no ramoops on this device, so a resume-side panic left nothing behind.
 The Nova DTS now reserves 2 MB at `0xc0000000` for one (`CONFIG_PSTORE_RAM`
-and `CONFIG_PSTORE_CONSOLE` built in), and after a restart `/sys/fs/pstore/`
-holds the last console lines and any panic. Read that first on the next
-failed resume. And it does not say what arm B saved: the battery gauge's
+and `CONFIG_PSTORE_CONSOLE` built in), and after a warm restart
+`/sys/fs/pstore/` holds the last console lines and any panic. For the
+restart below it held nothing; see there. And it does not say what arm B saved: the battery gauge's
 `charge_counter` did not move at all across arm A and dropped 3.2 mAh across
 arm B, which is the gauge updating late, not a measurement.
 
-The next run, on a build with 1089 and the ramoops region, is the two
-single-vote arms, each a 120 s s2idle from a detached script that logs to
-`/storage` first: `suspend_floor_cx=N` (bandwidth only), then
-`suspend_floor_bw=N` (CX only), each followed by a read of `qcom_stats` and,
-after any restart, of `/sys/fs/pstore/`.
+**Done, 2026-10-06, build `cee17f8d`, with a correction to everything
+above.** Those earlier arms, and the three of the day before, suspended by
+writing `mem` to `/sys/power/state`. That skips systemd's sleep hooks, and
+one of them matters: `096-cpuidle` disables cpu0's deep idle state at boot
+for the GPU's sake, and `sleep.d/pre/004-cpuidle-state1` gives it back for
+the suspend window. Without it cpu0 never leaves WFI, the CPU cluster's
+power domain never enters its sleep state (`power-domain-cluster/idle_states`
+in `pm_genpd` debugfs read 0 entries across seven suspends) and `apss` never
+counts. So none of those arms ever reached `cluster_sleep_1`, which is the
+state the firmware has to return from. They say less than they were taken
+to say.
+
+Through `systemctl suspend`, with the hooks running and an RTC alarm, 120 s
+each, back to back:
+
+| Arm | Vote kept in suspend | Cluster slept | Resumed | `cxsd`/`aosd`/`ddr` |
+|---|---|---|---|---|
+| A | both (shipped) | yes, `apss` 1 to 2 | yes | 0 / 0 / 0 |
+| B | bandwidth only (`suspend_floor_cx=N`) | yes, `apss` 2 to 3 | yes | 0 / 0 / 0 |
+| C | CX state only (`suspend_floor_bw=N`) | yes | **no, the device restarted** | boot counters |
+
+So the half the firmware needs is the DDR and LLCC sleep-set bandwidth. The
+CX `low_svs` request can go, and going without it changes nothing that can
+be measured: `cxsd` stays at 0, so something else keeps CX enabled in the
+sleep set. The candidates are in `pm_genpd_summary`: `gcc` holds CX with no
+runtime PM at all (the 20260424 patch gave it the domain so GDSC votes
+propagate), the PCIe controller holds `pcie_0_gdsc` for its wake line, and
+every enabled subdomain keeps the parent at its enable corner, which since
+patch 1090 is the first corner above retention. Finding which of those
+survives into the sleep set is the next piece of work; the PCIe vote is no
+longer in the way.
+
+Two more things the run settled:
+
+- **The retention backport (1090) did not make the drop survivable.** Arm C
+  restarted on a build that carries it.
+- **ramoops in DDR does not survive this restart.** The region registered
+  at boot and the console was logging to it, and after the restart
+  `/sys/fs/pstore/` was empty with no "found existing buffer" line: the
+  memory did not come back with its contents, which points at a cold reset
+  rather than a warm reboot. ramoops stays useful for a kernel panic that
+  reboots warm, and says nothing about this failure. What would is the
+  minidump path through always-on SRAM that 7.3 adds for SM8550.
+
+The same four arms were also run through `/sys/power/state` on this build
+first, before the hook problem was found. All four resumed, including the
+full drop that had restarted the device twice, and that is now explained:
+with the cluster awake there is nothing for the firmware to return from.
+The one restart that does not fit is the previous day's arm C, which also
+bypassed the hooks and still restarted when the vote was dropped with no
+PCIe device on the bus. That case is recorded as unexplained.
+
+Suspend experiments from a script must go through `systemctl suspend`, or
+run `sleep.d/pre/004-cpuidle-state1` by hand; `/sys/power/suspend_stats/
+success` is the signal that the sleep completed, and the cluster count in
+`pm_genpd` debugfs is the check that it was a real one.
 
 ## Measuring
 
