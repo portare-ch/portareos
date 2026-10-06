@@ -418,6 +418,58 @@ the way in. Three pieces, in increasing order of how much is unknown:
 So: yes in principle, and the honest order is 1, then 2, and only then consider
 3. Item 1 may make the rest unnecessary.
 
+## What Android does on the same device
+
+2026-10-06, the Nova booted into its stock Android, idle, no game yet:
+`dumpsys media.audio_flinger`, `dumpsys media.audio_policy`, `dumpsys audio`.
+The files are kept outside the tree (`~/1234/android/running_no_game`);
+the lines that decide anything are these.
+
+**There is no MMAP output.** The policy's output profiles are `primary`
+(`PRIMARY|FAST`), `deep_buffer`, `hifi_playback`, `spatial output`,
+`direct_pcm`, `compressed_offload`, `voice_tx`, `voip_rx` and
+`incall_music_uplink`; `MMAP_NOIRQ` appears nowhere. AAudio's exclusive
+path, the one that hands an app a buffer the DSP reads directly, does not
+exist on this hardware. Every low-latency client lands on the primary
+output's FAST track and goes through the FastMixer.
+
+**The FastMixer is Android's quantum, and it is 4 ms.** The primary
+output's HAL frame count is 192 at 48 kHz; the FastMixer reports
+`mixPeriod=4.00 ms`, measured 3.94 to 4.20 ms per cycle, `underruns=0`
+over 2.7 million frames, 158 us of CPU a cycle. Normal tracks go through
+the 960-frame normal mixer, 20 ms, and the policy reports the primary
+output's latency as 61 ms on that path; a game there would be far worse
+than ours, so a 10-frame camera result means RetroArch was on a fast
+track.
+
+**The FastMixer reports `latency=21.00 ms`.** That is the HAL's figure
+for everything from the mixer's output to the speaker: HAL buffering,
+the AudioReach graph, the codec and the amplifier. It is the tail this
+document could never measure from Linux, on the same silicon. The two
+idle fast tracks in the dump carry the same 21.00 ms in their `Latency`
+column.
+
+| | Android, fast path | PortareOS, PipeWire, after #540 and #542 |
+|---|---|---|
+| app's own buffer | unknown until a game runs | RetroArch ring 8 ms, held about half full: ~4 |
+| mixer or graph period | 4 ms | 3 ms quantum |
+| queued at the hardware | inside the 21 | ~4.9 ms at the PCM |
+| HAL/DSP/codec tail | inside the 21 | not visible; same hardware |
+
+If the tail behind the hardware is the same on both, the Linux path is
+within 3 to 4 ms of Android before the app's own buffer. The tester's
+12 to 13 camera frames against Android's 10 then fit only if Android's
+RetroArch buffers less than our 8 ms ring, and that is the one unknown
+left.
+
+**What to read in the game-running dump.** In `media.audio_flinger`, the
+primary thread's track table: RetroArch's row with `F` in the first
+column (fast track), its `FrmCnt` (the track's buffer in frames at its
+`SRate`) and its `Latency` column, Android's total for that track. From
+RetroArch's Android log or config: `audio_driver` (`opensl` or `aaudio`),
+`audio_latency`, `audio_block_frames`. That `Latency` figure against the
+8.9 ms here is the comparison the rest of this document leads to.
+
 ## RetroArch straight to the PCM: measured, and not a lever either
 
 2026-10-06. `audio_driver = alsa`, `audio_device = hw:0,0`, PipeWire idle so
