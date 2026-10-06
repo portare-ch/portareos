@@ -1,0 +1,31 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] ASoC: qcom: qdsp6: zero-initialize AudioReach module config
+
+Backport of upstream 9c9fb79f ("ASoC: qcom: qdsp6: Zero-initialize
+AudioReach module config", in 7.3). q6apm_dai_prepare() built the
+module configuration on the stack without initialising every field, so
+stack garbage could stand in for topology defaults such as slot mask,
+slots per frame and slot width. Correctness only; it does not move the
+period floor.
+---
+
+--- a/sound/soc/qcom/qdsp6/q6apm-dai.c
++++ b/sound/soc/qcom/qdsp6/q6apm-dai.c
+@@ -229,7 +229,7 @@
+ {
+ 	struct snd_pcm_runtime *runtime = substream->runtime;
+ 	struct q6apm_dai_rtd *prtd = runtime->private_data;
+-	struct audioreach_module_config cfg;
++	struct audioreach_module_config cfg = {};
+ 	struct device *dev = component->dev;
+ 	struct q6apm_dai_data *pdata;
+ 	int ret;
+@@ -917,7 +917,7 @@
+ 	struct snd_compr_runtime *runtime = stream->runtime;
+ 	struct q6apm_dai_rtd *prtd = runtime->private_data;
+ 	struct q6apm_dai_data *pdata;
+-	struct audioreach_module_config cfg;
++	struct audioreach_module_config cfg = {};
+ 	struct snd_codec *codec = &params->codec;
+ 	int dir = stream->direction;
+ 	int ret;

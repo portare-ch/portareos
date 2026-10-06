@@ -1,0 +1,35 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] pmdomain: qcom: rpmhpd: skip retention by default
+
+Backport of upstream 7178817f ("pmdomain: qcom: rpmhpd: Skip retention
+by default", Mike Tipton, in 7.3). Retention is almost never an
+operational corner; a child GDSC enabling its parent RPMh domain with
+no level voted brought the rail up at retention and could get stuck
+powering on. Upstream removes the per-domain skip_retention_level flag
+and skips retention everywhere. This keeps the flag (patch 0121 sits on
+the same struct) and drops the condition, which is the same behaviour.
+
+Taken for #505: with the PCIe suspend vote gone, CX has no explicit
+level at resume, and this is one way a resume can die before the kernel
+runs again.
+---
+
+--- a/drivers/pmdomain/qcom/rpmhpd.c
++++ b/drivers/pmdomain/qcom/rpmhpd.c
+@@ -1103,7 +1103,15 @@
+ 		return -EINVAL;
+ 
+ 	for (i = 0; i < rpmhpd->level_count; i++) {
+-		if (rpmhpd->skip_retention_level && buf[i] == RPMH_REGULATOR_LEVEL_RETENTION)
++		/*
++		 * Most HW won't function properly at Retention. The minimum
++		 * operational level is the first level above Retention. The
++		 * small subset of HW that can operate at Retention isn't
++		 * controlled by HLOS. Skip the Retention level to avoid HW
++		 * failures when the PD is enabled without first having an
++		 * explicit OPP level set.
++		 */
++		if (buf[i] == RPMH_REGULATOR_LEVEL_RETENTION)
+ 			continue;
+ 
+ 		rpmhpd->level[i] = buf[i];
