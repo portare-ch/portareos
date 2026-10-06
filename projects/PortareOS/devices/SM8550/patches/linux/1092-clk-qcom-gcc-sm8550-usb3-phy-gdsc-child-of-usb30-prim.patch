@@ -1,0 +1,35 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] clk: qcom: gcc-sm8550: make usb3_phy_gdsc a child of usb30_prim_gdsc
+
+The USB/DP combo PHY's aux, com_aux and pipe clock branches sit in the
+USB30 core block (0x39060, 0x39064, 0x39068), gated by usb30_prim_gdsc,
+while the PHY's own power domain is usb3_phy_gdsc. PortareOS lets the
+dwc3 glue runtime-suspend (udev 81-usb-runtime-pm.rules), which drops
+usb30_prim_gdsc. A DisplayPort connector probe then initialises the
+PHY with those branches unpowered:
+
+  gcc_usb3_prim_phy_aux_clk status stuck at 'off'
+  Failed to enable clk 'aux': -16
+  phy phy-88e8000.phy.3: phy init failed --> -16
+
+seen on the Retroid Pocket Nova from modetest at a game launch. With
+usb3_phy_gdsc a subdomain of usb30_prim_gdsc, gdsc_register() links
+them and powering the PHY powers the core block for as long as the PHY
+is in use; the USB runtime saving stays for the rest of the time.
+---
+
+--- a/drivers/clk/qcom/gcc-sm8550.c
++++ b/drivers/clk/qcom/gcc-sm8550.c
+@@ -3072,6 +3072,12 @@
+ 	.pd = {
+ 		.name = "usb3_phy_gdsc",
+ 	},
++	/*
++	 * The combo PHY's aux, com_aux and pipe clock branches live in the
++	 * USB30 core block, so initialising the PHY for DisplayPort while the
++	 * USB controller is runtime-suspended leaves them stuck off.
++	 */
++	.parent = &usb30_prim_gdsc.pd,
+ 	.pwrsts = PWRSTS_OFF_ON,
+ 	.flags = POLL_CFG_GDSCR | RETAIN_FF_ENABLE,
+ };
