@@ -534,7 +534,7 @@ case "$1" in
 		;;
 	
 	#
-	# API inspired by gpudriver
+	# Option-style API: --options lists the choices, a bare name selects one.
 	#
 	"--options")
 		echo "disabled network file_transfer"
