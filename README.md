@@ -274,7 +274,7 @@ with games, the counts, and the four numbers that matter in the header.
 ## Everyday use
 
 [portarelauncher](https://github.com/portare-ch/portarelauncher) provides
-consoles, games and settings for Wi-Fi, Bluetooth, SSH, USB gadget mode,
+consoles, games and settings for Wi-Fi, Bluetooth, SSH, USB mode,
 time zone and updates. Each device generates its own root password on first
 boot, shown under About.
 

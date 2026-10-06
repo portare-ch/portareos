@@ -56,8 +56,8 @@ only been built. BUGS.md carries the check for each unverified row.
 
 | Feature | What it does | Where | Status | Test |
 |---|---|---|---|---|
-| portarelauncher | KMS launcher on a dumb buffer: consoles, games, Tools, Settings. | `ui/portarelauncher` 0.5.0 | verified | human: navigation; auto: it holds DRM master at idle |
-| Quick Access: Recently played, Favourites, scrolling titles | The last ten launches under their day, a favourites list toggled with the left face button, and a selected long title that scrolls to its end. | `ui/portarelauncher` 0.5.0 | unverified | human: play, mark, scroll; portarelauncher#42 |
+| portarelauncher | KMS launcher on a dumb buffer: consoles, games, Tools, Settings. | `ui/portarelauncher` 0.5.1 | verified | human: navigation; auto: it holds DRM master at idle |
+| Quick Access: Recently played, Favourites, scrolling titles | The last ten launches under their day, a favourites list toggled with the left face button, and a selected long title that scrolls to its end. | `ui/portarelauncher` 0.5.1 | unverified | human: play, mark, scroll; portarelauncher#42 |
 | Settings: Wi-Fi, Bluetooth, SSH, USB gadget, buttons, color, profile, charging LED, time zone, about, power | Each writes system.cfg or acts directly. | launcher | verified except Consoles | human per row |
 | Settings > Consoles | PRMPT per console: SNES, NES, PlayStation, Game Boy, Game Boy Color, Game Boy Advance, Genesis. | launcher 0.4.2 | unverified | human: rows and text; auto: keys written to system.cfg |
 | Updates from GitHub | Nightly or release channel over Wi-Fi, installed on restart. | launcher `update.c`, `portareos-update` | verified | human: an update round trip |
