@@ -160,13 +160,13 @@ for hardware limits and emulator output rates.
 position. Removing `SNDRV_PCM_INFO_BATCH` stops PipeWire adding a period of
 batch-device headroom. Qualcomm DSP periods follow the stream's rate:
 10 ms instead of 480 frames, which previously meant 15 ms for SNES audio.
-PipeWire's minimum quantum is 256 frames (5.3 ms at 48 kHz).
+PortareOS configures PipeWire for a 3 ms graph quantum. Current PCM
+measurements and the remaining latency budget are documented in
+[audio latency](docs/audio-latency.md).
 
 RetroArch defaults to **8 ms**, down from the observed 32 ms crackle-free
 floor. This setting is not end-to-end latency. Camera tests showed
 improvement, though audio latency remains somewhat higher than Android.
-PCM period-floor experiments seek the hardware's limit; see
-[audio latency](docs/audio-latency.md) for measurements.
 
 ### Configured for this panel
 
