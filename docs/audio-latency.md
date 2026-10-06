@@ -407,7 +407,9 @@ the way in. Three pieces, in increasing order of how much is unknown:
    blobs usually expose many more frontends, a low-latency one among them, so a
    two-frontend topology is a sign this one may not carry it. The blob is not in
    this tree - it arrives with `extra-firmware` - so this needs a build or a
-   device.
+   device. **Done, and the suspicion was wrong:** every sub-graph in the blob
+   is already declared low-latency. See "Android's calibration database and
+   mixer paths" below.
 3. **Authoring a graph, if it is absent.** This is the wall.
    `AUDIO_SAMPLE_RATES.md` already records that the available AudioReach `.m4`
    source does not reproduce the shipped binary, which is why the rate work
@@ -469,6 +471,77 @@ column (fast track), its `FrmCnt` (the track's buffer in frames at its
 RetroArch's Android log or config: `audio_driver` (`opensl` or `aaudio`),
 `audio_latency`, `audio_block_frames`. That `Latency` figure against the
 8.9 ms here is the comparison the rest of this document leads to.
+
+## Android's calibration database and mixer paths
+
+2026-10-06, pulled from the stock Android alongside the dumps above and kept
+outside the tree (`~/1234/android/vendor`): `acdbdata/kalama_cdp/CDP_acdb_cal.acdb`
+(2.7 MB), its `CDP_workspaceFileXml.qwsp`, the four `mixer_paths_kalama_*.xml`
+and `audio_policy_configuration.xml`. The question was whether any of it
+carries a lower-latency DSP graph than ours, or speaker tuning we lack.
+
+**The two sides describe graphs in different places.** Android's userspace
+(AGM/PAL) opens graphs by *key vector* out of the ACDB, which also holds the
+per-module calibration; mainline's `q6apm` builds the same `APM_CMD_GRAPH_OPEN`
+from the ALSA topology blob instead, and sends no calibration. So the ACDB's
+graph list is readable by name, and ours by decoding the blob's vendor tuples
+with the token ids in `include/uapi/sound/snd_ar_tokens.h`.
+
+**Android's graph list.** `strings` on the ACDB gives the stream key vectors:
+`StreamRX_PCM_ULL_Playback_*`, `StreamRX_PCM_LL_Playback_*`,
+`StreamRX_PCM_Deep_Buffer_*`, `StreamRX_Generic_Playback_*`,
+`StreamRX_Compress_Offload_*`, `StreamRX_RAW_Playback_*`, each in speaker,
+headphones, BT, USB and HDMI variants. ULL, LL and deep-buffer are the three
+playback classes Android's policy exposes (`primary` with the `FAST` flag is
+the LL one, which is what the idle dump showed RetroArch would get).
+
+**Ours.** `AYN-Odin2-tplg.bin`, 19,960 bytes, 25 widgets, decoded on the
+device:
+
+| Sub-graph | Modules, in order | Perf mode | Direction |
+|---|---|---|---|
+| stream0 (`MultiMedia1 Playback`) | SH_MEM_PULL, PCM_DEC, PCM_CNV, SOFT_VOL, MFC, LOGGING | 2 | RX |
+| stream1 (`MultiMedia2 Playback`) | same | 2 | RX |
+| stream2 (`MultiMedia3 Capture`) | LOGGING, MFC, PCM_CNV, PCM_ENC, RD_SHMEM_EP | 2 | TX |
+| device113 (`RX_CODEC_DMA_RX_0`) | LOGGING, MFC, CODEC_DMA_SINK | 2 | RX |
+| device16, device104, device120 | MI2S, DisplayPort, codec DMA TX equivalents | 2 | |
+
+Perf mode 2 is `APM_SG_PERF_MODE_LOW_LATENCY` (`apm_sub_graph_api.h` in
+AudioReach's engine; 1 is `LOW_POWER`). The kernel passes it straight through
+as `APM_SUB_GRAPH_PROP_ID_PERF_MODE` at graph open (`audioreach.c`). So both
+playback frontends are already the DSP's low-latency class, and the only
+difference between them is where they are routed. There is no deep-buffer or
+low-power graph in the blob at all; the thing Android has three of, we have
+one of, and it is the fast one.
+
+What that means for the list in "The ULL graph" above: item 2 is answered,
+the graph is there; item 3, authoring one, is moot. What distinguishes
+Android's ULL from its LL is not a different DSP sub-graph property but the
+host side: the shared-memory period size AGM configures and the buffering
+AudioFlinger puts in front of it (4 ms FastMixer, 21 ms HAL latency per the
+dump). On our side those are `q6apm_dai`'s period, PipeWire's quantum and
+RetroArch's own buffer, which is where every measured lever has turned out to
+be.
+
+**Calibration.** The ACDB's per-module calibration targets modules we do not
+instantiate - speaker protection, limiter, MBDRC and the like are absent from
+our stream path, which is decode, convert, volume, rate convert, log. The
+speaker tuning that reaches the drivers lives in the amplifier, not the DSP:
+the AW88166 pair runs its own firmware with the profiles `Music` and
+`Receiver` (`SPK_L AW88166 Profile Set`), loaded from
+`qcom/sm8550/retroidpocket/rpnova/aw883xx_acf.bin`, which `nova-firmware`
+ships from the Nova's own Android image (`RPN07220904`). Android's inventory
+lists the same file at `/vendor/firmware/aw883xx_acf.bin`; it was not pulled,
+so the two are not yet confirmed byte-identical.
+
+**Mixer paths.** The four `mixer_paths_kalama_*.xml` are Qualcomm's reference
+board files (`speaker-hdk`, `speaker-fluid`, `speaker-liquid`, `-vbat`
+variants); none names an AW88166 control, so none is the Nova's actual
+routing. They confirm the RX routing we already have and nothing further.
+
+**Not readable.** The `.qwsp` workspace has no plain-text or archive structure
+(high entropy from byte 0); it is Qualcomm's tool format, so the ACDB cannot
+be edited or diffed here beyond its strings.
 
 ## RetroArch straight to the PCM: measured, and not a lever either
 
