@@ -29,8 +29,8 @@ PKG_BUILD_FLAGS="+pic"
 #
 # Three things link libmpg123 to decode with, and none of them runs the
 # binary: SDL2_mixer, amiberry and easyrpg-lr. Building no output module at all
-# would be defensible on that, but a PortMaster port can call anything on
-# PATH, and one small module is cheaper than a silent player.
+# would be defensible on that; one small module is kept so a script that
+# calls mpg123 on PATH is not a silent player.
 #
 # openal-soft was in the dependencies and is not in that list at all, so it
 # was never building anything. Dropped.

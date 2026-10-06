@@ -395,7 +395,7 @@ the log after return. N64 and Dreamcast are the open items.
 
 ### E5 Common quit and brightness hotkeys (human)
 
-For every entry in the README table plus ScummVM, PortMaster and mpv: start
+For every entry in the README table plus ScummVM and mpv: start
 it, press Home + Start; it exits to the launcher within three seconds and
 `/var/log/exec.log` ends with a clean exit line. Hold M1 and press volume
 up or down: brightness steps visibly in every one of them.
@@ -411,12 +411,6 @@ loading `gbc.opt`. Start a GB game: the GB palette applies instead.
 Copy Beneath a Steel Sky (freeware) to roms/scummvm, start it. The intro
 plays, MIDI music sounds through FluidLite, a save and load cycle works.
 `ls /storage/roms/bios/scummvm` holds the data bundle.
-
-### E8 PortMaster as its own platform (human)
-
-Start PortMaster, install a small port (2048). It starts, and each button
-does what the Nova's printing says: A confirms, B backs out. Fail if A/B
-or X/Y are swapped.
 
 ### E9 No automatic savestate load (auto)
 
@@ -506,8 +500,8 @@ appearing and die for the session (#446).
 
 ### L8 Home + Start for emulators that do not quit (human)
 
-Start mpv and PortMaster (neither has its own hotkey); Home + Start
-returns to the launcher within three seconds both times.
+Start mpv (it has no hotkey of its own); Home + Start returns to the
+launcher within three seconds.
 
 ### L9 Stick and trigger calibration (auto+human)
 

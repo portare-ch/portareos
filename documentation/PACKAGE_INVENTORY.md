@@ -28,7 +28,7 @@ The rule this applies is the README's: if it is not needed for a smooth game, it
 | **kernel-overlays** | 59 | Not what it looked like: 16 MB of modules, the rest the Nova's own firmware, already trimmed to this device's DSP, GPU, Wi-Fi and Bluetooth blobs. Nothing worth cutting. |
 | **slang-shaders** — trim, not drop | 70 → ~10 | We use `crt/crt-guest-advanced`, `handheld/lcd-grid-v2` and our own `portare/`. Keep those families and what they include; drop the other 60 MB. |
 | **renderdoc, apitrace (with glretrace, eglretrace), gdb, gdbserver, perf, vulkan-tools, glslc, binutils (strings, readelf), v4l-utils, edid-decode, cec-ctl, plplay, gltrim, wflinfo** | ~55 | Debugging and GPU tracing tools, in a release image. `DEBUG_PACKAGES` is off, so they arrive as somebody's dependency; find whose. |
-| **gstreamer, gst-plugins-base, gst-plugins-good, gst-libav** | 8 | No binary links it. qt6 pulled it and is gone; portmaster still lists gst-plugins-base, for ports. Goes with portmaster. |
+| **gstreamer, gst-plugins-base, gst-plugins-good, gst-libav** | 8 | No binary links it. qt6 pulled it and is gone, PortMaster listed `gst-plugins-base` and is gone too; three recipes still name it. Worth the same check. |
 | The sqlite3 CLI, nano and dialog, bluez's btmon | ~1 | Duplicates and unused command-line tools. |
 | **iwd_get-networks, ukify, spit** | – | Leftover scripts. |
 
@@ -40,8 +40,6 @@ The rule this applies is the README's: if it is not needed for a smooth game, it
 | **mangohud, mangoapp** | 12 | A performance overlay: handy for development, an anti-feature for a player. gamescope runs without it. |
 | **scummvm-lr** | 77 | ScummVM as the libretro core, with the standalone's engines less ten that want a keyboard or carry nothing playable here. Every engine in the tree would be 120. |
 | **fbneo** core | 76 | The largest core: every arcade driver. Fine for as long as arcade is a system. |
-| **`/usr/lib/compat`**: libavcodec 58, librsvg, x265, aom, openssl 1.1, SDL2 | 41 | Old-ABI libraries for PortMaster ports: a second copy of ffmpeg and friends. Stays exactly as long as PortMaster does. |
-| **portmaster** | – | Ports need the compat set above and their own launcher scripts. If ports are not a goal, it and the 41 MB leave together. |
 | **umtprd** (MTP) beside the USB network gadget | – | Two USB file-transfer paths where one would do. |
 | **libtirpc, heimdal, rpcbind** | 0 | Checked on the device: libtirpc and heimdal are not on the image at all and rpcbind is a stray systemd target with no binary. The ~10 MB this row used to claim is not there to reclaim. |
 

@@ -25,7 +25,6 @@ LIBRETRO_CORES=" bsnes-lr ymir-lr fbneo-lr flycast-lr gambatte-lr genesis-plus-g
 
 if [ "${ARCH}" = "aarch64" ]; then
   LIBRETRO_CORES+=" ppsspp-lr"
-  PKG_EMUS+=" portmaster"
 fi
 
 case "${DEVICE}" in
@@ -460,10 +459,6 @@ makeinstall_target() {
   ### Nintendo Stellaview
   add_emu_core satellaview retroarch bsnes true
   add_es_system satellaview
-
-  ### PC Ports
-  add_emu_core ports portmaster portmaster true
-  add_es_system ports
 
 
   ### Movies. One player, mpv, on the panel's 119.88 Hz mode - see

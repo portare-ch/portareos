@@ -13,18 +13,6 @@
         <image>./images/install-portareos.svg</image>
     </game>
     <game>
-        <path>./Start PortMaster.sh</path>
-        <name>PortMaster</name>
-        <desc>Downloads game ports made for ARM handhelds. The list is at portmaster.games.</desc>
-        <developer>Portmaster</developer>
-        <publisher>Portmaster</publisher>
-        <rating>5.0</rating>
-        <releasedate>2022</releasedate>         
-        <genre>Tool</genre>
-        <players>1</players>
-        <image>./images/portmaster.svg</image>
-    </game>
-    <game>
         <path>./Remove ._ Files.sh</path>
         <name>Remove ._ Files</name>
         <desc>Deletes the hidden ._ files macOS leaves next to every file it copies.</desc>

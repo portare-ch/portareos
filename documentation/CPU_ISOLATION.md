@@ -185,7 +185,6 @@ What it takes:
 - **Storage:** ownership of `/storage` paths emulators write: roms, saves,
   config, cache. Mount options for removable media formatted vfat or exfat.
 - **Audio:** PipeWire access for that uid.
-- **Ports:** PortMaster and port scripts that assume root.
 - **Account creation:** a static user, since `sysusers` is off in the systemd
   build.
 

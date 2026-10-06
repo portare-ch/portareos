@@ -49,7 +49,6 @@ only been built. BUGS.md carries the check for each unverified row.
 | Common quit and brightness hotkeys | Home + Start quits every emulator; M1 with volume sets brightness anywhere. | `portareos-hotkey`, `portsense`, launcher | verified | human: each emulator quits; brightness steps |
 | GBC hardware and palette for GBC games | Gambatte given the GBC model and its color correction. | `Gambatte/gbc.opt` | verified | human: a GBC game's colors |
 | ScummVM as a libretro core | LITE build with our engine list, FluidLite synth, data bundle to the system directory. | `scummvm-lr` | unverified | human: a game starts, music plays |
-| PortMaster as its own platform | Harbourmaster patch copies our control.txt and mapper; pad buttons as printed. | `portmaster` | unverified | human: install a port, buttons match printing |
 | No automatic savestate load | Deliberate. | `setsettings.sh` | verified | auto: `savestate_auto_load = "false"` |
 | Emulator pins bumped daily | A workflow opens a PR per upstream move. | `bump-emulator-pins.yml` | verified | auto: the workflow runs |
 
