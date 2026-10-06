@@ -8,7 +8,7 @@ why it matters here, and what we did with it. Their
 `packages/kernel/PATCHES.md` records the provenance of every patch,
 which makes cherry-picking easy.
 
-Nothing in armada covers RetroArch, a launcher, PortMaster, ScummVM,
+Nothing in armada covers RetroArch, a launcher, ScummVM,
 mpv or panel refresh modes; its display work is gamescope and HDR.
 
 ## Taken

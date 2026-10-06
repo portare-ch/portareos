@@ -44,7 +44,7 @@ make_target() {
 # zip, tar, gzip and bzip2 by itself.
 #
 # Nothing on the image called any of them: RetroArch has 7-Zip compiled in
-# rather than shelling out, and PortMaster carries its own 7zzs. The host
+# rather than shelling out. The host
 # build still gets 7za through makeinstall_host above, which is what the
 # package system extracts with.
 makeinstall_target() {

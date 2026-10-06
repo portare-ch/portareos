@@ -369,22 +369,6 @@ case ${EMULATOR} in
       "wii"|"wiiware")
         RUNTHIS='${RUN_SHELL} /usr/bin/start_dolphin_wii.sh "${ROMNAME}" "${PLATFORM}" "${CORE}"'
       ;;
-      "ports")
-      if [[ "${ROMNAME,,}" == *".appimage" ]]; then
-        RUNTHIS='${EMUPERF} "${ROMNAME}"'
-      else
-        RUNTHIS='${EMUPERF} ${RUN_SHELL} "${ROMNAME}"'
-      fi
-        chmod +x "${ROMNAME}"
-        sed -i "/^ACTIVE_GAME=/c\ACTIVE_GAME=\"${ROMNAME}\"" /storage/.config/PortMaster/mapper.txt
-        sed -i "/^ACTIVE_PLATFORM=/c\ACTIVE_PLATFORM=\"${PLATFORM}\"" /storage/.config/PortMaster/mapper.txt
-      ;;
-      "windows")
-        RUNTHIS='${EMUPERF} ${RUN_SHELL} "${ROMNAME}"'
-        # Hook into Portmaster control mapping
-        sed -i "/^ACTIVE_GAME=/c\ACTIVE_GAME=\"${ROMNAME}\"" /storage/.config/PortMaster/mapper.txt
-        sed -i "/^ACTIVE_PLATFORM=/c\ACTIVE_PLATFORM=\"${PLATFORM}\"" /storage/.config/PortMaster/mapper.txt
-      ;;
       "shell")
         RUNTHIS='${RUN_SHELL} "${ROMNAME}"'
       ;;
@@ -567,7 +551,7 @@ then
 fi
 
 # If the rom is a shell script just execute it, useful for DOSBOX and ScummVM scan scripts
-if [[ "${ROMNAME}" == *".sh" ]] && [ ! "${PLATFORM}" = "ports" ] && [ ! "${PLATFORM}" = "windows" ]; then
+if [[ "${ROMNAME}" == *".sh" ]]; then
         ${VERBOSE} && log $0 "Executing shell script ${ROMNAME}"
         ${GAMESCOPE} "${ROMNAME}" &>>${OUTPUT_LOG}
         ret_error=$?

@@ -125,8 +125,7 @@ Each program takes the panel itself:
 * **RetroArch** renders with Vulkan straight to the display (`VK_KHR_display`).
 * **mpv** plays films through Vulkan directly to the display, so a movie
   follows the same path as a game.
-* **xemu and PortMaster** use SDL's KMS driver. They need no desktop to
-  give them a window.
+* **xemu** uses SDL's KMS driver. It needs no desktop to give it a window.
 * **Steam** is the exception: it uses gamescope on the DRM backend.
 
 There is no desktop compositor or EmulationStation in the image. Each
@@ -158,7 +157,7 @@ together with the settings nobody had tuned for them. See
 | PSP | PPSSPP |
 | Xbox | xemu |
 | Point-and-click | ScummVM |
-| Ports, PC | PortMaster, Steam |
+| PC | Steam |
 | Movies, music | mpv, PORTAMP |
 
 [Folders, formats and cores](documentation/PER_DEVICE_DOCUMENTATION/SM8550/SUPPORTED_EMULATORS_AND_CORES.md).
@@ -286,7 +285,6 @@ boot, shown under About.
 * Settings > Consoles offers **PRMPT**, an experimental pre-emptive frame
   per 2D console. PlayStation keeps its measured, tuned configuration
   without this switch: the pre-emptive frame's performance cost was too high.
-* PortMaster is its own platform, with controls matching the printed buttons.
 * Updates download from GitHub over Wi-Fi through the launcher, using the
   nightly or release channel, and install on restart.
 
