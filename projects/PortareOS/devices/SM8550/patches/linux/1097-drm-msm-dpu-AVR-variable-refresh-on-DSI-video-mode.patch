@@ -7,9 +7,12 @@ trigger, up to a set frame length. Mainline defines its registers and
 never programs them.
 
 msm.dpu_avr_min_fps sets a floor in Hz, read at mode set; 0, the
-default, leaves the fixed refresh. With a floor, AVR runs one-shot as
-downstream programs it, and each commit ends the held porch. The panel
-gets no Qsync commands; the Nova's has none.
+default, leaves the fixed refresh. With a floor, the mode set writes the
+longest frame, and the next commit switches AVR on, one-shot, with the
+INTF in its flush: the order downstream uses. Switched on at mode set,
+before the timing engine ran, AVR read back as programmed and its
+status bit stayed clear. Each commit then ends the held porch. The
+panel gets no Qsync commands; the Nova's has none.
 ---
 --- a/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_intf.h
 +++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_intf.h
@@ -71,10 +74,11 @@ gets no Qsync commands; the Nova's has none.
  }
 --- a/drivers/gpu/drm/msm/disp/dpu1/dpu_encoder_phys.h
 +++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_encoder_phys.h
-@@ -198,6 +198,7 @@
+@@ -198,6 +198,8 @@
  	wait_queue_head_t pending_kickoff_wq;
  	unsigned int irq[INTR_IDX_MAX];
  	bool has_intf_te;
++	bool avr_wanted;
 +	bool avr_enabled;
  };
  
@@ -98,7 +102,7 @@ gets no Qsync commands; the Nova's has none.
  #define to_dpu_encoder_phys_vid(x) \
  	container_of(x, struct dpu_encoder_phys_vid, base)
  
-@@ -254,6 +264,43 @@
+@@ -254,6 +264,64 @@
  	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
  }
  
@@ -112,6 +116,7 @@ gets no Qsync commands; the Nova's has none.
 +	unsigned long lock_flags;
 +	u64 lines = 0;
 +
++	phys_enc->avr_wanted = false;
 +	phys_enc->avr_enabled = false;
 +	if (!intf->ops.setup_avr || !intf->ops.enable_avr ||
 +	    !intf->ops.avr_trigger)
@@ -125,24 +130,44 @@ gets no Qsync commands; the Nova's has none.
 +				 min_fps);
 +
 +	spin_lock_irqsave(phys_enc->enc_spinlock, lock_flags);
++	intf->ops.enable_avr(intf, false);
 +	if (lines > vtotal) {
 +		intf->ops.setup_avr(intf, (u32)(lines * htotal));
-+		intf->ops.enable_avr(intf, true);
-+		phys_enc->avr_enabled = true;
-+	} else {
-+		intf->ops.enable_avr(intf, false);
++		phys_enc->avr_wanted = true;
 +	}
 +	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
 +
-+	if (phys_enc->avr_enabled)
++	if (phys_enc->avr_wanted)
 +		DRM_INFO("intf%d: variable refresh, %u to %llu lines a frame\n",
 +			 intf->idx - INTF_0, vtotal, lines);
++}
++
++/*
++ * AVR is switched on in a commit while the timing engine runs, with the INTF
++ * in that commit's flush, as Qualcomm's driver switches Qsync on. Enabled
++ * at mode set, before the timing engine starts, it read back as programmed
++ * and its status bit stayed clear.
++ */
++static void dpu_encoder_phys_vid_start_avr(struct dpu_encoder_phys *phys_enc)
++{
++	unsigned long lock_flags;
++
++	if (!phys_enc->avr_wanted || phys_enc->avr_enabled ||
++	    phys_enc->enable_state != DPU_ENC_ENABLED)
++		return;
++
++	spin_lock_irqsave(phys_enc->enc_spinlock, lock_flags);
++	phys_enc->hw_intf->ops.enable_avr(phys_enc->hw_intf, true);
++	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
++	phys_enc->hw_ctl->ops.update_pending_flush_intf(phys_enc->hw_ctl,
++							phys_enc->hw_intf->idx);
++	phys_enc->avr_enabled = true;
 +}
 +
  static void dpu_encoder_phys_vid_setup_timing_engine(
  		struct dpu_encoder_phys *phys_enc)
  {
-@@ -330,6 +377,7 @@
+@@ -330,6 +398,7 @@
  	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
  
  	programmable_fetch_config(phys_enc, &timing_params);
@@ -150,19 +175,28 @@ gets no Qsync commands; the Nova's has none.
  }
  
  static void dpu_encoder_phys_vid_vblank_irq(void *arg)
-@@ -602,6 +650,11 @@
+@@ -558,6 +627,8 @@
+ 
+ 	drm_enc = phys_enc->parent;
+ 
++	dpu_encoder_phys_vid_start_avr(phys_enc);
++
+ 	ctl = phys_enc->hw_ctl;
+ 	if (!ctl->ops.wait_reset_status)
+ 		return;
+@@ -602,6 +673,11 @@
  	}
  
  	spin_lock_irqsave(phys_enc->enc_spinlock, lock_flags);
 +	/* A held front porch would delay the vsync waited for below. */
-+	if (phys_enc->avr_enabled) {
++	if (phys_enc->avr_enabled)
 +		phys_enc->hw_intf->ops.enable_avr(phys_enc->hw_intf, false);
-+		phys_enc->avr_enabled = false;
-+	}
++	phys_enc->avr_wanted = false;
++	phys_enc->avr_enabled = false;
  	phys_enc->hw_intf->ops.enable_timing(phys_enc->hw_intf, 0);
  	if (dpu_encoder_phys_vid_is_master(phys_enc))
  		dpu_encoder_phys_inc_pending(phys_enc);
-@@ -666,6 +719,13 @@
+@@ -666,6 +742,13 @@
  		spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
  		phys_enc->enable_state = DPU_ENC_ENABLED;
  	}

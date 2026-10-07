@@ -27,8 +27,11 @@
 // The kernel reads msm.dpu_avr_min_fps when it programs a mode, so the
 // dynamic phases start with a real mode set: a stretched mode, then the
 // preferred one. "reset" does only that, so a changed floor takes effect.
+// The kernel switches AVR on with the first commit after a mode set; "idle"
+// sets the fastest mode, commits once, and then commits nothing for SECONDS,
+// so the frame rate shows whether AVR holds the front porch.
 //
-// usage: vrr-probe [OUT.csv] [SECONDS] [static|dynamic|all|reset]
+// usage: vrr-probe [OUT.csv] [SECONDS] [static|dynamic|all|reset|idle]
 
 #define _GNU_SOURCE
 #include <errno.h>
@@ -332,8 +335,9 @@ int main(int argc, char **argv)
 	double secs = argc > 2 ? atof(argv[2]) : 6.0;
 	const char *which = argc > 3 ? argv[3] : "all";
 	int do_reset = strcmp(which, "reset") == 0;
-	int do_static = !do_reset && strcmp(which, "dynamic") != 0;
-	int do_dynamic = !do_reset && strcmp(which, "static") != 0;
+	int do_idle = strcmp(which, "idle") == 0;
+	int do_static = !do_reset && !do_idle && strcmp(which, "dynamic") != 0;
+	int do_dynamic = !do_reset && !do_idle && strcmp(which, "static") != 0;
 	static const int targets[] = { 0, 110, 100, 90, 80, 72, 60 };
 	static const int dyn_hz[] = { 120, 119, 110, 100, 0, 0, 0, 119 };
 
@@ -372,7 +376,7 @@ int main(int argc, char **argv)
 		fflush(stdout);
 	}
 
-	if ((do_dynamic || do_reset) && !stop) {
+	if ((do_dynamic || do_reset || do_idle) && !stop) {
 		struct drm_mode_modeinfo other = stretched(&base, base.vtotal + 90);
 		struct drm_mode_modeinfo *dyn = do_reset ? &base : &fast;
 		paint(&bufs[0], 7, dyn_hz[0]);
@@ -381,13 +385,25 @@ int main(int argc, char **argv)
 			perror("mode set"); return 1;
 		}
 		if (do_reset) { printf("mode set again\n"); return 0; }
-		printf("dynamic phases on %s, %.3f Hz, vtotal %u\n", fast.name, mode_hz(&fast), fast.vtotal);
 		usleep(300000);
+		if (do_idle) {
+			if (flip(7)) { perror("page flip"); return 1; }
+			while (!stop && !wait_flips(7, 200))
+				;
+			printf("%s, %.3f Hz: one commit, then idle for %.0f s\n", fast.name, mode_hz(&fast), secs);
+			fflush(stdout);
+			uint64_t end = now_ns() + (uint64_t)(secs * 1e9);
+			while (!stop && now_ns() < end)
+				usleep(100000);
+			do_dynamic = 0;
+		}
+		if (do_dynamic)
+			printf("dynamic phases on %s, %.3f Hz, vtotal %u\n", fast.name, mode_hz(&fast), fast.vtotal);
 		static const char *names[] = { "120 Hz", "119.652 Hz", "110 Hz", "100 Hz",
 					       "100/120 alternating", "random 8.34-10 ms",
 					       "game 16.7-20 ms, each frame twice",
 					       "119.652 Hz, every 20th game frame 2 ms late" };
-		for (int k = 0; k < 8 && !stop; k++) {
+		for (int k = 0; do_dynamic && k < 8 && !stop; k++) {
 			uint8_t phase = (uint8_t)(7 + k);
 			paint(&bufs[0], phase, dyn_hz[k]);
 			paint(&bufs[1], phase, dyn_hz[k]);
