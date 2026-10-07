@@ -23,7 +23,10 @@ from one frame to the next inside that range.
   writes `AVR_TRIGGER` after every commit. Its DSI code has no Qsync
   handling: the DSI controller follows the INTF.
 - **Kernel patch 1097** adds that, off by default.
-  `msm.dpu_avr_min_fps` sets the floor in Hz and is read at mode set.
+  `msm.dpu_avr_min_fps` sets the floor in Hz and is read at mode set,
+  which writes the longest frame. The next commit switches AVR on, with
+  the INTF in its flush, in the order downstream switches Qsync on. From
+  DPU 8.1, bit 31 of `AVR_CONTROL` reads 1 while AVR is active.
 
 ## Measured, 2026-10-07
 
@@ -68,22 +71,46 @@ With AVR the same schedules should start frames off the grid, within
 about a millisecond of each commit, and the frame lengths should follow
 the schedule.
 
+### AVR switched on at mode set: inactive
+
+The first version of patch 1097 enabled AVR at mode set, before the
+timing engine started. The registers read back as programmed:
+`AVR_CONTROL` 0x1, `AVR_MODE` 0x101, `AVR_VTOTAL` 1250 lines. The status
+bit stayed clear, frames ran at 119.98 Hz with no commits instead of the
+96 Hz floor, and every dynamic schedule landed on the 8.32 ms grid as on
+the fixed refresh. No flicker was seen, but on fixed timing. The patch
+now switches AVR on in the first commit after the mode set.
+
 ## Running the AVR test
 
 On a build with patch 1097. `vrr-probe` is in the debug set, which only
 unofficial builds carry; elsewhere, copy the static build to `/storage`.
 
+First, whether AVR holds the front porch at all. `idle` commits once
+and then nothing, so frames should slow to the floor:
+
 ```
 systemctl stop portarelauncher
 echo 96 > /sys/module/msm/parameters/dpu_avr_min_fps
+vrr-probe /dev/null 6 idle &
+sleep 2
+devmem 0xae36270 32          # 0x80000001: AVR active
+F=0xae360ac; a=$(devmem $F 32); sleep 2; b=$(devmem $F 32)
+echo $(( (b - a) / 2 )) frames/s   # about 96, not 120
+wait
+```
+
+Then the schedules:
+
+```
 vrr-probe /storage/vrr-avr.csv 10 dynamic
 echo 0 > /sys/module/msm/parameters/dpu_avr_min_fps
 vrr-probe /dev/null 1 reset
 systemctl start portarelauncher
 ```
 
-The kernel logs `intf1: variable refresh, 1116 to 1397 lines a frame`
-when AVR is on. The big digit is the phase, 7 to 14, and the grey number
+At the mode set the kernel logs `intf1: variable refresh, 1116 to 1397
+lines a frame`. The big digit is the phase, 7 to 14, and the grey number
 the rate (0 for a pattern). Watch the dark grey patches for flicker,
 especially in phase 11, where the frame length alternates every frame,
 and compare brightness with phase 7. Then repeat at minimum brightness.
