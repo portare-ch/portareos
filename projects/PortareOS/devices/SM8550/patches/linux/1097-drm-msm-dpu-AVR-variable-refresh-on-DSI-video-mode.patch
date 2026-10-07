@@ -1,0 +1,178 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] drm/msm/dpu: AVR variable refresh on DSI video mode, for testing
+
+The INTF on DPU 9.0 has AVR, the block Qualcomm's downstream driver uses
+for Qsync in video mode: the vertical front porch runs on until a
+trigger, up to a set frame length. Mainline defines its registers and
+never programs them.
+
+msm.dpu_avr_min_fps sets a floor in Hz, read at mode set; 0, the
+default, leaves the fixed refresh. With a floor, AVR runs one-shot as
+downstream programs it, and each commit ends the held porch. The panel
+gets no Qsync commands; the Nova's has none.
+---
+--- a/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_intf.h
++++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_intf.h
+@@ -112,6 +112,15 @@
+ 
+ 	void (*program_intf_cmd_cfg)(struct dpu_hw_intf *intf,
+ 				     struct dpu_hw_intf_cmd_mode_cfg *cmd_mode_cfg);
++
++	/*
++	 * AVR, the INTF's variable refresh in video mode: once enabled, the
++	 * vertical front porch runs on past the mode's frame until
++	 * avr_trigger(), or until the frame reaches setup_avr()'s length.
++	 */
++	void (*setup_avr)(struct dpu_hw_intf *intf, u32 max_frame_pixels);
++	void (*enable_avr)(struct dpu_hw_intf *intf, bool enable);
++	void (*avr_trigger)(struct dpu_hw_intf *intf);
+ };
+ 
+ struct dpu_hw_intf {
+--- a/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_intf.c
++++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_intf.c
+@@ -281,6 +281,25 @@
+ 	DPU_REG_WRITE(c, INTF_TIMING_ENGINE_EN, enable != 0);
+ }
+ 
++static void dpu_hw_intf_setup_avr(struct dpu_hw_intf *intf,
++		u32 max_frame_pixels)
++{
++	DPU_REG_WRITE(&intf->hw, INTF_AVR_VTOTAL, max_frame_pixels);
++}
++
++/* One-shot mode, as Qualcomm's downstream driver programs it for Qsync. */
++static void dpu_hw_intf_enable_avr(struct dpu_hw_intf *intf, bool enable)
++{
++	DPU_REG_WRITE(&intf->hw, INTF_AVR_CONTROL, enable ? BIT(0) : 0);
++	DPU_REG_WRITE(&intf->hw, INTF_AVR_MODE,
++		      enable ? (BIT(0) | BIT(8)) : 0);
++}
++
++static void dpu_hw_intf_avr_trigger(struct dpu_hw_intf *intf)
++{
++	DPU_REG_WRITE(&intf->hw, INTF_AVR_TRIGGER, 0x1);
++}
++
+ static void dpu_hw_intf_setup_prg_fetch(
+ 		struct dpu_hw_intf *intf,
+ 		const struct dpu_hw_intf_prog_fetch *fetch)
+@@ -668,5 +687,11 @@
+ 	if (mdss_rev->core_major_ver >= 7)
+ 		c->ops.program_intf_cmd_cfg = dpu_hw_intf_program_intf_cmd_cfg;
+ 
++	if (mdss_rev->core_major_ver >= 9 && cfg->type == INTF_DSI) {
++		c->ops.setup_avr = dpu_hw_intf_setup_avr;
++		c->ops.enable_avr = dpu_hw_intf_enable_avr;
++		c->ops.avr_trigger = dpu_hw_intf_avr_trigger;
++	}
++
+ 	return c;
+ }
+--- a/drivers/gpu/drm/msm/disp/dpu1/dpu_encoder_phys.h
++++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_encoder_phys.h
+@@ -198,6 +198,7 @@
+ 	wait_queue_head_t pending_kickoff_wq;
+ 	unsigned int irq[INTR_IDX_MAX];
+ 	bool has_intf_te;
++	bool avr_enabled;
+ };
+ 
+ static inline int dpu_encoder_phys_inc_pending(struct dpu_encoder_phys *phys)
+--- a/drivers/gpu/drm/msm/disp/dpu1/dpu_encoder_phys_vid.c
++++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_encoder_phys_vid.c
+@@ -27,6 +27,16 @@
+ 		(e) && (e)->hw_intf ? \
+ 		(e)->hw_intf->idx - INTF_0 : -1, ##__VA_ARGS__)
+ 
++/*
++ * Variable refresh on a DSI video-mode panel, for testing. With a floor set,
++ * each frame's vertical front porch runs on until the next commit, up to
++ * the frame length of the floor. 0 keeps the fixed refresh. Read at mode set.
++ */
++static unsigned int dpu_avr_min_fps;
++module_param(dpu_avr_min_fps, uint, 0644);
++MODULE_PARM_DESC(dpu_avr_min_fps,
++		 "Variable refresh floor in Hz on DSI video mode, 0 = off (test)");
++
+ #define to_dpu_encoder_phys_vid(x) \
+ 	container_of(x, struct dpu_encoder_phys_vid, base)
+ 
+@@ -254,6 +264,43 @@
+ 	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
+ }
+ 
++static void dpu_encoder_phys_vid_setup_avr(struct dpu_encoder_phys *phys_enc,
++		const struct dpu_hw_intf_timing_params *timing, int clock_khz)
++{
++	struct dpu_hw_intf *intf = phys_enc->hw_intf;
++	unsigned int min_fps = READ_ONCE(dpu_avr_min_fps);
++	u32 htotal = get_horizontal_total(timing);
++	u32 vtotal = get_vertical_total(timing);
++	unsigned long lock_flags;
++	u64 lines = 0;
++
++	phys_enc->avr_enabled = false;
++	if (!intf->ops.setup_avr || !intf->ops.enable_avr ||
++	    !intf->ops.avr_trigger)
++		return;
++
++	if (min_fps && htotal)
++		lines = div_u64((u64)clock_khz * 1000, htotal * min_fps);
++	if (min_fps && lines <= vtotal)
++		DPU_ERROR_VIDENC(phys_enc,
++				 "AVR floor %u Hz is not below the mode's rate\n",
++				 min_fps);
++
++	spin_lock_irqsave(phys_enc->enc_spinlock, lock_flags);
++	if (lines > vtotal) {
++		intf->ops.setup_avr(intf, (u32)(lines * htotal));
++		intf->ops.enable_avr(intf, true);
++		phys_enc->avr_enabled = true;
++	} else {
++		intf->ops.enable_avr(intf, false);
++	}
++	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
++
++	if (phys_enc->avr_enabled)
++		DRM_INFO("intf%d: variable refresh, %u to %llu lines a frame\n",
++			 intf->idx - INTF_0, vtotal, lines);
++}
++
+ static void dpu_encoder_phys_vid_setup_timing_engine(
+ 		struct dpu_encoder_phys *phys_enc)
+ {
+@@ -330,6 +377,7 @@
+ 	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
+ 
+ 	programmable_fetch_config(phys_enc, &timing_params);
++	dpu_encoder_phys_vid_setup_avr(phys_enc, &timing_params, mode.clock);
+ }
+ 
+ static void dpu_encoder_phys_vid_vblank_irq(void *arg)
+@@ -602,6 +650,11 @@
+ 	}
+ 
+ 	spin_lock_irqsave(phys_enc->enc_spinlock, lock_flags);
++	/* A held front porch would delay the vsync waited for below. */
++	if (phys_enc->avr_enabled) {
++		phys_enc->hw_intf->ops.enable_avr(phys_enc->hw_intf, false);
++		phys_enc->avr_enabled = false;
++	}
+ 	phys_enc->hw_intf->ops.enable_timing(phys_enc->hw_intf, 0);
+ 	if (dpu_encoder_phys_vid_is_master(phys_enc))
+ 		dpu_encoder_phys_inc_pending(phys_enc);
+@@ -666,6 +719,13 @@
+ 		spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
+ 		phys_enc->enable_state = DPU_ENC_ENABLED;
+ 	}
++
++	/* The frame is committed: end the held front porch. */
++	if (phys_enc->avr_enabled) {
++		spin_lock_irqsave(phys_enc->enc_spinlock, lock_flags);
++		phys_enc->hw_intf->ops.avr_trigger(phys_enc->hw_intf);
++		spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
++	}
+ }
+ 
+ static void dpu_encoder_phys_vid_irq_enable(struct dpu_encoder_phys *phys_enc)
