@@ -12,28 +12,23 @@ PKG_TOOLCHAIN="manual"
 
 makeinstall_target() {
   mkdir -p ${INSTALL}/$(get_full_firmware_dir)
+    cp -a SM8550/* ${INSTALL}/$(get_full_firmware_dir)
 
-  case "${DEVICE}" in
-    "SM6115") cp -a SM6115/* ${INSTALL}/$(get_full_firmware_dir) ;;
-    "SM8250") cp -a SM8250/* ${INSTALL}/$(get_full_firmware_dir) ;;
-    "SM8550") cp -a SM8550/* ${INSTALL}/$(get_full_firmware_dir) ;;
-    "SM8650") cp -a SM8650/* ${INSTALL}/$(get_full_firmware_dir) ;;
-    "SM8750") cp -a SM8750/* ${INSTALL}/$(get_full_firmware_dir) ;;
-  esac
+  # ROCKNIX's SM8550 folder carries every SM8550 handheld's firmware. The
+  # Nova loads its own DSP firmware, from nova-firmware, so none of the AYN
+  # or AYANEO devices' is ever loaded here; nor are the APS and Thor audio
+  # topologies, since its card is AYN-Odin2, nor the Renesas USB 3
+  # controller's, which it does not have. Wi-Fi (ath12k), the video decoder
+  # (qcom/vpu) and AYN-Odin2-tplg.bin stay.
+  FW=${INSTALL}/$(get_full_firmware_dir)
+  rm -rf ${FW}/qcom/sm8550/ayaneo ${FW}/qcom/sm8550/ayn
+  rm -f ${FW}/qcom/sm8550/SM8550-APS-tplg.bin ${FW}/qcom/sm8550/AYN-Thor-tplg.bin
+  rm -f ${FW}/renesas_usb_fw.mem
 
-  if [ "${DEVICE}" = "SM8550" ]; then
-    # ROCKNIX's SM8550 folder carries every SM8550 handheld's signed DSP
-    # firmware. The Nova loads its own, from nova-firmware, so none of
-    # the AYN or AYANEO devices' is ever loaded here. The topology,
-    # AYN-Odin2-tplg.bin, is Linux-side and stays.
-    FW=${INSTALL}/$(get_full_firmware_dir)/qcom/sm8550
-    rm -rf ${FW}/ayaneo ${FW}/ayn
+  python3 ${PKG_DIR}/sources/tplg-playback-rates.py \
+    ${INSTALL}/$(get_full_firmware_dir)/qcom/sm8550/AYN-Odin2-tplg.bin
 
-    python3 ${PKG_DIR}/sources/tplg-playback-rates.py \
-      ${INSTALL}/$(get_full_firmware_dir)/qcom/sm8550/AYN-Odin2-tplg.bin
-
-    # Runs second: its IN_SHA256 is the file the script above produces.
-    python3 ${PKG_DIR}/sources/tplg-pull-mode.py \
-      ${INSTALL}/$(get_full_firmware_dir)/qcom/sm8550/AYN-Odin2-tplg.bin
-  fi
+  # Runs second: its IN_SHA256 is the file the script above produces.
+  python3 ${PKG_DIR}/sources/tplg-pull-mode.py \
+    ${INSTALL}/$(get_full_firmware_dir)/qcom/sm8550/AYN-Odin2-tplg.bin
 }

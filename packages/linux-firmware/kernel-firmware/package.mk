@@ -23,70 +23,34 @@ post_patch() {
 
     mkdir -p "${PKG_FW_SOURCE}"
       ./copy-firmware.sh --verbose "${PKG_FW_SOURCE}"
-
-    # copy extra firmware files (or overwrite upstream ones)
-    if [ -d ${PKG_DIR}/extra-firmware ]; then
-      cp -r ${PKG_DIR}/extra-firmware/* "${PKG_FW_SOURCE}"
-    fi
   )
 }
 
-# Install additional miscellaneous drivers
+# Installs what the device's list names, config/kernel-firmware.dat, and
+# nothing else: linux-firmware is 1.5 GB of every vendor's blobs, and the
+# Nova loads a handful.
 makeinstall_target() {
   FW_TARGET_DIR=${INSTALL}/$(get_full_firmware_dir)
 
-  if find_file_path config/kernel-firmware.dat; then
-    FW_LISTS="${FOUND_PATH}"
-  else
-    FW_LISTS="${PKG_DIR}/firmwares/any.dat ${PKG_DIR}/firmwares/${TARGET_ARCH}.dat"
-  fi
+  find_file_path config/kernel-firmware.dat || die "no config/kernel-firmware.dat for ${DEVICE}"
 
-  FW_LISTS+=" ${PROJECT_DIR}/${PROJECT}/config/kernel-firmware-any.dat ${PROJECT_DIR}/${PROJECT}/config/kernel-firmware-${TARGET_ARCH}.dat"
+  while read -r fwline; do
+    [ -z "${fwline}" ] && continue
+    [[ ${fwline} =~ ^#.* ]] && continue
+    [[ ${fwline} =~ ^[[:space:]] ]] && continue
 
-  FW_LISTS+=" ${PROJECT_DIR}/${PROJECT}/devices/${DEVICE}/config/kernel-firmware-any.dat ${PROJECT_DIR}/${PROJECT}/devices/${DEVICE}/config/kernel-firmware-${TARGET_ARCH}.dat"
+    eval "(cd ${PKG_FW_SOURCE} && find "${fwline}" >/dev/null)" || die "ERROR: Firmware pattern does not exist: ${fwline}"
 
-  for fwlist in ${FW_LISTS}; do
-    [ -f "${fwlist}" ] || continue
+    while read -r fwfile; do
+      [ -d "${PKG_FW_SOURCE}/${fwfile}" ] && continue
 
-    while read -r fwline; do
-      [ -z "${fwline}" ] && continue
-      [[ ${fwline} =~ ^#.* ]] && continue
-      [[ ${fwline} =~ ^[[:space:]] ]] && continue
-
-      eval "(cd ${PKG_FW_SOURCE} && find "${fwline}" >/dev/null)" || die "ERROR: Firmware pattern does not exist: ${fwline}"
-
-      while read -r fwfile; do
-        [ -d "${PKG_FW_SOURCE}/${fwfile}" ] && continue
-
-        if [ -f "${PKG_FW_SOURCE}/${fwfile}" ]; then
-          mkdir -p "$(dirname "${FW_TARGET_DIR}/${fwfile}")"
-            cp -Lv "${PKG_FW_SOURCE}/${fwfile}" "${FW_TARGET_DIR}/${fwfile}"
-        else
-          echo "ERROR: Firmware file ${fwfile} does not exist - aborting"
-          exit 1
-        fi
-      done <<<"$(cd ${PKG_FW_SOURCE} && eval "find "${fwline}"")"
-    done <"${fwlist}"
-  done
-
-  PKG_KERNEL_CFG_FILE=$(kernel_config_path) || die
-
-  # brcm pcie firmware is only needed by x86_64
-  [ "${TARGET_ARCH}" != "x86_64" ] && rm -fr ${FW_TARGET_DIR}/brcm/*-pcie.*
-
-  # The BSP kernel for RK3588 reformats the vendor firmware path for Realtek BT devices,
-  # so symlink the firmware.
-  if [ ${DEVICE} = "RK3588" ]; then
-    for i in ${FW_TARGET_DIR}/rtl_bt/*.bin; do
-      ln -s "rtl_bt/$(basename ${i})" "${FW_TARGET_DIR}/$(basename ${i%.*})"
-    done
-  fi
-
-  # Sm8250 devices need slpi firmware set to the correct dir
-  if [ ${DEVICE} = "SM8250" ]; then
-   mv ${FW_TARGET_DIR}/qcom/sm8250/Thundercomm/RB5/* ${FW_TARGET_DIR}/qcom/sm8250/
-  fi
-
-  # Cleanup - which may be project or device specific
-  find_file_path scripts/cleanup.sh && ${FOUND_PATH} ${FW_TARGET_DIR} || true
+      if [ -f "${PKG_FW_SOURCE}/${fwfile}" ]; then
+        mkdir -p "$(dirname "${FW_TARGET_DIR}/${fwfile}")"
+          cp -Lv "${PKG_FW_SOURCE}/${fwfile}" "${FW_TARGET_DIR}/${fwfile}"
+      else
+        echo "ERROR: Firmware file ${fwfile} does not exist - aborting"
+        exit 1
+      fi
+    done <<<"$(cd ${PKG_FW_SOURCE} && eval "find "${fwline}"")"
+  done <"${FOUND_PATH}"
 }
