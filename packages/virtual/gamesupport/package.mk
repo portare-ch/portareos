@@ -9,7 +9,7 @@ PKG_LONGDESC="Game support software metapackage."
 
 # The SDL test apps (jstest-sdl, sdljoytest, sdltouchtest) went with
 # EmulationStation, whose Tools menu was the only way to start them.
-# gamepad-tester covers the same ground and is in the launcher's Tools.
+# PortScope, in the launcher's Settings > Diagnostics, covers that ground.
 # sdl3text is the game guide reader RetroArch runs on its hotkey.
 PKG_GAMESUPPORT="sixaxis portareos-hotkey gamecontrollerdb control-gen sdl3text"
 

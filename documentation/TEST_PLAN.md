@@ -518,6 +518,23 @@ grep -o 'echo [-0-9]* > [^ ]*' /storage/.config/autostart/GPcal.sh | \
 ```
 No line printed means the live parameters are the saved ones.
 
+### L10 PortScope (auto+human)
+
+Human: Settings > Diagnostics > PortScope. Every button, the D-pad, both
+triggers and both stick clicks light while held; each stick's dot follows
+it and reads about +1.00 and -1.00 at the rails; `RATE` shows a number
+while a stick moves and `--` a second after. Hold SELECT for a second:
+the header says `PortScope, raw` and the same controls light from the
+MCU; hold it again to go back. Home + START leaves, from either layer.
+With Button style set to Shapes, the face buttons are outlined marks
+here, in every hint line and in the Button style diagram. Auto, after
+leaving from the raw layer:
+
+```
+systemctl is-active inputplumber       # active
+grep -l DualSense /sys/class/input/event*/device/name   # the virtual pad is back
+```
+
 ## Power and hardware
 
 ### P1 Charge current throttle (auto)

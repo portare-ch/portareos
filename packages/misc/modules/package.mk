@@ -16,8 +16,7 @@ PKG_TOOLCHAIN="manual"
 
 case ${DEVICE} in
   RK3399|RK3588|SM8250|SM8550|SM8650|SM8750|SM6115)
-    PKG_DEPENDS_TARGET+=" gamepadtester"
-    ;;
+        ;;
 esac
 
 makeinstall_target() {

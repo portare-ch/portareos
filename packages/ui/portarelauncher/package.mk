@@ -2,8 +2,8 @@
 # Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
 
 PKG_NAME="portarelauncher"
-PKG_VERSION="0.5.1"
-PKG_SHA256="6dbbba91d714740ac405a8322a964ae7af1ffb3f3ebafb500756ab4bbb424da3"
+PKG_VERSION="0.6.0"
+PKG_SHA256="fbcac843c9cd957e563ec9479e69426ede2ef443f273a02070a534dc05d439f4"
 PKG_LICENSE="GPL-2.0"
 PKG_SITE="https://github.com/portare-ch/portarelauncher"
 # A release, not a commit: the tarball is made once by the launcher's release
@@ -18,7 +18,10 @@ PKG_TOOLCHAIN="make"
 # a text screen on a black field is a dumb buffer and a memcpy, so the GPU
 # never leaves idle while the menu is up.
 
+# portscope is the input diagnostics the launcher opens from Settings >
+# Diagnostics, at /usr/bin/portscope.
 makeinstall_target() {
   mkdir -p ${INSTALL}/usr/bin
     cp -a ${PKG_BUILD}/portarelauncher ${INSTALL}/usr/bin
+    cp -a ${PKG_BUILD}/portscope ${INSTALL}/usr/bin
 }
