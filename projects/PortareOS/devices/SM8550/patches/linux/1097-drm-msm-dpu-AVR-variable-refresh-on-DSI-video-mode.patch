@@ -8,14 +8,16 @@ registers and never programs them.
 
 A panel declares a refresh range in display_info.monitor_range and sets
 the connector's vrr_capable, which DSI connectors now carry. At mode set
-the DPU writes the longest frame, from the range's minimum. The CRTC's
-VRR_ENABLED then switches AVR on and off in a commit, with the INTF in
-that commit's flush and the DSI host's AVR support bit, the way
-downstream switches Qsync. AVR runs in continuous mode: one-shot,
-downstream's default, never became active on SM8550.
+the DPU writes the longest frame, from the range's minimum; the mode's
+own frame is the shortest. The CRTC's VRR_ENABLED then switches AVR on
+and off in a commit, with the INTF in that commit's flush and the DSI
+host's AVR support bit, the way downstream switches Qsync. AVR runs in
+continuous mode: one-shot, downstream's default, never became active on
+SM8550.
 
-The Nova's panel declares 90 to 120 Hz. Measured: frames of 8.3 to 11.1
-ms changing every frame, without flicker at 5% backlight.
+The Nova's panel declares 90 Hz up to its fastest mode, 120.198 Hz,
+rounded up to 121. Measured: frames of 8.3 to 11.1 ms changing every
+frame, without flicker at 5% backlight.
 ---
 --- a/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_intf.h
 +++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_intf.h
@@ -350,18 +352,20 @@ ms changing every frame, without flicker at 5% backlight.
  
 --- a/drivers/gpu/drm/panel/panel-ilitek-il97680a.c
 +++ b/drivers/gpu/drm/panel/panel-ilitek-il97680a.c
-@@ -45,6 +45,10 @@
+@@ -45,6 +45,12 @@
  	const struct drm_display_mode *modes;
  	unsigned int num_modes;
  	int (*init_sequence)(struct panel_info *pinfo);
 +
-+	/* Variable refresh range in Hz, 0 for none. */
++	/*
++	 * Variable refresh floor in Hz, 0 for none. The top is the fastest
++	 * mode, which is the shortest frame AVR can run.
++	 */
 +	unsigned int vrr_min_hz;
-+	unsigned int vrr_max_hz;
  };
  
  static const struct regulator_bulk_data panel_supplies[] = {
-@@ -421,6 +425,13 @@
+@@ -421,6 +427,12 @@
  static struct panel_desc il97680a_rpnova_desc = {
  	.modes = il97680a_rpnova_modes,
  	.num_modes = ARRAY_SIZE(il97680a_rpnova_modes),
@@ -371,17 +375,28 @@ ms changing every frame, without flicker at 5% backlight.
 +	 * either. 90 leaves a late commit room inside 100-120 Hz.
 +	 */
 +	.vrr_min_hz = 90,
-+	.vrr_max_hz = 120,
  	.width_mm = 91,
  	.height_mm = 68,
  	.bpc = 8,
-@@ -553,6 +564,11 @@
+@@ -553,6 +565,23 @@
  	connector->display_info.width_mm = pinfo->desc->width_mm;
  	connector->display_info.height_mm = pinfo->desc->height_mm;
  	connector->display_info.bpc = pinfo->desc->bpc;
 +	if (pinfo->desc->vrr_min_hz) {
++		unsigned int max_hz = 0;
++
++		/*
++		 * Rounded up, since the field is whole Hz: the 120.198 Hz mode,
++		 * twice the SNES, must read as inside the range, not above it.
++		 */
++		for (i = 0; i < pinfo->desc->num_modes; i++) {
++			const struct drm_display_mode *m = &pinfo->desc->modes[i];
++
++			max_hz = max_t(unsigned int, max_hz,
++				       DIV_ROUND_UP(m->clock * 1000, m->htotal * m->vtotal));
++		}
 +		connector->display_info.monitor_range.min_vfreq = pinfo->desc->vrr_min_hz;
-+		connector->display_info.monitor_range.max_vfreq = pinfo->desc->vrr_max_hz;
++		connector->display_info.monitor_range.max_vfreq = max_hz;
 +		drm_connector_set_vrr_capable_property(connector, true);
 +	}
  	pinfo->connector = connector;

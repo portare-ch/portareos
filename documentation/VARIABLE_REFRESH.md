@@ -26,7 +26,8 @@ variable-refresh properties.
   (`DSI_VIDEO_MODE_CTRL`, mainline's `REG_DSI_VID_CFG0` plus the 6G
   shift, 0xae94010 on the Nova), when it switches Qsync on.
 - **Kernel patch 1097** adds it as DRM's standard interface:
-  - The panel driver declares its range, 90 to 120 Hz, in the connector's
+  - The panel driver declares its range, 90 Hz up to its fastest mode,
+    120.198 Hz rounded up to 121, in the connector's
     `display_info.monitor_range` and sets `vrr_capable`, which DSI
     connectors now carry.
   - At mode set the DPU writes the longest frame, from the range's
@@ -192,6 +193,24 @@ effect. The big digit is the phase, 7 to 14, and the grey number
 the rate (0 for a pattern). Watch the dark grey patches for flicker,
 especially in phase 11, where the frame length alternates every frame,
 and compare brightness with phase 7. Then repeat at minimum brightness.
+
+## Integer multiples for every game
+
+AVR's shortest frame is the frame of the mode in use, so a doubled rate
+fits only up to that mode's rate. With variable refresh on, the mode has
+to be the fastest one, 120.198 Hz, twice the SNES. On the 119.652 Hz
+mode, the PlayStation's, doubled SNES would not fit.
+
+The multiple for a game is the largest k with k times its rate at most
+120.198 Hz and at least the 90 Hz floor: 2 for 45 to 60.1 Hz, 3 for 30 to
+40 Hz, 4 for 22.5 to 30 Hz. Userspace has to know the range from a device
+quirk: DRM keeps `monitor_range` inside the kernel for a panel without
+EDID.
+
+Rates between 60.1 and 61 Hz, a few arcade boards, have no multiple in
+range. Whether the panel runs faster than 120.198 Hz is untested; the
+static probe can check 121 to 125 Hz modes the way it checked slower
+ones.
 
 ## Do not
 
