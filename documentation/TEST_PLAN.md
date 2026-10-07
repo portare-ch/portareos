@@ -449,9 +449,9 @@ launcher returns to the game that was started.
 Each row once. Wi-Fi off and on reconnects; Bluetooth pairs a pad; SSH off
 then on (`ssh.enabled` follows, `sshd` stops and starts); USB gadget
 mounts on a PC; buttons swaps A/B in the launcher; color as D6; profile
-changes the CPU governor; charging LED as L7; time zone changes the clock
-under About; About shows version, password and IP; power reboots and shuts
-down.
+changes the CPU governor; charging LED as L7; Language & region as L11,
+its time zone changing the clock under About; About shows version,
+password and IP; power reboots and shuts down.
 
 ### L3 Settings > Consoles (auto+human)
 
@@ -533,6 +533,23 @@ leaving from the raw layer:
 ```
 systemctl is-active inputplumber       # active
 grep -l DualSense /sys/class/input/event*/device/name   # the virtual pad is back
+```
+
+### L11 Japanese (auto+human)
+
+Human: Settings > Language & region, press A on `Language / 言語`: every
+screen redraws in Japanese, and again in English on the next press; a
+restart keeps the choice. In Japanese: the console names are the ones
+sold in Japan (スーパーファミコン, NINTENDO64); a ROM named in Japanese
+shows its title, a long one scrolling with whole characters; Recently
+played heads its days 今日, 昨日, with SFC and PS; Wi-Fi, Bluetooth,
+Power and About read correctly. A ROM copied from a Mac with an accent in
+its name reads correctly in either language. Auto:
+
+```
+grep '^system.language' /storage/.config/system/configs/system.cfg   # ja_JP after the switch
+ls -l /usr/share/portarelauncher/                    # ja26.bin, ja26.NOTICE, OFL-1.1.txt
+journalctl -u portarelauncher -b | grep ja26         # nothing: the glyphs loaded
 ```
 
 ## Power and hardware
