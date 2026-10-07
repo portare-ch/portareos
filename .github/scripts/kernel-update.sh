@@ -31,7 +31,12 @@ cmd_export() {
   local out="${1:?usage: kernel-update.sh export <outdir>}"
   local inst modroot modver
 
+  # config/options is written for the build scripts, which run without
+  # errexit: its xmlstarlet pipeline for subdevices fails when the device
+  # has none, and under set -e that ended the export.
+  set +e +o pipefail
   . config/options ""
+  set -e -o pipefail
 
   inst="$(get_install_dir linux)"
   modroot="${inst}/$(get_kernel_overlay_dir)/lib/modules"
