@@ -1,18 +1,19 @@
 From: PortareOS <hello@portare.org>
-Subject: [PATCH] drm/msm/dpu: AVR variable refresh on DSI video mode, for testing
+Subject: [PATCH] drm/msm: AVR variable refresh on DSI video mode, for testing
 
 The INTF on DPU 9.0 has AVR, the block Qualcomm's downstream driver uses
 for Qsync in video mode: the vertical front porch runs on until a
 trigger, up to a set frame length. Mainline defines its registers and
-never programs them.
+never programs them. Downstream sets AVR_SUPPORT_ENABLE, bit 29 of the
+DSI host's video mode control, with it.
 
 msm.dpu_avr_min_fps sets a floor in Hz, read at mode set; 0, the
-default, leaves the fixed refresh. With a floor, the mode set writes the
-longest frame, and the next commit switches AVR on, one-shot, with the
-INTF in its flush: the order downstream uses. Switched on at mode set,
-before the timing engine ran, AVR read back as programmed and its
-status bit stayed clear. Each commit then ends the held porch. The
-panel gets no Qsync commands; the Nova's has none.
+default, leaves the fixed refresh. With a floor, the DSI host sets bit
+29, the mode set writes the longest frame, and the next commit switches
+AVR on, one-shot, with the INTF in its flush, in the order downstream
+uses. Each commit then ends the held porch. Without the DSI bit, AVR
+read back as programmed and its status bit stayed clear. The panel gets
+no Qsync commands; the Nova's has none.
 ---
 --- a/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_intf.h
 +++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_intf.h
@@ -85,24 +86,7 @@ panel gets no Qsync commands; the Nova's has none.
  static inline int dpu_encoder_phys_inc_pending(struct dpu_encoder_phys *phys)
 --- a/drivers/gpu/drm/msm/disp/dpu1/dpu_encoder_phys_vid.c
 +++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_encoder_phys_vid.c
-@@ -27,6 +27,16 @@
- 		(e) && (e)->hw_intf ? \
- 		(e)->hw_intf->idx - INTF_0 : -1, ##__VA_ARGS__)
- 
-+/*
-+ * Variable refresh on a DSI video-mode panel, for testing. With a floor set,
-+ * each frame's vertical front porch runs on until the next commit, up to
-+ * the frame length of the floor. 0 keeps the fixed refresh. Read at mode set.
-+ */
-+static unsigned int dpu_avr_min_fps;
-+module_param(dpu_avr_min_fps, uint, 0644);
-+MODULE_PARM_DESC(dpu_avr_min_fps,
-+		 "Variable refresh floor in Hz on DSI video mode, 0 = off (test)");
-+
- #define to_dpu_encoder_phys_vid(x) \
- 	container_of(x, struct dpu_encoder_phys_vid, base)
- 
-@@ -254,6 +264,64 @@
+@@ -254,6 +254,64 @@
  	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
  }
  
@@ -110,7 +94,7 @@ panel gets no Qsync commands; the Nova's has none.
 +		const struct dpu_hw_intf_timing_params *timing, int clock_khz)
 +{
 +	struct dpu_hw_intf *intf = phys_enc->hw_intf;
-+	unsigned int min_fps = READ_ONCE(dpu_avr_min_fps);
++	unsigned int min_fps = READ_ONCE(msm_avr_min_fps);
 +	u32 htotal = get_horizontal_total(timing);
 +	u32 vtotal = get_vertical_total(timing);
 +	unsigned long lock_flags;
@@ -167,7 +151,7 @@ panel gets no Qsync commands; the Nova's has none.
  static void dpu_encoder_phys_vid_setup_timing_engine(
  		struct dpu_encoder_phys *phys_enc)
  {
-@@ -330,6 +398,7 @@
+@@ -330,6 +388,7 @@
  	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
  
  	programmable_fetch_config(phys_enc, &timing_params);
@@ -175,7 +159,7 @@ panel gets no Qsync commands; the Nova's has none.
  }
  
  static void dpu_encoder_phys_vid_vblank_irq(void *arg)
-@@ -558,6 +627,8 @@
+@@ -558,6 +617,8 @@
  
  	drm_enc = phys_enc->parent;
  
@@ -184,7 +168,7 @@ panel gets no Qsync commands; the Nova's has none.
  	ctl = phys_enc->hw_ctl;
  	if (!ctl->ops.wait_reset_status)
  		return;
-@@ -602,6 +673,11 @@
+@@ -602,6 +663,11 @@
  	}
  
  	spin_lock_irqsave(phys_enc->enc_spinlock, lock_flags);
@@ -196,7 +180,7 @@ panel gets no Qsync commands; the Nova's has none.
  	phys_enc->hw_intf->ops.enable_timing(phys_enc->hw_intf, 0);
  	if (dpu_encoder_phys_vid_is_master(phys_enc))
  		dpu_encoder_phys_inc_pending(phys_enc);
-@@ -666,6 +742,13 @@
+@@ -666,6 +732,13 @@
  		spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
  		phys_enc->enable_state = DPU_ENC_ENABLED;
  	}
@@ -210,3 +194,51 @@ panel gets no Qsync commands; the Nova's has none.
  }
  
  static void dpu_encoder_phys_vid_irq_enable(struct dpu_encoder_phys *phys_enc)
+--- a/drivers/gpu/drm/msm/msm_drv.c
++++ b/drivers/gpu/drm/msm/msm_drv.c
+@@ -55,6 +55,17 @@
+ module_param(modeset, bool, 0600);
+ 
+ static bool separate_gpu_kms;
++/*
++ * Variable refresh on a DSI video-mode panel, for testing. With a floor in
++ * Hz, the DPU's video encoder holds each frame's vertical front porch open
++ * until the next commit (AVR) and the DSI host follows it. 0 keeps the
++ * fixed refresh. Read at mode set.
++ */
++unsigned int msm_avr_min_fps;
++MODULE_PARM_DESC(dpu_avr_min_fps,
++		 "Variable refresh floor in Hz on DSI video mode, 0 = off (test)");
++module_param_named(dpu_avr_min_fps, msm_avr_min_fps, uint, 0644);
++
+ MODULE_PARM_DESC(separate_gpu_kms, "Use separate DRM device for the GPU (0=single DRM device for both GPU and display (default), 1=two DRM devices)");
+ module_param(separate_gpu_kms, bool, 0400);
+ 
+--- a/drivers/gpu/drm/msm/msm_drv.h
++++ b/drivers/gpu/drm/msm/msm_drv.h
+@@ -529,6 +529,9 @@
+ 
+ extern const struct component_master_ops msm_drm_ops;
+ 
++/* AVR floor in Hz for DSI video mode, 0 = off; msm_drv.c. */
++extern unsigned int msm_avr_min_fps;
++
+ int msm_kms_pm_prepare(struct device *dev);
+ void msm_kms_pm_complete(struct device *dev);
+ 
+--- a/drivers/gpu/drm/msm/dsi/dsi_host.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_host.c
+@@ -843,6 +843,13 @@
+ 		data |= DSI_VID_CFG0_VIRT_CHANNEL(msm_host->channel);
+ 		if (msm_dsi_host_is_wide_bus_enabled(&msm_host->base))
+ 			data |= DSI_VID_CFG0_DATABUS_WIDEN;
++		/*
++		 * AVR_SUPPORT_ENABLE in Qualcomm's downstream driver, which sets
++		 * it together with the INTF's AVR: without it the video engine
++		 * keeps its own frame while the INTF holds the porch open.
++		 */
++		if (READ_ONCE(msm_avr_min_fps))
++			data |= BIT(29);
+ 		dsi_write(msm_host, REG_DSI_VID_CFG0, data);
+ 
+ 		/* Do not swap RGB colors */
