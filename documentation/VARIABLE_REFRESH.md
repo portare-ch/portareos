@@ -20,13 +20,16 @@ from one frame to the next inside that range.
   trigger, up to a set frame length. Mainline defines its registers and
   programs none. Downstream writes the longest frame to `AVR_VTOTAL`, sets
   bit 0 of `AVR_CONTROL` and bits 0 and 8 of `AVR_MODE` for one-shot, and
-  writes `AVR_TRIGGER` after every commit. Its DSI code has no Qsync
-  handling: the DSI controller follows the INTF.
+  writes `AVR_TRIGGER` after every commit. The SM8550 driver also sets
+  `AVR_SUPPORT_ENABLE`, bit 29 of the DSI host's video mode control
+  (`DSI_VIDEO_MODE_CTRL`, mainline's `REG_DSI_VID_CFG0` plus the 6G
+  shift, 0xae94010 on the Nova), when it switches Qsync on.
 - **Kernel patch 1097** adds that, off by default.
-  `msm.dpu_avr_min_fps` sets the floor in Hz and is read at mode set,
-  which writes the longest frame. The next commit switches AVR on, with
-  the INTF in its flush, in the order downstream switches Qsync on. From
-  DPU 8.1, bit 31 of `AVR_CONTROL` reads 1 while AVR is active.
+  `msm.dpu_avr_min_fps` sets the floor in Hz and is read at mode set:
+  the DSI host sets bit 29 and the INTF gets the longest frame. The next
+  commit switches AVR on, with the INTF in its flush, in the order
+  downstream switches Qsync on. From DPU 8.1, bit 31 of `AVR_CONTROL`
+  reads 1 while AVR is active.
 
 ## Measured, 2026-10-07
 
@@ -78,8 +81,12 @@ timing engine started. The registers read back as programmed:
 `AVR_CONTROL` 0x1, `AVR_MODE` 0x101, `AVR_VTOTAL` 1250 lines. The status
 bit stayed clear, frames ran at 119.98 Hz with no commits instead of the
 96 Hz floor, and every dynamic schedule landed on the 8.32 ms grid as on
-the fixed refresh. No flicker was seen, but on fixed timing. The patch
-now switches AVR on in the first commit after the mode set.
+the fixed refresh. No flicker was seen, but on fixed timing.
+
+Switched on in the first commit after the mode set, with the INTF in
+that flush, it stayed inactive the same way: status bit clear, 119.5
+frames/s with no commits. The DSI host's `AVR_SUPPORT_ENABLE` was still
+clear (`0x10009130`); the patch now sets it.
 
 ## Running the AVR test
 
