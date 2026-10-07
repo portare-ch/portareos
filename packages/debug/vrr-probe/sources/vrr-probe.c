@@ -32,7 +32,12 @@
 // fastest mode, commits once, and then commits nothing for SECONDS, so the
 // frame rate shows whether AVR holds the front porch.
 //
-// usage: vrr-probe [OUT.csv] [SECONDS] [static|dynamic|all|reset|idle] [vrr]
+// "fast" sets modes above the fastest one, 121 and 122 Hz (phases 15 to 17,
+// the first being the fastest mode itself): its pixel clock and front porch,
+// with a shorter back porch. Its front porch is 12 lines and its back porch
+// 142, against 27 on the preferred mode, so the back porch has room.
+//
+// usage: vrr-probe [OUT.csv] [SECONDS] [static|dynamic|all|reset|idle|fast] [vrr]
 
 #define _GNU_SOURCE
 #include <errno.h>
@@ -184,6 +189,17 @@ static struct drm_mode_modeinfo stretched(const struct drm_mode_modeinfo *base, 
 static double mode_hz(const struct drm_mode_modeinfo *m)
 {
 	return m->clock * 1000.0 / ((double)m->htotal * m->vtotal);
+}
+
+// The same mode with a shorter or longer vertical back porch.
+static struct drm_mode_modeinfo backporch(const struct drm_mode_modeinfo *base, int vtotal)
+{
+	struct drm_mode_modeinfo m = *base;
+	m.vtotal = vtotal;
+	m.vrefresh = (uint32_t)((uint64_t)base->clock * 1000 / ((uint64_t)base->htotal * vtotal));
+	m.type = DRM_MODE_TYPE_USERDEF;
+	snprintf(m.name, sizeof m.name, "%ux%u-b%d", m.hdisplay, m.vdisplay, vtotal);
+	return m;
 }
 
 static int find_display(struct drm_mode_modeinfo *base, struct drm_mode_modeinfo *fast)
@@ -378,8 +394,9 @@ int main(int argc, char **argv)
 	const char *which = argc > 3 ? argv[3] : "all";
 	int do_reset = strcmp(which, "reset") == 0;
 	int do_idle = strcmp(which, "idle") == 0;
-	int do_static = !do_reset && !do_idle && strcmp(which, "dynamic") != 0;
-	int do_dynamic = !do_reset && !do_idle && strcmp(which, "static") != 0;
+	int do_fast = strcmp(which, "fast") == 0;
+	int do_static = !do_reset && !do_idle && !do_fast && strcmp(which, "dynamic") != 0;
+	int do_dynamic = !do_reset && !do_idle && !do_fast && strcmp(which, "static") != 0;
 	int vrr = argc > 4 && !strcmp(argv[4], "vrr");
 	static const int targets[] = { 0, 110, 100, 90, 80, 72, 60 };
 	static const int dyn_hz[] = { 120, 119, 110, 100, 0, 0, 0, 119 };
@@ -423,6 +440,29 @@ int main(int argc, char **argv)
 		int n = run_free((uint8_t)i, secs);
 		printf("phase %zu: %d Hz, vtotal %u, vfp %u: %d flips in %.1f s\n",
 		       i, hz, m.vtotal, m.vsync_start - m.vdisplay, n, secs);
+		fflush(stdout);
+	}
+
+	static const double fast_targets[] = { 0, 121.0, 122.0 };
+	for (size_t i = 0; do_fast && i < sizeof fast_targets / sizeof fast_targets[0] && !stop; i++) {
+		struct drm_mode_modeinfo m = fast;
+		if (fast_targets[i] > 0)
+			m = backporch(&fast, (int)(fast.clock * 1000.0 / (fast.htotal * fast_targets[i]) + 0.5));
+		uint8_t phase = (uint8_t)(15 + i);
+		int hz = (int)(mode_hz(&m) + 0.5);
+		paint(&bufs[0], phase, hz);
+		paint(&bufs[1], phase, hz);
+		add(phase, 'M', now_ns());
+		if (set_mode(&bufs[cur], &m)) {
+			printf("phase %u: %.3f Hz, vtotal %u: mode set FAILED: %s\n", phase, mode_hz(&m), m.vtotal, strerror(errno));
+			continue;
+		}
+		add(phase, 'm', now_ns());
+		usleep(300000);
+		int n = run_free(phase, secs);
+		printf("phase %u: %.3f Hz, clock %u, vtotal %u, vfp %u, vbp %u: %d flips in %.1f s\n",
+		       phase, mode_hz(&m), m.clock, m.vtotal, m.vsync_start - m.vdisplay,
+		       m.vtotal - m.vsync_end, n, secs);
 		fflush(stdout);
 	}
 

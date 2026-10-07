@@ -208,9 +208,13 @@ quirk: DRM keeps `monitor_range` inside the kernel for a panel without
 EDID.
 
 Rates between 60.1 and 61 Hz, a few arcade boards, have no multiple in
-range. Whether the panel runs faster than 120.198 Hz is untested; the
-static probe can check 121 to 125 Hz modes the way it checked slower
-ones.
+range, and the range cannot grow upward. `vrr-probe fast`, 2026-10-08:
+the fastest mode's 174.651 MHz clock and 12-line front porch, with the
+back porch cut from 142 lines to 135 (120.956 Hz) and 126 (121.946 Hz).
+The SoC delivered every frame exactly one period apart, within 10 us, at
+all three rates. By eye the moving block jumped at 121 and 122 Hz and was
+clean at 120.198: the panel does not show frames faster than its 120 Hz
+class evenly. Those boards keep a fixed mode.
 
 ## Do not
 
