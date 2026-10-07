@@ -59,10 +59,12 @@ jobs:
       CCACHE_COMPRESSLEVEL: 6
       CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,include_file_ctime
     steps:
+      # Its default profile removes the GitHub CLI, which the base tarball
+      # step needs; the first run died on "gh: command not found".
       - name: Maximize build space
         uses: justinthelaw/maximize-github-runner-space@v0.9.0
         with:
-          skip-components: docker-engine
+          skip-components: docker-engine,gh-cli
 
       - uses: actions/checkout@v6
         with:
@@ -102,7 +104,10 @@ jobs:
           BASE: ${{ inputs.base }}
         run: |
           if [ -z "${BASE}" ]; then
-            for t in $(gh release list --repo "${GITHUB_REPOSITORY}" --limit 30 --json tagName --jq '.[].tagName'); do
+            # An assignment, so a failing gh fails the step instead of
+            # reading as "no release".
+            TAGS="$(gh release list --repo "${GITHUB_REPOSITORY}" --limit 30 --json tagName --jq '.[].tagName')"
+            for t in ${TAGS}; do
               if gh release view "${t}" --repo "${GITHUB_REPOSITORY}" --json assets --jq '.assets[].name' | grep -q '\.tar$'; then
                 BASE="${t}"
                 break
@@ -135,6 +140,7 @@ jobs:
 
       - name: Swap the kernel into the base
         run: |
+          sudo apt-get update -qq
           sudo apt-get install -y -qq squashfs-tools >/dev/null
           .github/scripts/kernel-update.sh repack base/*.tar kernel-export out "kernel-${{ steps.names.outputs.short }}"
 
