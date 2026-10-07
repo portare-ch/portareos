@@ -1,8 +1,10 @@
 # USB_RTL8152
 rtl_nic/rtl8153a-4.fw
 
+# WCN7850 Bluetooth. btqca asks for hmtnv20.b<board id> when the board
+# reports one; the Nova's does not, and it loads hmtnv20.bin.
 qca/hmtbtfw20.tlv
-qca/hmtnv20.*
+qca/hmtnv20.bin
 qcom/sm8550/a740_zap.mbn
 qcom/a740_sqe.fw
 qcom/gmu_gen70200.bin
