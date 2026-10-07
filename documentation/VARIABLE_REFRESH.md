@@ -4,8 +4,9 @@ The goal is integer-multiple variable refresh. Every game frame is
 scanned exactly twice, and the panel follows the game at twice its rate:
 PAL at 100 Hz, NTSC at 119.88 Hz, SwanStation's 59.826 at 119.652 Hz.
 That needs no panel mode per console, and nothing outside 100 to 121 Hz.
-The open question is whether the panel takes a frame length that changes
-from one frame to the next inside that range.
+The panel takes a frame length that changes every frame inside that range
+(measured below), and patch 1097 exposes it through DRM's standard
+variable-refresh properties.
 
 ## What the hardware offers
 
@@ -24,12 +25,17 @@ from one frame to the next inside that range.
   `AVR_SUPPORT_ENABLE`, bit 29 of the DSI host's video mode control
   (`DSI_VIDEO_MODE_CTRL`, mainline's `REG_DSI_VID_CFG0` plus the 6G
   shift, 0xae94010 on the Nova), when it switches Qsync on.
-- **Kernel patch 1097** adds that, off by default.
-  `msm.dpu_avr_min_fps` sets the floor in Hz and is read at mode set:
-  the DSI host sets bit 29 and the INTF gets the longest frame. The next
-  commit switches AVR on, with the INTF in its flush, in the order
-  downstream switches Qsync on. From DPU 8.1, bit 31 of `AVR_CONTROL`
-  reads 1 while AVR is active.
+- **Kernel patch 1097** adds it as DRM's standard interface:
+  - The panel driver declares its range, 90 to 120 Hz, in the connector's
+    `display_info.monitor_range` and sets `vrr_capable`, which DSI
+    connectors now carry.
+  - At mode set the DPU writes the longest frame, from the range's
+    minimum.
+  - The CRTC's `VRR_ENABLED` switches AVR on and off in a commit, without
+    a mode set, with the INTF in that commit's flush and the DSI host's bit
+    29 alongside, in continuous mode.
+  - The kernel logs `intf1: variable refresh on` and `off`. From DPU 8.1,
+    bit 31 of `AVR_CONTROL` reads 1 while AVR is active.
 
 ## Measured, 2026-10-07
 
@@ -104,8 +110,9 @@ build can try them all:
 | `dpu_avr_flush_intf` | N | Flush the INTF on every commit |
 | `dpu_avr_dsi` | Y | The DSI host's AVR support bit |
 
-All are under `/sys/module/msm/parameters/` and are read at mode set,
-except `dpu_avr_flush_intf`, which is read every commit.
+All were under `/sys/module/msm/parameters/`. Once continuous mode was
+found they came out again, for the interface above; the measurements
+below used them.
 
 ### AVR working: continuous mode
 
@@ -120,7 +127,7 @@ idle check per combination, floor 96:
 | Continuous, without the DSI bit | 0x80000001 | 95.9 |
 
 Continuous mode alone engages AVR; one-shot, downstream's Qsync default,
-never did. `dpu_avr_continuous` now defaults to Y.
+never did.
 
 Frames on a schedule, continuous, floor 90, the probe's own receive
 times against its commits:
@@ -156,14 +163,15 @@ or work without them.
 
 On a build with patch 1097. `vrr-probe` is in the debug set, which only
 unofficial builds carry; elsewhere, copy the static build to `/storage`.
+Its fourth argument, `vrr`, sets the CRTC's `VRR_ENABLED` for the run and
+clears it on the way out; it prints the connector's `vrr_capable` first.
 
 First, whether AVR holds the front porch at all. `idle` commits once
 and then nothing, so frames should slow to the floor:
 
 ```
 systemctl stop portarelauncher
-echo 90 > /sys/module/msm/parameters/dpu_avr_min_fps
-vrr-probe /dev/null 6 idle &
+vrr-probe /dev/null 6 idle vrr &
 sleep 2
 devmem 0xae36270 32          # 0x80000001: AVR active
 F=0xae360ac; a=$(devmem $F 32); sleep 2; b=$(devmem $F 32)
@@ -174,14 +182,13 @@ wait
 Then the schedules:
 
 ```
-vrr-probe /storage/vrr-avr.csv 10 dynamic
-echo 0 > /sys/module/msm/parameters/dpu_avr_min_fps
+vrr-probe /storage/vrr-avr.csv 10 dynamic vrr
 vrr-probe /dev/null 1 reset
 systemctl start portarelauncher
 ```
 
-At the mode set the kernel logs `intf1: variable refresh, 1116 to 1490
-lines a frame`. The big digit is the phase, 7 to 14, and the grey number
+The kernel logs `intf1: variable refresh on` when the CRTC property takes
+effect. The big digit is the phase, 7 to 14, and the grey number
 the rate (0 for a pattern). Watch the dark grey patches for flicker,
 especially in phase 11, where the frame length alternates every frame,
 and compare brightness with phase 7. Then repeat at minimum brightness.

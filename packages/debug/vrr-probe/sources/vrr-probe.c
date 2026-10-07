@@ -24,14 +24,15 @@
 // against CLOCK_MONOTONIC: f = read by us, F = the kernel's vblank
 // timestamp, S = scheduled, C = committed, M/m = mode set start and end.
 //
-// The kernel reads msm.dpu_avr_min_fps when it programs a mode, so the
-// dynamic phases start with a real mode set: a stretched mode, then the
-// preferred one. "reset" does only that, so a changed floor takes effect.
-// The kernel switches AVR on with the first commit after a mode set; "idle"
-// sets the fastest mode, commits once, and then commits nothing for SECONDS,
-// so the frame rate shows whether AVR holds the front porch.
+// Variable refresh is the CRTC's VRR_ENABLED, on a connector whose
+// vrr_capable is set; "vrr" as the fourth argument sets it for the dynamic
+// and idle phases, and it is cleared on the way out. The dynamic phases
+// start with a real mode set: a stretched mode, then the fastest one.
+// "reset" clears VRR_ENABLED and does only the mode set. "idle" sets the
+// fastest mode, commits once, and then commits nothing for SECONDS, so the
+// frame rate shows whether AVR holds the front porch.
 //
-// usage: vrr-probe [OUT.csv] [SECONDS] [static|dynamic|all|reset|idle]
+// usage: vrr-probe [OUT.csv] [SECONDS] [static|dynamic|all|reset|idle] [vrr]
 
 #define _GNU_SOURCE
 #include <errno.h>
@@ -220,6 +221,47 @@ static int find_display(struct drm_mode_modeinfo *base, struct drm_mode_modeinfo
 	return -1;
 }
 
+// A property of a DRM object by name: its id, and its value in *value.
+static uint32_t find_prop(uint32_t obj_id, uint32_t obj_type, const char *name, uint64_t *value)
+{
+	struct drm_mode_obj_get_properties gp = { .obj_id = obj_id, .obj_type = obj_type };
+	if (xioctl(drm_fd, DRM_IOCTL_MODE_OBJ_GETPROPERTIES, &gp) || !gp.count_props)
+		return 0;
+	uint32_t *ids = calloc(gp.count_props, sizeof *ids);
+	uint64_t *vals = calloc(gp.count_props, sizeof *vals);
+	gp.props_ptr = (uintptr_t)ids;
+	gp.prop_values_ptr = (uintptr_t)vals;
+	uint32_t found = 0;
+	if (!xioctl(drm_fd, DRM_IOCTL_MODE_OBJ_GETPROPERTIES, &gp)) {
+		for (uint32_t i = 0; i < gp.count_props && !found; i++) {
+			struct drm_mode_get_property pr = { .prop_id = ids[i] };
+			if (!xioctl(drm_fd, DRM_IOCTL_MODE_GETPROPERTY, &pr) && !strcmp(pr.name, name)) {
+				found = ids[i];
+				if (value) *value = vals[i];
+			}
+		}
+	}
+	free(ids);
+	free(vals);
+	return found;
+}
+
+static int set_vrr(int on)
+{
+	uint32_t id = find_prop(crtc_id, DRM_MODE_OBJECT_CRTC, "VRR_ENABLED", NULL);
+	if (!id) {
+		fprintf(stderr, "the CRTC has no VRR_ENABLED\n");
+		return -1;
+	}
+	struct drm_mode_obj_set_property sp = { .value = (uint64_t)on, .prop_id = id,
+		.obj_id = crtc_id, .obj_type = DRM_MODE_OBJECT_CRTC };
+	if (xioctl(drm_fd, DRM_IOCTL_MODE_OBJ_SETPROPERTY, &sp)) {
+		perror("VRR_ENABLED");
+		return -1;
+	}
+	return 0;
+}
+
 // Wait up to timeout_ms for flip completions; returns how many arrived.
 static int wait_flips(uint8_t phase, int timeout_ms)
 {
@@ -338,6 +380,7 @@ int main(int argc, char **argv)
 	int do_idle = strcmp(which, "idle") == 0;
 	int do_static = !do_reset && !do_idle && strcmp(which, "dynamic") != 0;
 	int do_dynamic = !do_reset && !do_idle && strcmp(which, "static") != 0;
+	int vrr = argc > 4 && !strcmp(argv[4], "vrr");
 	static const int targets[] = { 0, 110, 100, 90, 80, 72, 60 };
 	static const int dyn_hz[] = { 120, 119, 110, 100, 0, 0, 0, 119 };
 
@@ -353,6 +396,13 @@ int main(int argc, char **argv)
 	printf("base mode %s: clock %u htotal %u vtotal %u, connector %u crtc %u\n",
 	       base.name, base.clock, base.htotal, base.vtotal, conn_id, crtc_id);
 	if (make_buf(&bufs[0]) || make_buf(&bufs[1])) { perror("dumb buffer"); return 1; }
+	uint64_t capable = 0;
+	if (find_prop(conn_id, DRM_MODE_OBJECT_CONNECTOR, "vrr_capable", &capable))
+		printf("connector vrr_capable %llu\n", (unsigned long long)capable);
+	else
+		printf("connector has no vrr_capable\n");
+	if (!vrr || do_reset)
+		set_vrr(0);
 
 	for (size_t i = 0; do_static && i < sizeof targets / sizeof targets[0] && !stop; i++) {
 		struct drm_mode_modeinfo m = base;
@@ -384,7 +434,9 @@ int main(int argc, char **argv)
 		if (set_mode(&bufs[cur], &other) || set_mode(&bufs[cur], dyn)) {
 			perror("mode set"); return 1;
 		}
-		if (do_reset) { printf("mode set again\n"); return 0; }
+		if (do_reset) { printf("mode set again, VRR_ENABLED 0\n"); return 0; }
+		if (vrr && set_vrr(1) == 0)
+			printf("VRR_ENABLED 1\n");
 		usleep(300000);
 		if (do_idle) {
 			if (flip(7)) { perror("page flip"); return 1; }
@@ -413,6 +465,8 @@ int main(int argc, char **argv)
 		}
 	}
 
+	if (vrr)
+		set_vrr(0);
 	paint(&bufs[cur], 0, base_hz);
 	if (set_mode(&bufs[cur], &base)) perror("restoring the base mode");
 
