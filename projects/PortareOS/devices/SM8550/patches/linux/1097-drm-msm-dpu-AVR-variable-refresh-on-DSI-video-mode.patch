@@ -2,23 +2,20 @@ From: PortareOS <hello@portare.org>
 Subject: [PATCH] drm/msm: AVR variable refresh on DSI video mode, for testing
 
 The INTF on DPU 9.0 has AVR, the block Qualcomm's downstream driver uses
-for Qsync in video mode: the vertical front porch runs on until a
-trigger, up to a set frame length. Mainline defines its registers and
-never programs them.
+for Qsync in video mode: the vertical front porch runs on until the next
+frame is committed, up to a set frame length. Mainline defines its
+registers and never programs them.
 
 msm.dpu_avr_min_fps sets a floor in Hz, read at mode set; 0, the
 default, leaves the fixed refresh. With a floor, the mode set writes the
-longest frame and each commit ends the held porch.
-
-How AVR has to be brought up is not settled: programmed as downstream
-programs it, with the DSI host's AVR support bit, its status bit stayed
-clear. The candidates are parameters, read at mode set unless noted:
-dpu_avr_continuous (continuous instead of one-shot), dpu_avr_prog_fetch
-(programmable fetch lines where the porches need none; downstream
-always fetches at least one), dpu_avr_at_modeset (switch on at mode set
-instead of in the first commit after it), dpu_avr_flush_intf (flush the
-INTF on every commit, read per commit) and dpu_avr_dsi (the DSI host's
-bit). The panel gets no Qsync commands; the Nova's has none.
+longest frame, the next commit switches AVR on, and each commit after
+that starts a frame. On the Nova that takes continuous mode: one-shot,
+downstream's Qsync default, never engaged, with or without the
+programmable fetch and the DSI host's AVR support bit, both of which
+downstream sets. Those stay as parameters for testing:
+dpu_avr_continuous, dpu_avr_prog_fetch, dpu_avr_at_modeset,
+dpu_avr_flush_intf (read every commit) and dpu_avr_dsi. The panel gets no
+Qsync commands; the Nova's has none.
 ---
 --- a/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_intf.h
 +++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_intf.h
@@ -231,7 +228,7 @@ bit). The panel gets no Qsync commands; the Nova's has none.
  static void dpu_encoder_phys_vid_irq_enable(struct dpu_encoder_phys *phys_enc)
 --- a/drivers/gpu/drm/msm/msm_drv.c
 +++ b/drivers/gpu/drm/msm/msm_drv.c
-@@ -55,6 +55,39 @@
+@@ -55,6 +55,40 @@
  module_param(modeset, bool, 0600);
  
  static bool separate_gpu_kms;
@@ -247,11 +244,12 @@ bit). The panel gets no Qsync commands; the Nova's has none.
 +module_param_named(dpu_avr_min_fps, msm_avr_min_fps, uint, 0644);
 +
 +/*
-+ * How AVR is brought up, to find what it needs. Downstream: one-shot,
-+ * switched on in a commit after the mode set, programmable fetch always on
-+ * (one line when the porches need none), the DSI host's AVR support bit.
++ * How AVR is brought up. Downstream: one-shot, switched on in a commit after
++ * the mode set, programmable fetch always on (one line when the porches need
++ * none), the DSI host's AVR support bit. On the Nova only continuous mode
++ * engaged AVR, with or without the fetch and the DSI bit; one-shot never did.
 + */
-+bool msm_avr_continuous;
++bool msm_avr_continuous = true;
 +MODULE_PARM_DESC(dpu_avr_continuous, "AVR continuous instead of one-shot (test)");
 +module_param_named(dpu_avr_continuous, msm_avr_continuous, bool, 0644);
 +unsigned int msm_avr_prog_fetch = 1;
