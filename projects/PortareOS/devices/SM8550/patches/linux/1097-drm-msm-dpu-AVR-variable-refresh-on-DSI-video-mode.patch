@@ -1,21 +1,23 @@
 From: PortareOS <hello@portare.org>
-Subject: [PATCH] drm/msm: AVR variable refresh on DSI video mode, for testing
+Subject: [PATCH] drm/msm: variable refresh on DSI video mode through AVR
 
 The INTF on DPU 9.0 has AVR, the block Qualcomm's downstream driver uses
 for Qsync in video mode: the vertical front porch runs on until the next
 frame is committed, up to a set frame length. Mainline defines its
 registers and never programs them.
 
-msm.dpu_avr_min_fps sets a floor in Hz, read at mode set; 0, the
-default, leaves the fixed refresh. With a floor, the mode set writes the
-longest frame, the next commit switches AVR on, and each commit after
-that starts a frame. On the Nova that takes continuous mode: one-shot,
-downstream's Qsync default, never engaged, with or without the
-programmable fetch and the DSI host's AVR support bit, both of which
-downstream sets. Those stay as parameters for testing:
-dpu_avr_continuous, dpu_avr_prog_fetch, dpu_avr_at_modeset,
-dpu_avr_flush_intf (read every commit) and dpu_avr_dsi. The panel gets no
-Qsync commands; the Nova's has none.
+A panel declares a refresh range in display_info.monitor_range and sets
+the connector's vrr_capable, which DSI connectors now carry. At mode set
+the DPU writes the longest frame, from the range's minimum; the mode's
+own frame is the shortest. The CRTC's VRR_ENABLED then switches AVR on
+and off in a commit, with the INTF in that commit's flush and the DSI
+host's AVR support bit, the way downstream switches Qsync. AVR runs in
+continuous mode: one-shot, downstream's default, never became active on
+SM8550.
+
+The Nova's panel declares 90 Hz up to its fastest mode, 120.198 Hz,
+rounded up to 121. Measured: frames of 8.3 to 11.1 ms changing every
+frame, without flicker at 5% backlight.
 ---
 --- a/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_intf.h
 +++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_intf.h
@@ -25,19 +27,19 @@ Qsync commands; the Nova's has none.
  				     struct dpu_hw_intf_cmd_mode_cfg *cmd_mode_cfg);
 +
 +	/*
-+	 * AVR, the INTF's variable refresh in video mode: once enabled, the
-+	 * vertical front porch runs on past the mode's frame until
-+	 * avr_trigger(), or until the frame reaches setup_avr()'s length.
++	 * AVR, the INTF's variable refresh in video mode: the vertical front
++	 * porch runs on past the mode's frame until the next commit, up to
++	 * setup_avr()'s length.
 +	 */
 +	void (*setup_avr)(struct dpu_hw_intf *intf, u32 max_frame_pixels);
-+	void (*enable_avr)(struct dpu_hw_intf *intf, bool enable, bool one_shot);
++	void (*enable_avr)(struct dpu_hw_intf *intf, bool enable);
 +	void (*avr_trigger)(struct dpu_hw_intf *intf);
  };
  
  struct dpu_hw_intf {
 --- a/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_intf.c
 +++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_intf.c
-@@ -281,6 +281,26 @@
+@@ -281,6 +281,27 @@
  	DPU_REG_WRITE(c, INTF_TIMING_ENGINE_EN, enable != 0);
  }
  
@@ -47,13 +49,14 @@ Qsync commands; the Nova's has none.
 +	DPU_REG_WRITE(&intf->hw, INTF_AVR_VTOTAL, max_frame_pixels);
 +}
 +
-+/* As Qualcomm's downstream driver programs it for Qsync. */
-+static void dpu_hw_intf_enable_avr(struct dpu_hw_intf *intf, bool enable,
-+				   bool one_shot)
++/*
++ * Continuous mode. One-shot, which Qualcomm's downstream driver uses for
++ * Qsync, never became active on SM8550: bit 31 of AVR_CONTROL stayed clear.
++ */
++static void dpu_hw_intf_enable_avr(struct dpu_hw_intf *intf, bool enable)
 +{
 +	DPU_REG_WRITE(&intf->hw, INTF_AVR_CONTROL, enable ? BIT(0) : 0);
-+	DPU_REG_WRITE(&intf->hw, INTF_AVR_MODE,
-+		      enable && one_shot ? (BIT(0) | BIT(8)) : 0);
++	DPU_REG_WRITE(&intf->hw, INTF_AVR_MODE, 0);
 +}
 +
 +static void dpu_hw_intf_avr_trigger(struct dpu_hw_intf *intf)
@@ -64,7 +67,7 @@ Qsync commands; the Nova's has none.
  static void dpu_hw_intf_setup_prg_fetch(
  		struct dpu_hw_intf *intf,
  		const struct dpu_hw_intf_prog_fetch *fetch)
-@@ -668,5 +688,11 @@
+@@ -668,5 +689,11 @@
  	if (mdss_rev->core_major_ver >= 7)
  		c->ops.program_intf_cmd_cfg = dpu_hw_intf_program_intf_cmd_cfg;
  
@@ -82,137 +85,118 @@ Qsync commands; the Nova's has none.
  	wait_queue_head_t pending_kickoff_wq;
  	unsigned int irq[INTR_IDX_MAX];
  	bool has_intf_te;
-+	bool avr_wanted;
++	bool avr_capable;
 +	bool avr_enabled;
  };
  
  static inline int dpu_encoder_phys_inc_pending(struct dpu_encoder_phys *phys)
 --- a/drivers/gpu/drm/msm/disp/dpu1/dpu_encoder_phys_vid.c
 +++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_encoder_phys_vid.c
-@@ -188,7 +188,9 @@
- 	if (start_of_frame_lines >= worst_case_needed_lines) {
- 		DPU_DEBUG_VIDENC(phys_enc,
- 				"prog fetch is not needed, large vbp+vsw\n");
--		actual_vfp_lines = 0;
-+		/* Downstream keeps it on regardless, which AVR may need. */
-+		actual_vfp_lines = phys_enc->avr_wanted ?
-+				   READ_ONCE(msm_avr_prog_fetch) : 0;
- 	} else if (timing->v_front_porch < needed_vfp_lines) {
- 		/* Warn fetch needed, but not enough porch in panel config */
- 		pr_warn_once
-@@ -254,6 +256,81 @@
+@@ -254,6 +254,74 @@
  	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
  }
  
++/*
++ * Variable refresh from the INTF's AVR, for a DSI panel that declares a
++ * refresh range: the mode's frame is the shortest, the range's minimum
++ * gives the longest. The CRTC's VRR_ENABLED switches it per commit.
++ */
 +static void dpu_encoder_phys_vid_setup_avr(struct dpu_encoder_phys *phys_enc,
 +		const struct dpu_hw_intf_timing_params *timing, int clock_khz)
 +{
 +	struct dpu_hw_intf *intf = phys_enc->hw_intf;
-+	unsigned int min_fps = READ_ONCE(msm_avr_min_fps);
++	struct drm_connector *conn = dpu_encoder_get_connector(phys_enc->parent);
++	unsigned int min_hz = conn ? conn->display_info.monitor_range.min_vfreq : 0;
 +	u32 htotal = get_horizontal_total(timing);
 +	u32 vtotal = get_vertical_total(timing);
 +	unsigned long lock_flags;
 +	u64 lines = 0;
 +
-+	phys_enc->avr_wanted = false;
++	phys_enc->avr_capable = false;
 +	phys_enc->avr_enabled = false;
 +	if (!intf->ops.setup_avr || !intf->ops.enable_avr ||
 +	    !intf->ops.avr_trigger)
 +		return;
 +
-+	if (min_fps && htotal)
-+		lines = div_u64((u64)clock_khz * 1000, htotal * min_fps);
-+	if (min_fps && lines <= vtotal)
-+		DPU_ERROR_VIDENC(phys_enc,
-+				 "AVR floor %u Hz is not below the mode's rate\n",
-+				 min_fps);
++	if (min_hz && htotal)
++		lines = div_u64((u64)clock_khz * 1000, htotal * min_hz);
 +
 +	spin_lock_irqsave(phys_enc->enc_spinlock, lock_flags);
-+	intf->ops.enable_avr(intf, false, false);
++	intf->ops.enable_avr(intf, false);
 +	if (lines > vtotal) {
 +		intf->ops.setup_avr(intf, (u32)(lines * htotal));
-+		phys_enc->avr_wanted = true;
-+		if (READ_ONCE(msm_avr_at_modeset)) {
-+			intf->ops.enable_avr(intf, true,
-+					     !READ_ONCE(msm_avr_continuous));
-+			phys_enc->avr_enabled = true;
-+		}
++		phys_enc->avr_capable = true;
 +	}
 +	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
 +
-+	if (phys_enc->avr_wanted)
-+		DRM_INFO("intf%d: variable refresh, %u to %llu lines a frame, %s, %s, fetch %u, dsi %d, flush %d\n",
-+			 intf->idx - INTF_0, vtotal, lines,
-+			 READ_ONCE(msm_avr_continuous) ? "continuous" : "one-shot",
-+			 READ_ONCE(msm_avr_at_modeset) ? "at mode set" : "at first commit",
-+			 READ_ONCE(msm_avr_prog_fetch), READ_ONCE(msm_avr_dsi),
-+			 READ_ONCE(msm_avr_flush_intf));
++	if (phys_enc->avr_capable)
++		DRM_DEBUG_KMS("intf%d: variable refresh available, %u to %llu lines a frame\n",
++			      intf->idx - INTF_0, vtotal, lines);
 +}
 +
 +/*
-+ * AVR is switched on in a commit while the timing engine runs, with the INTF
-+ * in that commit's flush, as Qualcomm's driver switches Qsync on. Enabled
-+ * at mode set, before the timing engine starts, it read back as programmed
-+ * and its status bit stayed clear.
++ * Follows VRR_ENABLED in a commit while the timing engine runs, with the
++ * INTF in that commit's flush, as Qualcomm's driver switches Qsync. The DSI
++ * host's AVR support bit goes with it, set before AVR and cleared after.
 + */
-+static void dpu_encoder_phys_vid_start_avr(struct dpu_encoder_phys *phys_enc)
++static void dpu_encoder_phys_vid_update_avr(struct dpu_encoder_phys *phys_enc)
 +{
++	bool want = phys_enc->avr_capable &&
++		    phys_enc->enable_state == DPU_ENC_ENABLED &&
++		    dpu_encoder_vrr_enabled(phys_enc->parent);
 +	unsigned long lock_flags;
 +
-+	if (!phys_enc->avr_wanted ||
-+	    phys_enc->enable_state != DPU_ENC_ENABLED)
++	if (want == phys_enc->avr_enabled)
 +		return;
 +
-+	if (phys_enc->avr_enabled) {
-+		if (READ_ONCE(msm_avr_flush_intf))
-+			phys_enc->hw_ctl->ops.update_pending_flush_intf(
-+				phys_enc->hw_ctl, phys_enc->hw_intf->idx);
-+		return;
-+	}
-+
++	if (want)
++		dpu_encoder_set_dsi_avr(phys_enc->parent, true);
 +	spin_lock_irqsave(phys_enc->enc_spinlock, lock_flags);
-+	phys_enc->hw_intf->ops.enable_avr(phys_enc->hw_intf, true,
-+					  !READ_ONCE(msm_avr_continuous));
++	phys_enc->hw_intf->ops.enable_avr(phys_enc->hw_intf, want);
 +	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
 +	phys_enc->hw_ctl->ops.update_pending_flush_intf(phys_enc->hw_ctl,
 +							phys_enc->hw_intf->idx);
-+	phys_enc->avr_enabled = true;
++	if (!want)
++		dpu_encoder_set_dsi_avr(phys_enc->parent, false);
++	phys_enc->avr_enabled = want;
++
++	DRM_INFO("intf%d: variable refresh %s\n",
++		 phys_enc->hw_intf->idx - INTF_0, want ? "on" : "off");
 +}
 +
  static void dpu_encoder_phys_vid_setup_timing_engine(
  		struct dpu_encoder_phys *phys_enc)
  {
-@@ -329,6 +406,7 @@
- 
+@@ -330,6 +398,7 @@
  	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
  
-+	dpu_encoder_phys_vid_setup_avr(phys_enc, &timing_params, mode.clock);
  	programmable_fetch_config(phys_enc, &timing_params);
++	dpu_encoder_phys_vid_setup_avr(phys_enc, &timing_params, mode.clock);
  }
  
-@@ -558,6 +636,8 @@
+ static void dpu_encoder_phys_vid_vblank_irq(void *arg)
+@@ -558,6 +627,8 @@
  
  	drm_enc = phys_enc->parent;
  
-+	dpu_encoder_phys_vid_start_avr(phys_enc);
++	dpu_encoder_phys_vid_update_avr(phys_enc);
 +
  	ctl = phys_enc->hw_ctl;
  	if (!ctl->ops.wait_reset_status)
  		return;
-@@ -602,6 +682,12 @@
+@@ -602,6 +673,11 @@
  	}
  
  	spin_lock_irqsave(phys_enc->enc_spinlock, lock_flags);
 +	/* A held front porch would delay the vsync waited for below. */
 +	if (phys_enc->avr_enabled)
-+		phys_enc->hw_intf->ops.enable_avr(phys_enc->hw_intf, false,
-+						  false);
-+	phys_enc->avr_wanted = false;
++		phys_enc->hw_intf->ops.enable_avr(phys_enc->hw_intf, false);
++	phys_enc->avr_capable = false;
 +	phys_enc->avr_enabled = false;
  	phys_enc->hw_intf->ops.enable_timing(phys_enc->hw_intf, 0);
  	if (dpu_encoder_phys_vid_is_master(phys_enc))
  		dpu_encoder_phys_inc_pending(phys_enc);
-@@ -666,6 +752,13 @@
+@@ -666,6 +742,13 @@
  		spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
  		phys_enc->enable_state = DPU_ENC_ENABLED;
  	}
@@ -226,79 +210,195 @@ Qsync commands; the Nova's has none.
  }
  
  static void dpu_encoder_phys_vid_irq_enable(struct dpu_encoder_phys *phys_enc)
---- a/drivers/gpu/drm/msm/msm_drv.c
-+++ b/drivers/gpu/drm/msm/msm_drv.c
-@@ -55,6 +55,40 @@
- module_param(modeset, bool, 0600);
+--- a/drivers/gpu/drm/msm/disp/dpu1/dpu_encoder.h
++++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_encoder.h
+@@ -72,6 +72,12 @@
  
- static bool separate_gpu_kms;
-+/*
-+ * Variable refresh on a DSI video-mode panel, for testing. With a floor in
-+ * Hz, the DPU's video encoder holds each frame's vertical front porch open
-+ * until the next commit (AVR) and the DSI host follows it. 0 keeps the
-+ * fixed refresh. Read at mode set.
-+ */
-+unsigned int msm_avr_min_fps;
-+MODULE_PARM_DESC(dpu_avr_min_fps,
-+		 "Variable refresh floor in Hz on DSI video mode, 0 = off (test)");
-+module_param_named(dpu_avr_min_fps, msm_avr_min_fps, uint, 0644);
-+
-+/*
-+ * How AVR is brought up. Downstream: one-shot, switched on in a commit after
-+ * the mode set, programmable fetch always on (one line when the porches need
-+ * none), the DSI host's AVR support bit. On the Nova only continuous mode
-+ * engaged AVR, with or without the fetch and the DSI bit; one-shot never did.
-+ */
-+bool msm_avr_continuous = true;
-+MODULE_PARM_DESC(dpu_avr_continuous, "AVR continuous instead of one-shot (test)");
-+module_param_named(dpu_avr_continuous, msm_avr_continuous, bool, 0644);
-+unsigned int msm_avr_prog_fetch = 1;
-+MODULE_PARM_DESC(dpu_avr_prog_fetch,
-+		 "Programmable fetch lines with AVR where the porches need none (test)");
-+module_param_named(dpu_avr_prog_fetch, msm_avr_prog_fetch, uint, 0644);
-+bool msm_avr_at_modeset;
-+MODULE_PARM_DESC(dpu_avr_at_modeset, "Switch AVR on at mode set (test)");
-+module_param_named(dpu_avr_at_modeset, msm_avr_at_modeset, bool, 0644);
-+bool msm_avr_flush_intf;
-+MODULE_PARM_DESC(dpu_avr_flush_intf, "Flush the INTF on every AVR commit (test)");
-+module_param_named(dpu_avr_flush_intf, msm_avr_flush_intf, bool, 0644);
-+bool msm_avr_dsi = true;
-+MODULE_PARM_DESC(dpu_avr_dsi, "Set the DSI host's AVR support bit with a floor (test)");
-+module_param_named(dpu_avr_dsi, msm_avr_dsi, bool, 0644);
-+
- MODULE_PARM_DESC(separate_gpu_kms, "Use separate DRM device for the GPU (0=single DRM device for both GPU and display (default), 1=two DRM devices)");
- module_param(separate_gpu_kms, bool, 0400);
+ bool dpu_encoder_is_widebus_enabled(const struct drm_encoder *drm_enc);
  
++struct drm_connector *dpu_encoder_get_connector(struct drm_encoder *drm_enc);
++
++bool dpu_encoder_vrr_enabled(struct drm_encoder *drm_enc);
++
++void dpu_encoder_set_dsi_avr(struct drm_encoder *drm_enc, bool enable);
++
+ bool dpu_encoder_is_dsc_enabled(const struct drm_encoder *drm_enc);
+ 
+ int dpu_encoder_get_crc_values_cnt(const struct drm_encoder *drm_enc);
+--- a/drivers/gpu/drm/msm/disp/dpu1/dpu_encoder.c
++++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_encoder.c
+@@ -295,6 +295,29 @@
+ 	return false;
+ }
+ 
++struct drm_connector *dpu_encoder_get_connector(struct drm_encoder *drm_enc)
++{
++	return to_dpu_encoder_virt(drm_enc)->connector;
++}
++
++/* The CRTC's VRR_ENABLED, in the state being committed. */
++bool dpu_encoder_vrr_enabled(struct drm_encoder *drm_enc)
++{
++	struct drm_crtc *crtc = to_dpu_encoder_virt(drm_enc)->crtc;
++
++	return crtc && crtc->state && crtc->state->vrr_enabled;
++}
++
++void dpu_encoder_set_dsi_avr(struct drm_encoder *drm_enc, bool enable)
++{
++	struct dpu_encoder_virt *dpu_enc = to_dpu_encoder_virt(drm_enc);
++	struct msm_drm_private *priv = drm_enc->dev->dev_private;
++	int index = dpu_enc->disp_info.h_tile_instance[0];
++
++	if (dpu_enc->disp_info.intf_type == INTF_DSI)
++		msm_dsi_set_avr(priv->kms->dsi[index], enable);
++}
++
+ /**
+  * dpu_encoder_is_dsc_enabled - indicate whether dsc is enabled
+  *				for the encoder.
 --- a/drivers/gpu/drm/msm/msm_drv.h
 +++ b/drivers/gpu/drm/msm/msm_drv.h
-@@ -529,6 +529,14 @@
+@@ -303,6 +303,7 @@
+ bool msm_dsi_is_bonded_dsi(struct msm_dsi *msm_dsi);
+ bool msm_dsi_is_master_dsi(struct msm_dsi *msm_dsi);
+ bool msm_dsi_wide_bus_enabled(struct msm_dsi *msm_dsi);
++void msm_dsi_set_avr(struct msm_dsi *msm_dsi, bool enable);
+ struct drm_dsc_config *msm_dsi_get_dsc_config(struct msm_dsi *msm_dsi);
+ const char *msm_dsi_get_te_source(struct msm_dsi *msm_dsi);
+ #else
+@@ -338,6 +339,10 @@
+ 	return false;
+ }
  
- extern const struct component_master_ops msm_drm_ops;
- 
-+/* AVR floor in Hz for DSI video mode, 0 = off, and how it is brought up. */
-+extern unsigned int msm_avr_min_fps;
-+extern bool msm_avr_continuous;
-+extern unsigned int msm_avr_prog_fetch;
-+extern bool msm_avr_at_modeset;
-+extern bool msm_avr_flush_intf;
-+extern bool msm_avr_dsi;
++static inline void msm_dsi_set_avr(struct msm_dsi *msm_dsi, bool enable)
++{
++}
 +
- int msm_kms_pm_prepare(struct device *dev);
- void msm_kms_pm_complete(struct device *dev);
+ static inline struct drm_dsc_config *msm_dsi_get_dsc_config(struct msm_dsi *msm_dsi)
+ {
+ 	return NULL;
+--- a/drivers/gpu/drm/msm/dsi/dsi.h
++++ b/drivers/gpu/drm/msm/dsi/dsi.h
+@@ -123,6 +123,7 @@
+ void msm_dsi_host_test_pattern_en(struct mipi_dsi_host *host);
+ struct drm_dsc_config *msm_dsi_host_get_dsc_config(struct mipi_dsi_host *host);
+ bool msm_dsi_host_is_wide_bus_enabled(struct mipi_dsi_host *host);
++void msm_dsi_host_set_avr(struct mipi_dsi_host *host, bool enable);
  
+ /* dsi phy */
+ struct msm_dsi_phy;
+--- a/drivers/gpu/drm/msm/dsi/dsi.c
++++ b/drivers/gpu/drm/msm/dsi/dsi.c
+@@ -22,6 +22,11 @@
+ 	return msm_dsi_host_is_wide_bus_enabled(msm_dsi->host);
+ }
+ 
++void msm_dsi_set_avr(struct msm_dsi *msm_dsi, bool enable)
++{
++	msm_dsi_host_set_avr(msm_dsi->host, enable);
++}
++
+ static int dsi_get_phy(struct msm_dsi *msm_dsi)
+ {
+ 	struct platform_device *pdev = msm_dsi->pdev;
 --- a/drivers/gpu/drm/msm/dsi/dsi_host.c
 +++ b/drivers/gpu/drm/msm/dsi/dsi_host.c
-@@ -843,6 +843,13 @@
- 		data |= DSI_VID_CFG0_VIRT_CHANNEL(msm_host->channel);
- 		if (msm_dsi_host_is_wide_bus_enabled(&msm_host->base))
- 			data |= DSI_VID_CFG0_DATABUS_WIDEN;
-+		/*
-+		 * AVR_SUPPORT_ENABLE in Qualcomm's downstream driver, which sets
-+		 * it together with the INTF's AVR: without it the video engine
-+		 * keeps its own frame while the INTF holds the porch open.
-+		 */
-+		if (READ_ONCE(msm_avr_min_fps) && READ_ONCE(msm_avr_dsi))
-+			data |= BIT(29);
- 		dsi_write(msm_host, REG_DSI_VID_CFG0, data);
+@@ -816,6 +816,29 @@
+ 					MSM_DSI_6G_VER_MINOR_V2_5_0);
+ }
  
- 		/* Do not swap RGB colors */
++/*
++ * AVR_SUPPORT_ENABLE in Qualcomm's downstream driver, which sets it with the
++ * INTF's AVR while the video engine runs. dsi_ctrl_enable() rewrites the
++ * register, so a mode set clears it with the DPU's AVR.
++ */
++#define DSI_VID_CFG0_AVR_SUPPORT	BIT(29)
++
++void msm_dsi_host_set_avr(struct mipi_dsi_host *host, bool enable)
++{
++	struct msm_dsi_host *msm_host = to_msm_dsi_host(host);
++	u32 data;
++
++	if (!msm_host->power_on || !(msm_host->mode_flags & MIPI_DSI_MODE_VIDEO))
++		return;
++
++	data = dsi_read(msm_host, REG_DSI_VID_CFG0);
++	if (enable)
++		data |= DSI_VID_CFG0_AVR_SUPPORT;
++	else
++		data &= ~DSI_VID_CFG0_AVR_SUPPORT;
++	dsi_write(msm_host, REG_DSI_VID_CFG0, data);
++}
++
+ static void dsi_ctrl_enable(struct msm_dsi_host *msm_host,
+ 			struct msm_dsi_phy_shared_timings *phy_shared_timings, struct msm_dsi_phy *phy)
+ {
+--- a/drivers/gpu/drm/msm/dsi/dsi_manager.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_manager.c
+@@ -485,6 +485,13 @@
+ 		return PTR_ERR(connector);
+ 	}
+ 
++	/*
++	 * False until a panel declares a refresh range in display_info and
++	 * sets it. The DPU then runs the INTF's AVR while the CRTC's
++	 * VRR_ENABLED is set.
++	 */
++	drm_connector_attach_vrr_capable_property(connector);
++
+ 	return 0;
+ }
+ 
+--- a/drivers/gpu/drm/panel/panel-ilitek-il97680a.c
++++ b/drivers/gpu/drm/panel/panel-ilitek-il97680a.c
+@@ -45,6 +45,12 @@
+ 	const struct drm_display_mode *modes;
+ 	unsigned int num_modes;
+ 	int (*init_sequence)(struct panel_info *pinfo);
++
++	/*
++	 * Variable refresh floor in Hz, 0 for none. The top is the fastest
++	 * mode, which is the shortest frame AVR can run.
++	 */
++	unsigned int vrr_min_hz;
+ };
+ 
+ static const struct regulator_bulk_data panel_supplies[] = {
+@@ -421,6 +427,12 @@
+ static struct panel_desc il97680a_rpnova_desc = {
+ 	.modes = il97680a_rpnova_modes,
+ 	.num_modes = ARRAY_SIZE(il97680a_rpnova_modes),
++	/*
++	 * Measured on the Nova: frames of 8.3 to 11.1 ms, changing every frame,
++	 * with no flicker at 5% backlight; a held 60 Hz frame showed none
++	 * either. 90 leaves a late commit room inside 100-120 Hz.
++	 */
++	.vrr_min_hz = 90,
+ 	.width_mm = 91,
+ 	.height_mm = 68,
+ 	.bpc = 8,
+@@ -553,6 +565,23 @@
+ 	connector->display_info.width_mm = pinfo->desc->width_mm;
+ 	connector->display_info.height_mm = pinfo->desc->height_mm;
+ 	connector->display_info.bpc = pinfo->desc->bpc;
++	if (pinfo->desc->vrr_min_hz) {
++		unsigned int max_hz = 0;
++
++		/*
++		 * Rounded up, since the field is whole Hz: the 120.198 Hz mode,
++		 * twice the SNES, must read as inside the range, not above it.
++		 */
++		for (i = 0; i < pinfo->desc->num_modes; i++) {
++			const struct drm_display_mode *m = &pinfo->desc->modes[i];
++
++			max_hz = max_t(unsigned int, max_hz,
++				       DIV_ROUND_UP(m->clock * 1000, m->htotal * m->vtotal));
++		}
++		connector->display_info.monitor_range.min_vfreq = pinfo->desc->vrr_min_hz;
++		connector->display_info.monitor_range.max_vfreq = max_hz;
++		drm_connector_set_vrr_capable_property(connector, true);
++	}
+ 	pinfo->connector = connector;
+ 
+ 	return count;

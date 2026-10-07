@@ -4,8 +4,9 @@ The goal is integer-multiple variable refresh. Every game frame is
 scanned exactly twice, and the panel follows the game at twice its rate:
 PAL at 100 Hz, NTSC at 119.88 Hz, SwanStation's 59.826 at 119.652 Hz.
 That needs no panel mode per console, and nothing outside 100 to 121 Hz.
-The open question is whether the panel takes a frame length that changes
-from one frame to the next inside that range.
+The panel takes a frame length that changes every frame inside that range
+(measured below), and patch 1097 exposes it through DRM's standard
+variable-refresh properties.
 
 ## What the hardware offers
 
@@ -24,12 +25,18 @@ from one frame to the next inside that range.
   `AVR_SUPPORT_ENABLE`, bit 29 of the DSI host's video mode control
   (`DSI_VIDEO_MODE_CTRL`, mainline's `REG_DSI_VID_CFG0` plus the 6G
   shift, 0xae94010 on the Nova), when it switches Qsync on.
-- **Kernel patch 1097** adds that, off by default.
-  `msm.dpu_avr_min_fps` sets the floor in Hz and is read at mode set:
-  the DSI host sets bit 29 and the INTF gets the longest frame. The next
-  commit switches AVR on, with the INTF in its flush, in the order
-  downstream switches Qsync on. From DPU 8.1, bit 31 of `AVR_CONTROL`
-  reads 1 while AVR is active.
+- **Kernel patch 1097** adds it as DRM's standard interface:
+  - The panel driver declares its range, 90 Hz up to its fastest mode,
+    120.198 Hz rounded up to 121, in the connector's
+    `display_info.monitor_range` and sets `vrr_capable`, which DSI
+    connectors now carry.
+  - At mode set the DPU writes the longest frame, from the range's
+    minimum.
+  - The CRTC's `VRR_ENABLED` switches AVR on and off in a commit, without
+    a mode set, with the INTF in that commit's flush and the DSI host's bit
+    29 alongside, in continuous mode.
+  - The kernel logs `intf1: variable refresh on` and `off`. From DPU 8.1,
+    bit 31 of `AVR_CONTROL` reads 1 while AVR is active.
 
 ## Measured, 2026-10-07
 
@@ -104,8 +111,9 @@ build can try them all:
 | `dpu_avr_flush_intf` | N | Flush the INTF on every commit |
 | `dpu_avr_dsi` | Y | The DSI host's AVR support bit |
 
-All are under `/sys/module/msm/parameters/` and are read at mode set,
-except `dpu_avr_flush_intf`, which is read every commit.
+All were under `/sys/module/msm/parameters/`. Once continuous mode was
+found they came out again, for the interface above; the measurements
+below used them.
 
 ### AVR working: continuous mode
 
@@ -120,7 +128,7 @@ idle check per combination, floor 96:
 | Continuous, without the DSI bit | 0x80000001 | 95.9 |
 
 Continuous mode alone engages AVR; one-shot, downstream's Qsync default,
-never did. `dpu_avr_continuous` now defaults to Y.
+never did.
 
 Frames on a schedule, continuous, floor 90, the probe's own receive
 times against its commits:
@@ -156,14 +164,15 @@ or work without them.
 
 On a build with patch 1097. `vrr-probe` is in the debug set, which only
 unofficial builds carry; elsewhere, copy the static build to `/storage`.
+Its fourth argument, `vrr`, sets the CRTC's `VRR_ENABLED` for the run and
+clears it on the way out; it prints the connector's `vrr_capable` first.
 
 First, whether AVR holds the front porch at all. `idle` commits once
 and then nothing, so frames should slow to the floor:
 
 ```
 systemctl stop portarelauncher
-echo 90 > /sys/module/msm/parameters/dpu_avr_min_fps
-vrr-probe /dev/null 6 idle &
+vrr-probe /dev/null 6 idle vrr &
 sleep 2
 devmem 0xae36270 32          # 0x80000001: AVR active
 F=0xae360ac; a=$(devmem $F 32); sleep 2; b=$(devmem $F 32)
@@ -174,17 +183,55 @@ wait
 Then the schedules:
 
 ```
-vrr-probe /storage/vrr-avr.csv 10 dynamic
-echo 0 > /sys/module/msm/parameters/dpu_avr_min_fps
+vrr-probe /storage/vrr-avr.csv 10 dynamic vrr
 vrr-probe /dev/null 1 reset
 systemctl start portarelauncher
 ```
 
-At the mode set the kernel logs `intf1: variable refresh, 1116 to 1490
-lines a frame`. The big digit is the phase, 7 to 14, and the grey number
+The kernel logs `intf1: variable refresh on` when the CRTC property takes
+effect. The big digit is the phase, 7 to 14, and the grey number
 the rate (0 for a pattern). Watch the dark grey patches for flicker,
 especially in phase 11, where the frame length alternates every frame,
 and compare brightness with phase 7. Then repeat at minimum brightness.
+
+### Through the interface, 2026-10-08
+
+Kernel-only build of patch 1097 with the DRM interface, no parameters:
+`vrr_capable` reads 1 on the DSI connector. With `VRR_ENABLED` set and
+nothing committed, `AVR_CONTROL` read 0x80000001, the DSI bit was set and
+frames ran at 90.01/s, the floor. Clearing `VRR_ENABLED`, without a mode
+set, turned both off again: 119.92 frames/s. The schedules matched the
+runs with the parameters; at 100 Hz the median frame-length error was
+0.16 ms (p95 0.56 ms).
+
+A schedule that starts behind the frame boundary catches up only by the
+margin between its frame and the mode's shortest: at 120 Hz on the
+120.198 Hz mode that is 14 us a frame, and one run started a whole frame
+behind (8.3 ms from commit to frame) and was still 4 ms behind after
+four seconds. At 119.652 Hz the margin is 38 us; lower rates recover
+faster.
+
+## Integer multiples for every game
+
+AVR's shortest frame is the frame of the mode in use, so a doubled rate
+fits only up to that mode's rate. With variable refresh on, the mode has
+to be the fastest one, 120.198 Hz, twice the SNES. On the 119.652 Hz
+mode, the PlayStation's, doubled SNES would not fit.
+
+The multiple for a game is the largest k with k times its rate at most
+120.198 Hz and at least the 90 Hz floor: 2 for 45 to 60.1 Hz, 3 for 30 to
+40 Hz, 4 for 22.5 to 30 Hz. Userspace has to know the range from a device
+quirk: DRM keeps `monitor_range` inside the kernel for a panel without
+EDID.
+
+Rates between 60.1 and 61 Hz, a few arcade boards, have no multiple in
+range, and the range cannot grow upward. `vrr-probe fast`, 2026-10-08:
+the fastest mode's 174.651 MHz clock and 12-line front porch, with the
+back porch cut from 142 lines to 135 (120.956 Hz) and 126 (121.946 Hz).
+The SoC delivered every frame exactly one period apart, within 10 us, at
+all three rates. By eye the moving block jumped at 121 and 122 Hz and was
+clean at 120.198: the panel does not show frames faster than its 120 Hz
+class evenly. Those boards keep a fixed mode.
 
 ## Do not
 
