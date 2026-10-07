@@ -168,7 +168,7 @@ fi
         fi
 
   #Vsync
-        if [ "$VSYNC" = "false" ]; then
+        if [ "$VSYNC" = "false" ] || [ "$VSYNC" = "0" ]; then
                 sed -i "/vsync =/c\vsync = false" "${CONF_DIR}/${XEMU_INI}"
         else
                 sed -i "/vsync =/c\vsync = true" "${CONF_DIR}/${XEMU_INI}"
