@@ -141,6 +141,11 @@ its longest frame, 10.4 ms, left 0.4 ms for a commit to get through the
 kernel, and missed frames fell back onto the 8.3 ms grid (p95 error
 9.6 ms). Floor 90 gives 1.1 ms.
 
+By eye, 2026-10-08, with AVR on (floor 90, continuous) and the backlight
+at 172 of 3445: no flicker or brightness change in any schedule, the
+alternating 100 and 120 Hz one included. That run's log confirms AVR was
+on: 100 Hz frames came 9.9 to 10.1 ms apart, p95 error 0.71 ms.
+
 The kernel's flip timestamps are not usable under AVR: DRM derives them
 from the scanout position against the mode's fixed frame length, and two
 flips often came back with the same one. Mesa's and RetroArch's frame
