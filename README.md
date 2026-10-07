@@ -30,8 +30,8 @@ over Wi-Fi through the launcher, using the nightly or release channel, and
 install on restart.
 
 [portarelauncher](https://github.com/portare-ch/portarelauncher) provides
-consoles, games and settings for Wi-Fi, Bluetooth, SSH, USB mode, time zone
-and updates. Each device generates a root password on first boot, shown
+consoles, games and settings for Wi-Fi, Bluetooth, SSH, USB mode, language
+and time zone, and updates, in English or Japanese. Each device generates a root password on first boot, shown
 under About.
 
 * **Home + Start** quits every emulator; **M1 + volume** adjusts brightness
