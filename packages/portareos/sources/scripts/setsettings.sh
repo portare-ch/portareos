@@ -1189,6 +1189,23 @@ function set_swapchain_images() {
     add_setting "none" "video_max_swapchain_images" "${IMAGES}"
 }
 
+function set_vsync() {
+    # vsync=0 presents each frame when the core finishes it rather than at
+    # the next vblank. Then Sync to Exact Content Framerate has to time the
+    # loop: left to audio sync, rate control held every game at its 0.5%
+    # limit, Daytona USA at 60.13 fps for 59.83. A missing key keeps vsync
+    # on.
+    local VSYNC="true"
+    local EXACT="false"
+    if [ "$(game_setting vsync)" = "0" ]
+    then
+        VSYNC="false"
+        EXACT="true"
+    fi
+    add_setting "none" "video_vsync" "${VSYNC}"
+    add_setting "none" "vrr_runloop_enable" "${EXACT}"
+}
+
 function set_frame_delay() {
     # No automatic frame delay with a preemptive frame. The delay grows to
     # eat the slack it measures on quiet frames; a frame where input
@@ -1499,6 +1516,7 @@ set_n64opts &
 set_saturnopts &
 set_dreamcastopts &
 set_melondsdsopts &
+set_vsync &
 set_frame_delay &
 set_swapchain_images &
 

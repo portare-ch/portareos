@@ -85,6 +85,9 @@ mode for a system with its own row.
 
 ### D2 Timed presents on Vulkan display (auto+human)
 
+Needs vsync on: run it with `<system>.vsync=1` while `global.vsync=0`
+ships, and skip it otherwise.
+
 Auto, game running: the RetroArch log contains
 
 ```
@@ -111,7 +114,13 @@ Game running, in the launched config:
 video_max_swapchain_images = "2"
 video_threaded = "false"
 video_swap_interval = "0"      # RetroArch picks 2 for 60 Hz content; 1 with black frame insertion
+video_vsync = "false"          # global.vsync=0; "true" with <system>.vsync=1
+vrr_runloop_enable = "true"    # with vsync off only; "false" with vsync on
 ```
+
+With vsync off, the MangoHud frame rate over a minute is the core's own
+rate within 0.01%: 59.826 for Saturn, 60.099 for SNES. Fail at 0.4% or more
+above it, which is the loop running on audio sync alone.
 
 ### D4 Automatic frame delay (auto+human)
 
