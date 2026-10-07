@@ -99,13 +99,53 @@ build can try them all:
 | Parameter | Default | What it changes |
 |---|---|---|
 | `dpu_avr_prog_fetch` | 1 | Programmable fetch lines while AVR is wanted, where the porches need none |
-| `dpu_avr_continuous` | N | Continuous AVR instead of one-shot |
+| `dpu_avr_continuous` | Y | Continuous AVR instead of one-shot |
 | `dpu_avr_at_modeset` | N | Switch AVR on at mode set instead of in the first commit |
 | `dpu_avr_flush_intf` | N | Flush the INTF on every commit |
 | `dpu_avr_dsi` | Y | The DSI host's AVR support bit |
 
 All are under `/sys/module/msm/parameters/` and are read at mode set,
 except `dpu_avr_flush_intf`, which is read every commit.
+
+### AVR working: continuous mode
+
+On the kernel with the parameters (kernel-only build, 2026-10-07), the
+idle check per combination, floor 96:
+
+| Combination | `AVR_CONTROL` | Idle frames/s |
+|---|---|---|
+| One-shot, any fetch, DSI bit, enable point or per-commit flush | 0x00000001 | 120 |
+| Continuous, with fetch and DSI bit | 0x80000001 | 96 to 97 |
+| Continuous, without programmable fetch | 0x80000001 | 96.1 |
+| Continuous, without the DSI bit | 0x80000001 | 95.9 |
+
+Continuous mode alone engages AVR; one-shot, downstream's Qsync default,
+never did. `dpu_avr_continuous` now defaults to Y.
+
+Frames on a schedule, continuous, floor 90, the probe's own receive
+times against its commits:
+
+| Schedule | Commit to frame, median | Frame length error, median | p95 |
+|---|---|---|---|
+| 120 Hz | 1.11 ms | 0.03 ms | 0.46 ms |
+| 119.652 Hz | 0.85 ms | 0.05 ms | 0.40 ms |
+| 110 Hz | 0.50 ms | 0.19 ms | 0.72 ms |
+| 100 Hz | 0.78 ms | 0.27 ms | 1.56 ms |
+| 100 and 120 alternating | 0.66 ms | 0.20 ms | 0.87 ms |
+| Random, 8.34 to 10 ms | 0.36 ms | 0.25 ms | 0.86 ms |
+| Game frames of 16.7 to 20 ms, each twice | 0.32 ms | 0.11 ms | 0.66 ms |
+
+On the fixed refresh the same 100 Hz schedule had 4.9 ms from commit to
+frame and a p95 error of 7.1 ms. A floor of 96 was too tight for 100 Hz:
+its longest frame, 10.4 ms, left 0.4 ms for a commit to get through the
+kernel, and missed frames fell back onto the 8.3 ms grid (p95 error
+9.6 ms). Floor 90 gives 1.1 ms.
+
+The kernel's flip timestamps are not usable under AVR: DRM derives them
+from the scanout position against the mode's fixed frame length, and two
+flips often came back with the same one. Mesa's and RetroArch's frame
+timing read those timestamps, so a variable-refresh path has to fix them
+or work without them.
 
 ## Running the AVR test
 
@@ -117,12 +157,12 @@ and then nothing, so frames should slow to the floor:
 
 ```
 systemctl stop portarelauncher
-echo 96 > /sys/module/msm/parameters/dpu_avr_min_fps
+echo 90 > /sys/module/msm/parameters/dpu_avr_min_fps
 vrr-probe /dev/null 6 idle &
 sleep 2
 devmem 0xae36270 32          # 0x80000001: AVR active
 F=0xae360ac; a=$(devmem $F 32); sleep 2; b=$(devmem $F 32)
-echo $(( (b - a) / 2 )) frames/s   # about 96, not 120
+echo $(( (b - a) / 2 )) frames/s   # about 90, not 120
 wait
 ```
 
@@ -135,7 +175,7 @@ vrr-probe /dev/null 1 reset
 systemctl start portarelauncher
 ```
 
-At the mode set the kernel logs `intf1: variable refresh, 1116 to 1397
+At the mode set the kernel logs `intf1: variable refresh, 1116 to 1490
 lines a frame`. The big digit is the phase, 7 to 14, and the grey number
 the rate (0 for a pattern). Watch the dark grey patches for flicker,
 especially in phase 11, where the frame length alternates every frame,
