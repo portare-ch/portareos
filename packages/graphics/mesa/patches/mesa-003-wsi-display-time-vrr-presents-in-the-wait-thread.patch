@@ -1,0 +1,167 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] wsi/display: time VRR presents in the wait thread, not the caller
+
+With VRR enabled on the CRTC, a present with a target time is held until
+that time by sleeping in _wsi_display_queue_next. When no flip is pending,
+that runs inside vkQueuePresentKHR, on the application's thread and with
+wait_mutex held: the application can do nothing else until the target,
+and the wait thread cannot handle flip events meanwhile. An emulator that
+presents each frame twice, the second half a frame later, lost half of
+every frame to that sleep.
+
+Hold such an image in WSI_IMAGE_WAITING instead, arm a timerfd for its
+target, and let the wait thread, which now polls the timer beside the DRM
+fd, queue it when the timer fires, as the FRR branch does after a vblank
+event. A target under 0.2 ms away still sleeps.
+
+Measured on SM8550 (Retroid Pocket Nova), VRR on, 50 Hz frames presented
+twice with VK_GOOGLE_display_timing: vkQueuePresentKHR blocked a median
+9.48 ms before and 0.04 ms after (max 0.31 ms). Presents reached the
+display a median 0.41 ms after their target either way, 10.0 ms apart.
+
+Signed-off-by: PortareOS <hello@portare.org>
+---
+--- a/src/vulkan/wsi/wsi_common_display.c
++++ b/src/vulkan/wsi/wsi_common_display.c
+@@ -59,6 +59,7 @@
+ #include <string.h>
+ #include <fcntl.h>
+ #include <poll.h>
++#include <sys/timerfd.h>
+ #include <stdbool.h>
+ #include <math.h>
+ #include <xf86drm.h>
+@@ -223,6 +224,13 @@
+    struct u_cnd_monotonic       wait_cond;
+    pthread_t                    wait_thread;
+ 
++   /* A VRR present timed for later is held in WSI_IMAGE_WAITING and the
++    * wait thread commits it when this timer fires, so the presenting
++    * thread does not sleep for it. -1 until the wait thread starts.
++    */
++   int                          timer_fd;
++   struct wsi_display_image     *timer_image;
++
+    struct u_cnd_monotonic       hotplug_cond;
+    pthread_t                    hotplug_thread;
+ 
+@@ -1893,6 +1901,14 @@
+       (struct wsi_display_swapchain *) drv_chain;
+    struct wsi_display *wsi = chain->wsi;
+ 
++   mtx_lock(&wsi->wait_mutex);
++   if (wsi->timer_image && wsi->timer_image->chain == chain) {
++      struct itimerspec off = { 0 };
++      (void) timerfd_settime(wsi->timer_fd, 0, &off, NULL);
++      wsi->timer_image = NULL;
++   }
++   mtx_unlock(&wsi->wait_mutex);
++
+    _wsi_display_cleanup_state(chain);
+ 
+    for (uint32_t i = 0; i < chain->base.image_count; i++)
+@@ -2100,21 +2116,45 @@
+    .sequence_handler = wsi_display_sequence_handler,
+ };
+ 
++/* The timer for a held VRR present fired: queue it as if its wait were a
++ * vblank event. Called by the wait thread with wait_mutex held.
++ */
++static void
++wsi_display_timer_expired(struct wsi_display *wsi)
++{
++   struct wsi_display_image *image = wsi->timer_image;
++   uint64_t expirations;
++
++   (void) read(wsi->timer_fd, &expirations, sizeof(expirations));
++   wsi->timer_image = NULL;
++
++   if (image && image->state == WSI_IMAGE_WAITING && !image->fence) {
++      image->state = WSI_IMAGE_QUEUED_AFTER_WAIT;
++      VkResult result = _wsi_display_queue_next(&image->chain->base);
++      if (result != VK_SUCCESS)
++         image->chain->status = result;
++   }
++}
++
+ static void *
+ wsi_display_wait_thread(void *data)
+ {
+    struct wsi_display *wsi = data;
+-   struct pollfd pollfd = {
+-      .fd = wsi->fd,
+-      .events = POLLIN
++   struct pollfd pollfd[2] = {
++      { .fd = wsi->fd, .events = POLLIN },
++      { .fd = wsi->timer_fd, .events = POLLIN },
+    };
++   nfds_t nfds = wsi->timer_fd >= 0 ? 2 : 1;
+ 
+    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+    for (;;) {
+-      int ret = poll(&pollfd, 1, -1);
++      int ret = poll(pollfd, nfds, -1);
+       if (ret > 0) {
+          mtx_lock(&wsi->wait_mutex);
+-         (void) drmHandleEvent(wsi->fd, &event_context);
++         if (pollfd[0].revents)
++            (void) drmHandleEvent(wsi->fd, &event_context);
++         if (nfds > 1 && (pollfd[1].revents & POLLIN))
++            wsi_display_timer_expired(wsi);
+          u_cnd_monotonic_broadcast(&wsi->wait_cond);
+          mtx_unlock(&wsi->wait_mutex);
+       }
+@@ -2126,6 +2166,8 @@
+ wsi_display_start_wait_thread(struct wsi_display *wsi)
+ {
+    if (!wsi->wait_thread) {
++      if (wsi->timer_fd < 0)
++         wsi->timer_fd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK);
+       int ret = pthread_create(&wsi->wait_thread, NULL,
+                                wsi_display_wait_thread, wsi);
+       if (ret)
+@@ -3194,6 +3236,26 @@
+              * times in the past. */
+             target_ns -= 1 * 1000 * 1000;
+ 
++            /* Sleeping here sleeps in the presenting thread, and with wait_mutex held, which also
++             * keeps the wait thread from handling flip events. On VRR, hold the image instead and
++             * let the wait thread commit it when its timer fires, as the FRR branch does with a
++             * vblank event.
++             */
++            if (is_vrr && wsi->timer_fd >= 0 && wsi->wait_thread &&
++                target_ns > (int64_t)os_time_get_nano() + 200 * 1000) {
++               struct itimerspec at = {
++                  .it_value = {
++                     .tv_sec = target_ns / 1000000000LL,
++                     .tv_nsec = target_ns % 1000000000LL,
++                  },
++               };
++               if (timerfd_settime(wsi->timer_fd, TFD_TIMER_ABSTIME, &at, NULL) == 0) {
++                  wsi->timer_image = image;
++                  image->state = WSI_IMAGE_WAITING;
++                  return VK_SUCCESS;
++               }
++            }
++
+             os_time_nanosleep_until(target_ns);
+          }
+       }
+@@ -3716,6 +3778,8 @@
+ 
+    list_inithead(&wsi->connectors);
+ 
++   wsi->timer_fd = -1;
++
+    int ret = mtx_init(&wsi->wait_mutex, mtx_plain);
+    if (ret != thrd_success) {
+       result = VK_ERROR_OUT_OF_HOST_MEMORY;
+@@ -3776,6 +3840,8 @@
+          wsi_display_free_connector(wsi, connector);
+ 
+       wsi_display_stop_wait_thread(wsi);
++      if (wsi->timer_fd >= 0)
++         close(wsi->timer_fd);
+ 
+       if (wsi->hotplug_thread) {
+          pthread_cancel(wsi->hotplug_thread);
