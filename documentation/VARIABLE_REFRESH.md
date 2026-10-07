@@ -88,6 +88,25 @@ that flush, it stayed inactive the same way: status bit clear, 119.5
 frames/s with no commits. The DSI host's `AVR_SUPPORT_ENABLE` was still
 clear (`0x10009130`); the patch now sets it.
 
+With the DSI bit set (`0x30009130`), AVR stayed inactive again: status
+bit clear, 120.5 frames/s with no commits. One difference left in plain
+sight: downstream always enables programmable fetch in video mode, at
+least one line ("prog fetch always enabled case"); mainline turns it off
+when the back porch is long enough, as here (`PROG_FETCH_START` 0). The
+patch now carries that and the other candidates as parameters, so one
+build can try them all:
+
+| Parameter | Default | What it changes |
+|---|---|---|
+| `dpu_avr_prog_fetch` | 1 | Programmable fetch lines while AVR is wanted, where the porches need none |
+| `dpu_avr_continuous` | N | Continuous AVR instead of one-shot |
+| `dpu_avr_at_modeset` | N | Switch AVR on at mode set instead of in the first commit |
+| `dpu_avr_flush_intf` | N | Flush the INTF on every commit |
+| `dpu_avr_dsi` | Y | The DSI host's AVR support bit |
+
+All are under `/sys/module/msm/parameters/` and are read at mode set,
+except `dpu_avr_flush_intf`, which is read every commit.
+
 ## Running the AVR test
 
 On a build with patch 1097. `vrr-probe` is in the debug set, which only
