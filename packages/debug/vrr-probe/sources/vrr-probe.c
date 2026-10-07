@@ -37,7 +37,11 @@
 // with a shorter back porch. Its front porch is 12 lines and its back porch
 // 142, against 27 on the preferred mode, so the back porch has room.
 //
-// usage: vrr-probe [OUT.csv] [SECONDS] [static|dynamic|all|reset|idle|fast] [vrr]
+// "vrr-on" and "vrr-off" only set the CRTC's VRR_ENABLED and leave it, for
+// a program started afterwards, such as a Vulkan client of the KHR display
+// path, which reads it when it takes the display.
+//
+// usage: vrr-probe [OUT.csv] [SECONDS] [static|dynamic|all|reset|idle|fast|vrr-on|vrr-off] [vrr]
 
 #define _GNU_SOURCE
 #include <errno.h>
@@ -418,6 +422,14 @@ int main(int argc, char **argv)
 		printf("connector vrr_capable %llu\n", (unsigned long long)capable);
 	else
 		printf("connector has no vrr_capable\n");
+	if (!strcmp(which, "vrr-on") || !strcmp(which, "vrr-off")) {
+		uint64_t v = 0;
+		if (set_vrr(!strcmp(which, "vrr-on")))
+			return 1;
+		find_prop(crtc_id, DRM_MODE_OBJECT_CRTC, "VRR_ENABLED", &v);
+		printf("VRR_ENABLED %llu\n", (unsigned long long)v);
+		return 0;
+	}
 	if (!vrr || do_reset)
 		set_vrr(0);
 
