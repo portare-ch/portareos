@@ -84,18 +84,6 @@
         <image>./images/xemu.svg</image>
     </game>
     <game>
-        <path>./Test Gamepad.sh</path>
-        <name>Test Gamepad</name>
-        <desc>Shows what every button and stick reports. To leave: hold L1, press START and SELECT.</desc>
-        <developer>PortareOS</developer>
-        <publisher>PortareOS</publisher>
-        <rating>5.0</rating>
-        <releasedate>2024</releasedate>
-        <genre>tool</genre>
-        <players>1</players>
-        <image>./images/test-gamepad.svg</image>
-    </game>
-    <game>
         <path>./GPcal.sh</path>
         <name>Calibrate Gamepad</name>
         <desc>Calibrates the sticks and triggers.</desc>
