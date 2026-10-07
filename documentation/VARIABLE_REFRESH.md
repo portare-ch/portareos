@@ -194,6 +194,23 @@ the rate (0 for a pattern). Watch the dark grey patches for flicker,
 especially in phase 11, where the frame length alternates every frame,
 and compare brightness with phase 7. Then repeat at minimum brightness.
 
+### Through the interface, 2026-10-08
+
+Kernel-only build of patch 1097 with the DRM interface, no parameters:
+`vrr_capable` reads 1 on the DSI connector. With `VRR_ENABLED` set and
+nothing committed, `AVR_CONTROL` read 0x80000001, the DSI bit was set and
+frames ran at 90.01/s, the floor. Clearing `VRR_ENABLED`, without a mode
+set, turned both off again: 119.92 frames/s. The schedules matched the
+runs with the parameters; at 100 Hz the median frame-length error was
+0.16 ms (p95 0.56 ms).
+
+A schedule that starts behind the frame boundary catches up only by the
+margin between its frame and the mode's shortest: at 120 Hz on the
+120.198 Hz mode that is 14 us a frame, and one run started a whole frame
+behind (8.3 ms from commit to frame) and was still 4 ms behind after
+four seconds. At 119.652 Hz the margin is 38 us; lower rates recover
+faster.
+
 ## Integer multiples for every game
 
 AVR's shortest frame is the frame of the mode in use, so a doubled rate
