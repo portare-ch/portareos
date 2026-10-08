@@ -2,7 +2,7 @@
 # Copyright (C) 2026 ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="fex-emu"
-PKG_VERSION="d58a4e0da26bde9b7bc3f2cb41ec588f4a6d6cb0"
+PKG_VERSION="14c92681f4d62cf84d901460e0358de09c8847a7"
 PKG_LICENSE="MIT"
 PKG_SITE="https://github.com/FEX-Emu/FEX"
 PKG_URL="https://github.com/FEX-Emu/FEX.git"
