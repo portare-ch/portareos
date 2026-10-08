@@ -300,6 +300,22 @@ def main():
                   % (pct(jitter, 0.99), jitter[-1] if jitter else 0))
             jumps = [i for i in range(1, len(phase)) if abs(phase[i] - phase[i - 1]) > a.jump_ms]
             bad = [i for i in jumps if not explained(i, a.jump_ms)]
+            # What the rest came from, on the display side: the refresh
+            # before the frame (a repeat, or the frame before) committed
+            # after it was due, or a commit slow to reach the screen.
+            order = {id(c): j for j, c in enumerate(run.commits)}
+            for i in bad[:10]:
+                c = timed[i]
+                prev = run.commits[order[id(c)] - 1]
+                due = prev['target'] + (period / k * 1e6 if prev['repeat'] else 0)
+                why = []
+                if prev['repeat'] and prev['commit'] > due:
+                    why.append('the repeat before it committed %.2f ms after it was due' % ((prev['commit'] - due) / 1e6))
+                for name, x in (('the refresh before', prev), ('the frame', c)):
+                    if x['vblank'] and x['vblank'][2] - x['commit'] > 2e6:
+                        why.append('%s took %.2f ms from commit to screen' % (name, (x['vblank'][2] - x['commit']) / 1e6))
+                print('  jump at id %d, %.1f s: phase %.2f to %.2f ms; %s' % (
+                    c['id'], (c['vblank'][2] - t0) / 1e9, phase[i - 1], phase[i], '; '.join(why) or 'no cause found'))
             check(not bad, 'every phase jump over %.1f ms is at a late frame or a moved target (%d of %d not)'
                   % (a.jump_ms, len(bad), len(jumps)))
             s0, v0 = timed[0]['serial'], timed[0]['vblank'][2]
@@ -309,8 +325,9 @@ def main():
                 minutes[int((c['vblank'][2] - v0) / 60e9)].append(g)
             med = [statistics.median(v) for _, v in sorted(minutes.items())]
             print('  scanout against the content clock, median per minute, ms:', ' '.join('%.2f' % m for m in med))
-            check(max(grid) - min(grid) < period, 'the panel stays within a frame of the content clock '
-                  '(range %.2f ms, %.2f to %.2f)' % (max(grid) - min(grid), min(grid), max(grid)))
+            print('  single frames: %.2f to %.2f ms (late frames, and the recovery after them)' % (min(grid), max(grid)))
+            check(max(med) - min(med) < period, 'no drift: the per-minute medians against the content clock '
+                  'stay within a frame (range %.2f ms)' % (max(med) - min(med)))
             base = statistics.median(phase)
             recover = []
             for i in range(len(timed)):
