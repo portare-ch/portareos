@@ -148,6 +148,8 @@ def main():
     ap.add_argument('--rate', type=float, help='frame rate the content was timed at (VRR)')
     ap.add_argument('--refresh-ms', type=float, default=1000 / 120.198,
                     help='the shortest refresh, default the 120.198 Hz mode')
+    ap.add_argument('--floor-hz', type=float, default=80,
+                    help="the panel's variable refresh floor (patch 1097; 90 before #595's follow-up)")
     ap.add_argument('--bound-ms', type=float, default=0.46,
                     help="vrr-probe's p95 frame-length error for the rate (VARIABLE_REFRESH.md)")
     ap.add_argument('--jump-ms', type=float, default=2.0,
@@ -262,7 +264,7 @@ def main():
         k = int((period + r / 50) / r)
         step = period / k
         print('rate %.3f Hz: period %.3f ms, k = %d, P/k = %.3f ms%s' % (
-            a.rate, period, k, step, '' if step >= r - 0.001 and step <= 1000 / 90 else '  (outside the panel range)'))
+            a.rate, period, k, step, '' if step >= r - 0.001 and step <= 1000 / a.floor_hz else '  (outside the panel range)'))
         errs = [abs(x - step) for kind in ('frame', 'repeat') for x in intervals[kind]]
         print('  refresh interval error vs P/k:', stats(errs))
         off = sum(1 for e in errs if e > a.bound_ms)
@@ -296,12 +298,19 @@ def main():
             # period per present. It must stay within a frame.
             steps = [0.0] + [(timed[i]['target'] - timed[i - 1]['target']) / 1e6 - period
                              for i in range(1, len(timed))]
+            # A panel behind its usual phase makes up k x (P/k - R) a frame:
+            # 3.4 ms at 50 Hz, over the jump size.
+            base = statistics.median(phase)
+            catch = k * (step - r)
             def explained(i, size):
                 return (timed[i]['id'] in late_set or timed[i - 1]['id'] in late_set
-                        or abs(steps[i]) > size / 2)
+                        or abs(steps[i]) > size / 2
+                        or (catch > 0 and phase[i - 1] > base + a.bound_ms
+                            and phase[i] > base - a.bound_ms
+                            and 0 < phase[i - 1] - phase[i] < catch + a.bound_ms))
             jitter = sorted(abs(phase[i] - phase[i - 1]) for i in range(1, len(phase))
                             if not explained(i, 0.4))
-            print('  phase change between frames, neither late nor moved: p99 %.3f  max %.3f ms'
+            print('  phase change between frames, neither late, moved nor catching up: p99 %.3f  max %.3f ms'
                   % (pct(jitter, 0.99), jitter[-1] if jitter else 0))
             jumps = [i for i in range(1, len(phase)) if abs(phase[i] - phase[i - 1]) > a.jump_ms]
             bad = [i for i in jumps if not explained(i, a.jump_ms)]
@@ -323,7 +332,8 @@ def main():
                         why.append('%s reached the plane %.2f ms after its commit' % (name, (x['programmed'] - x['commit']) / 1e6))
                 print('  jump at id %d, %.1f s: phase %.2f to %.2f ms; %s' % (
                     c['id'], (c['vblank'][2] - t0) / 1e9, phase[i - 1], phase[i], '; '.join(why) or 'no cause found'))
-            check(not bad, 'every phase jump over %.1f ms is at a late frame or a moved target (%d of %d not)'
+            check(not bad, 'every phase jump over %.1f ms is at a late frame, a moved target or the panel '
+                  'catching up (%d of %d not)'
                   % (a.jump_ms, len(bad), len(jumps)))
             s0, v0 = timed[0]['serial'], timed[0]['vblank'][2]
             grid = [((c['vblank'][2] - v0) / 1e6 - (c['serial'] - s0) * period) for c in timed]
@@ -335,7 +345,6 @@ def main():
             print('  single frames: %.2f to %.2f ms (late frames, and the recovery after them)' % (min(grid), max(grid)))
             check(max(med) - min(med) < period, 'no drift: the per-minute medians against the content clock '
                   'stay within a frame (range %.2f ms)' % (max(med) - min(med)))
-            base = statistics.median(phase)
             recover = []
             for i in range(len(timed)):
                 if timed[i]['id'] in late_set:
