@@ -149,6 +149,9 @@ def main():
                     help='the shortest refresh, default the 120.198 Hz mode')
     ap.add_argument('--bound-ms', type=float, default=0.46,
                     help="vrr-probe's p95 frame-length error for the rate (VARIABLE_REFRESH.md)")
+    ap.add_argument('--jump-ms', type=float, default=2.0,
+                    help='a phase change between two frames counted as a correction; a quarter of '
+                         'the fastest refresh, above the commit-to-frame jitter (up to 1.3 ms seen)')
     a = ap.parse_args()
 
     run = Run(a.run)
@@ -281,27 +284,44 @@ def main():
             mean = span / (len(frames) - 1)
             check(abs(mean - period) / period < 0.001, 'mean display interval %.4f ms vs 1/f %.4f ms' % (mean, period))
         if len(phase) > 20:
-            # Drift: the median phase of the last tenth against the first,
-            # robust to single late frames; jumps: a frame's phase off the
-            # one before by more than the bound, with what followed.
-            tenth = max(1, len(phase) // 10)
-            drift = statistics.median(phase[-tenth:]) - statistics.median(phase[:tenth])
-            span = (timed[-1]['vblank'][2] - timed[0]['vblank'][2]) / 1e9
-            check(abs(drift) < a.bound_ms, 'phase drift over the run %.3f ms in %.0f s (%.4f ms/s)'
-                  % (drift, span, drift / span if span else 0))
-            jumps = [i for i in range(1, len(phase)) if abs(phase[i] - phase[i - 1]) > a.bound_ms]
-            explained = sum(1 for i in jumps if timed[i]['id'] in late_set or timed[i - 1]['id'] in late_set)
-            print('  phase jumps over %.2f ms: %d, %d at a late frame' % (a.bound_ms, len(jumps), explained))
+            # The phase against the targets moves when the application moves
+            # them (RetroArch's budget, 0018) or a frame comes late; a jump
+            # with neither is unexplained. Drift is the panel against the
+            # content's own clock: scanout against the first one plus a
+            # period per present. It must stay within a frame.
+            steps = [0.0] + [(timed[i]['target'] - timed[i - 1]['target']) / 1e6 - period
+                             for i in range(1, len(timed))]
+            def explained(i, size):
+                return (timed[i]['id'] in late_set or timed[i - 1]['id'] in late_set
+                        or abs(steps[i]) > size / 2)
+            jitter = sorted(abs(phase[i] - phase[i - 1]) for i in range(1, len(phase))
+                            if not explained(i, 0.4))
+            print('  phase change between frames, neither late nor moved: p99 %.3f  max %.3f ms'
+                  % (pct(jitter, 0.99), jitter[-1] if jitter else 0))
+            jumps = [i for i in range(1, len(phase)) if abs(phase[i] - phase[i - 1]) > a.jump_ms]
+            bad = [i for i in jumps if not explained(i, a.jump_ms)]
+            check(not bad, 'every phase jump over %.1f ms is at a late frame or a moved target (%d of %d not)'
+                  % (a.jump_ms, len(bad), len(jumps)))
+            s0, v0 = timed[0]['serial'], timed[0]['vblank'][2]
+            grid = [((c['vblank'][2] - v0) / 1e6 - (c['serial'] - s0) * period) for c in timed]
+            minutes = collections.defaultdict(list)
+            for c, g in zip(timed, grid):
+                minutes[int((c['vblank'][2] - v0) / 60e9)].append(g)
+            med = [statistics.median(v) for _, v in sorted(minutes.items())]
+            print('  scanout against the content clock, median per minute, ms:', ' '.join('%.2f' % m for m in med))
+            check(max(grid) - min(grid) < period, 'the panel stays within a frame of the content clock '
+                  '(range %.2f ms, %.2f to %.2f)' % (max(grid) - min(grid), min(grid), max(grid)))
             base = statistics.median(phase)
             recover = []
             for i in range(len(timed)):
                 if timed[i]['id'] in late_set:
                     j = i + 1
-                    while j < len(phase) and abs(phase[j] - base) > a.bound_ms:
+                    while j < len(phase) and abs(phase[j] - phase[i - 1 if i else 0]) > a.bound_ms:
                         j += 1
                     recover.append(j - i - 1)
             if recover:
-                print('  frames until the phase is back within %.2f ms after a late frame:' % a.bound_ms, stats(recover))
+                print('  frames until the phase is back within %.2f ms of where it was before a late frame:'
+                      % a.bound_ms, stats(recover))
 
     # present-probe's records against the trace: actualPresentTime is the
     # vblank payload truncated to microseconds.
