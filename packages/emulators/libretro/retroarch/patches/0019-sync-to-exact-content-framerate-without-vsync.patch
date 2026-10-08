@@ -1,0 +1,91 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] Sync to Exact Content Framerate: timed with vsync off, locked when it cannot fit
+
+Two things for a variable refresh display.
+
+With Sync to Exact Content Framerate, the runloop's timer paces every
+frame, and a context that times its presents (0014, 0018) shows each one
+at its own time. Vsync off then has nothing left to switch off: it only
+made video presents non-blocking, which shows a frame whenever it happens
+to be ready. On a variable refresh panel that is a refresh of that
+length, below the panel's range for a 60 Hz game. Video now stays
+blocking under Sync to Exact Content Framerate, at init and when the
+nonblock state is applied. Fast-forward still presents without blocking.
+
+A frame is shown for a whole number of refreshes, each no shorter than
+the display's fastest. Content that does not fit twice into the display's
+rate, such as the few arcade boards at 60.1 to 61 Hz against 120.198,
+has no multiple in range. For that session, drivers_init turns Sync to
+Exact Content Framerate off and vsync on before the swap interval is
+chosen. The content is then locked to half the display's rate, with
+audio resampled, as on a fixed refresh display.
+
+Measured on SM8550 (Retroid Pocket Nova), VRR on: Super Mario World,
+vsync off, 3606 refreshes for 1803 frames in 30 s, none longer than
+8.42 ms. The same forced onto the 119.88 Hz mode: "60.099 fps does not
+fit twice", swap interval 2, the audio rate adjusted to 59.94 frames a
+second, 2398 refreshes in 20 s, none longer than 8.46 ms.
+
+Signed-off-by: PortareOS <hello@portare.org>
+---
+diff --git a/gfx/video_driver.c b/gfx/video_driver.c
+--- a/gfx/video_driver.c
++++ b/gfx/video_driver.c
+@@ -5680,7 +5680,14 @@
+    video.height                      = height;
+    video.fullscreen                  = settings->bools.video_fullscreen
+          || ((uint32_t)retro_atomic_load_relaxed_int(&video_st->flags) & VIDEO_FLAG_FORCE_FULLSCREEN);
+-   video.vsync                       = settings->bools.video_vsync
++   /* With Sync to Exact Content Framerate the runloop's timer paces
++    * every frame, and a context that times its presents shows each at
++    * its own time: vsync off has nothing left to switch off. Presenting
++    * without blocking would only show a frame whenever it happened to be
++    * ready, which on a variable refresh display is a refresh that long.
++    * Fast-forward still presents without blocking. */
++   video.vsync                       = (settings->bools.video_vsync
++            || settings->bools.vrr_runloop_enable)
+          && !settings->bools.video_scanline_sync
+          && (!(runloop_st->flags & RUNLOOP_FLAG_FORCE_NONBLOCK));
+    video.force_aspect                = settings->bools.video_force_aspect;
+diff --git a/retroarch.c b/retroarch.c
+--- a/retroarch.c
++++ b/retroarch.c
+@@ -1578,7 +1578,10 @@
+       if (video_st->current_video->set_nonblock_state)
+       {
+          bool video_nonblock        = enable;
+-         if (!video_vsync || runloop_force_nonblock)
++         /* Not with Sync to Exact Content Framerate: see video.vsync in
++          * video_driver_init_internal(). */
++         if (     (!video_vsync && !settings->bools.vrr_runloop_enable)
++               || runloop_force_nonblock)
+             video_nonblock = true;
+          video_st->current_video->set_nonblock_state(video_st->data,
+                video_nonblock,
+@@ -1625,6 +1628,26 @@
+ 
+    DRIVER_FLAGS_NORMALIZE(flags);
+ 
++   /* Sync to Exact Content Framerate on a variable refresh display shows
++    * each frame for a whole number of refreshes, each no shorter than the
++    * display's fastest: twice for 45 to 60 Hz content on a 120 Hz panel.
++    * Content that does not fit twice into the display's rate - a few
++    * arcade boards run at 60.1 to 61 Hz against 120.198 - has no multiple
++    * in range. Lock it to the display instead, as on a fixed refresh
++    * display: vsync, and the core's rate adjusted to half the display's.
++    * For this session; the next launch sets both again. */
++   if (     settings->bools.vrr_runloop_enable
++         && video_st->av_info.timing.fps > 0.0
++         && settings->floats.video_refresh_rate > 0.0f
++         && video_st->av_info.timing.fps * 2.0
++            > (double)settings->floats.video_refresh_rate * 1.0001)
++   {
++      RARCH_LOG("[Video] %.3f fps does not fit twice into %.3f Hz, locked to the display.\n",
++            video_st->av_info.timing.fps, settings->floats.video_refresh_rate);
++      settings->bools.vrr_runloop_enable = false;
++      settings->bools.video_vsync        = true;
++   }
++
+    /* Content av_info based automatic swap interval must be set early. */
+    runloop_set_video_swap_interval(settings);
+ 
