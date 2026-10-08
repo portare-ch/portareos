@@ -1,0 +1,81 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
+
+# Runs a command on a Nova over ssh while tracing the display, and copies
+# the run back for tools/display-check (#595).
+#
+#   tools/display-trace root@nova NAME SECONDS [--crc] -- COMMAND...
+#
+# The launcher is stopped for the run and started again after it. Written
+# to ./NAME.*: trace (drm_vblank_event, dpu_crtc_complete_flip,
+# dpu_plane_set_scanout and trace_marker lines, trace_clock mono), out
+# (the command's output), and with --crc the DPU's per-refresh CRC.
+# COMMAND runs with MESA_VK_WSI_DISPLAY_TRACE=1, so Mesa's commits are in
+# the trace (mesa-007), and RUN, the run's path prefix on the device, for
+# further files such as present-probe's logs; a command line that names it
+# goes through sh -c:
+#
+#   tools/display-trace root@nova obs 20 -- \
+#     sh -c 'present-probe $RUN 30 observe cadence:2,2,4'
+
+if [ "$1" != "--remote" ]; then
+  [ $# -lt 5 ] && { sed -n '5,21p' "$0" | cut -c3-; exit 1; }
+  HOST=$1 NAME=$2 SECS=$3; shift 3
+  CRC=0; [ "$1" = "--crc" ] && { CRC=1; shift; }
+  [ "$1" = "--" ] && shift
+  # ssh hands the remote shell one command line, so the command, quoted
+  # word by word, is quoted once more as a whole.
+  CMD=$(printf '%q ' "$@")
+  ssh "${HOST}" bash -s -- --remote "${NAME}" "${SECS}" "${CRC}" "$(printf '%q' "${CMD}")" <"$0" || exit 1
+  scp -q "${HOST}:/storage/display-trace/${NAME}.*" . && ls -l "${NAME}".*
+  exit
+fi
+
+shift
+NAME=$1 SECS=$2 CRC=$3 CMD=$4
+. /etc/profile
+T=/sys/kernel/tracing
+DIR=/storage/display-trace
+RUN=${DIR}/${NAME}
+EVENTS="drm/drm_vblank_event dpu/dpu_crtc_complete_flip dpu/dpu_plane_set_scanout"
+mkdir -p ${DIR}; rm -f ${RUN}.*
+
+systemctl stop portarelauncher; sleep 1
+# A player left over keeps DRM master and the launcher cannot take it back.
+for p in $(pidof mpv); do kill -9 $p; done
+
+echo 0 > $T/tracing_on; echo > $T/trace; echo mono > $T/trace_clock
+echo 1 > $T/options/markers
+for e in ${EVENTS}; do echo 1 > $T/events/$e/enable; done
+cat $T/trace_pipe > ${RUN}.trace &
+TP=$!
+echo 1 > $T/tracing_on
+
+RUN=${RUN} MESA_VK_WSI_DISPLAY_TRACE=1 bash -c "exec ${CMD}" >${RUN}.out 2>&1 &
+PID=$!
+# msm turns the vblank interrupt off whenever nothing waits on it, and then
+# rebuilds the vblank count from the mode's nominal frame time, which is
+# wrong on a variable refresh. vblank-rate holds a vblank event for the run.
+# Started once the client holds DRM master: the first opener becomes it.
+# The CRC too, after the client's mode set, which leaves it reading 0.
+sleep 2
+vblank-rate -s $((SECS - 2)) >${RUN}.vbl 2>&1 &
+VP=$!
+if [ "${CRC}" = 1 ]; then
+  echo auto > /sys/kernel/debug/dri/0/crtc-0/crc/control
+  cat /sys/kernel/debug/dri/0/crtc-0/crc/data > ${RUN}.crc &
+  CP=$!
+fi
+sleep $((SECS - 2))
+
+kill ${VP} ${PID} 2>/dev/null
+for i in $(seq 1 50); do kill -0 ${PID} 2>/dev/null || break; sleep 0.2; done
+kill -9 ${PID} 2>/dev/null
+[ "${CRC}" = 1 ] && kill ${CP}
+echo 0 > $T/tracing_on; sleep 0.5; kill ${TP}
+for e in ${EVENTS}; do echo 0 > $T/events/$e/enable; done
+rm -f ${RUN}.vbl
+
+systemctl start portarelauncher; sleep 3
+echo "launcher $(systemctl is-active portarelauncher), DRM master: $(awk '$4 == "y" {print $1}' /sys/kernel/debug/dri/0/clients)"
