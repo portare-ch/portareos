@@ -75,3 +75,8 @@ CONFIG_ENABLE_DEFAULT_TRACERS=y
 CONFIG_EVENT_TRACING=y
 CONFIG_TRACEPOINTS=y
 CONFIG_FUNCTION_TRACER=n
+# ath12k ignores a country set from userspace without this (it depends on
+# CFG80211_CERTIFICATION_ONUS, which depends on EXPERT): setregdomain sets
+# the one the timezone names, and the firmware's own 11d detection would
+# otherwise leave the chip on world rules after a fast reconnect.
+CONFIG_ATH_REG_DYNAMIC_USER_REG_HINTS=y

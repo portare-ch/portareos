@@ -9,6 +9,8 @@ Type=oneshot
 Environment=TIMEZONE=UTC
 EnvironmentFile=-/storage/.cache/timezone
 ExecStart=/bin/ln -sf /usr/share/zoneinfo/${TIMEZONE} /var/run/localtime
+# The Wi-Fi regulatory domain follows the timezone's country (iw).
+ExecStartPost=-/usr/lib/iw/setregdomain
 RemainAfterExit=yes
 StartLimitInterval=0
 

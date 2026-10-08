@@ -1,8 +1,30 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+# Copyright (C) 2016-present Team LibreELEC (https://libreelec.tv)
+# Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
 
-REGDOMAIN=
-REGDOMAIN_CONF="/storage/.cache/regdomain.conf"
-[ -r "$REGDOMAIN_CONF" ] && . "$REGDOMAIN_CONF"
-[ -z "$REGDOMAIN" ] && exit 0
+# The Wi-Fi regulatory domain follows the region setting: the country of the
+# timezone the launcher saved, Europe/Berlin is DE. Run when a wireless device
+# appears (udev), when the timezone changes (tz-data.service) and by wifictl.
+# A zone with no country, such as UTC, sets world rules, which cfg80211
+# ignores while they are already in place, so at boot the chip's own country
+# detection (11d) keeps working for it.
 
-exec /usr/sbin/iw reg set "$REGDOMAIN"
+TIMEZONE=
+[ -r /storage/.cache/timezone ] && . /storage/.cache/timezone
+
+# zone.tab gives one country per zone; zone1970.tab lists every country
+# sharing a zone, the one holding its reference location first.
+CC=$(awk -F'\t' -v z="${TIMEZONE}" '!/^#/ && $3 == z { sub(/,.*/, "", $1); print $1; exit }' \
+  /usr/share/zoneinfo/zone.tab /usr/share/zoneinfo/zone1970.tab 2>/dev/null)
+
+ls /sys/class/ieee80211 2>/dev/null | grep -q . || exit 0
+[ -n "${CC}" ] || exec /usr/sbin/iw reg set 00
+
+# A self-managed phy (ath12k) reports its own country after the global one.
+PHY_CC=$(/usr/sbin/iw reg get | awk '/^phy#/ { p = 1 } p && /^country / { print substr($2, 1, 2); exit }')
+[ "${PHY_CC}" = "${CC}" ] && exit 0
+# cfg80211 drops a hint for the country already set, which a phy registered
+# since has not had.
+/usr/sbin/iw reg get | grep -q "^country ${CC}:" && /usr/sbin/iw reg set 00
+exec /usr/sbin/iw reg set "${CC}"
