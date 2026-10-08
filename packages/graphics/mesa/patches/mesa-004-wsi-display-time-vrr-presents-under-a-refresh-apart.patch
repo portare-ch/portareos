@@ -1,0 +1,35 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] wsi/display: time a VRR present less than a refresh after the last
+
+On VRR, _wsi_display_queue_next holds a present for its target only when
+the target is at least one refresh after the last vblank: it counts
+refresh cycles the way the FRR branch does. The last vblank is stamped at
+the end of vblank, so a present aimed one refresh after the refresh
+before it fell just short of a whole cycle and was committed at once.
+With each frame shown twice on a 120 Hz panel, that is every frame. The
+cycle count means nothing on VRR, as the comment above it says: time any
+target still ahead, and let the hardware's shortest frame bound it.
+
+Measured on SM8550 (Retroid Pocket Nova), VRR on, PlayStation frames
+(59.826 Hz) presented twice: commits went from pairs 1.2 ms apart to a
+median of 8.358 ms apart, half the frame.
+
+Signed-off-by: PortareOS <hello@portare.org>
+---
+--- a/src/vulkan/wsi/wsi_common_display.c
++++ b/src/vulkan/wsi/wsi_common_display.c
+@@ -3201,7 +3201,13 @@
+       bool is_vrr = connector->vrr_enabled == VRR_TRISTATE_ENABLED &&
+                     connector->vrr_capable == VRR_TRISTATE_ENABLED;
+ 
+-      if (num_cycles_to_skip) {
++      /* Nor as a threshold: on VRR a target less than a refresh after the last vblank is still a
++       * time to start the next refresh at, and the hardware's shortest frame bounds it anyway. The
++       * last vblank is stamped at the end of vblank, so a present aimed one refresh after the
++       * refresh before it - every frame, when each is shown twice - fell below a whole cycle and
++       * was committed at once.
++       */
++      if (num_cycles_to_skip || (is_vrr && target_relative_ns > 0)) {
+          if (!is_vrr && connector->has_vblank) {
+             /* On FRR, we can rely on vblank events to guide time progression. */
+             VkDisplayKHR display = wsi_display_connector_to_handle(connector);

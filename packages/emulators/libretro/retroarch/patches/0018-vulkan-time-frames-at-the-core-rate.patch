@@ -1,0 +1,206 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] vulkan: time frames at the core's rate under Sync to Exact Content Framerate
+
+With Sync to Exact Content Framerate the runloop's timer starts each
+frame at the core's own rate. On a variable refresh display a frame is
+shown when it arrives, so presenting it as soon as it is rendered puts
+each frame's emulation and render time on screen as jitter. Aim it
+instead at its start plus a budget: what the last 64 frames needed to be
+ready (the 60th of them) and a millisecond. Frames then reach the display
+a core period apart, and the presentation engine repeats each one to
+keep the panel within its range (Mesa's KMS backend, PortareOS
+mesa-005). A late frame is shown when it is ready and the next keeps its
+place. The budget rises at once and falls half a millisecond per 64
+frames.
+
+Ready means the GPU has finished the frame. The driver waits for the
+frame's fence before such a present, which costs nothing: the present is
+timed later. Without that, the budget measured submission, and a 12-pass
+shader at 4x missed its time by the render.
+
+This applies on a context that times presents (KHR display), at swap
+interval 1, while the runloop's timer paces the core, and not over the
+menu, fast-forward, slow motion, a pause, black frame insertion or
+shader subframes. Everything else keeps the targets from 0014.
+
+Measured on SM8550 (Retroid Pocket Nova), VRR on, two swapchain images:
+Tekken 3 ready a median 3.1 ms after the frame's start (p95 4.3), budget
+around 5.3 ms, 9 of 3588 frames late in 60 s of attract mode.
+
+Signed-off-by: PortareOS <hello@portare.org>
+---
+diff --git a/gfx/common/vulkan_common.c b/gfx/common/vulkan_common.c
+--- a/gfx/common/vulkan_common.c
++++ b/gfx/common/vulkan_common.c
+@@ -3662,6 +3662,80 @@
+  * so a frame that came late moves the cadence by a refresh and the
+  * next frame is placed from where the display actually is. 0, an
+  * immediate present, before anything has been timed. */
++/* Where a frame paced by the runloop's timer at the core's own rate
++ * (Sync to Exact Content Framerate) should reach the display: its start
++ * plus a budget. On a variable refresh display the panel starts a
++ * refresh when the frame arrives, so frames placed a core period apart
++ * are shown a core period apart, and the presentation engine repeats
++ * each one to keep the panel within its range.
++ *
++ * The budget is what the last 64 frames needed to be ready - the 60th
++ * of them - and a millisecond, half a frame until 64 have been seen. A
++ * frame later than that is shown when it is ready and the next keeps
++ * its place, so one slow frame does not move the cadence. After the
++ * first, the budget rises at once and falls by half a millisecond at a
++ * time, so a quiet second does not leave the next busy one late.
++ * 0 when the frame is not timed this way. */
++static uint64_t vulkan_vrr_target(gfx_ctx_vulkan_data_t *vk)
++{
++   vulkan_context_t *ctx = &vk->context;
++   uint64_t period;
++   uint64_t now_ns;
++
++   if (     !ctx->vrr_want
++         || ctx->vrr_period_ns <= 0
++         || ctx->vrr_frame_start_ns <= 0
++         || !(ctx->flags & VK_CTX_FLAG_SWAP_INTERVAL_TIMED))
++   {
++      if (vk->vrr_budget_ns)
++         RARCH_LOG("[Vulkan] Frames follow the display's refresh.\n");
++      vk->vrr_budget_ns   = 0;
++      vk->vrr_ready_count = 0;
++      return 0;
++   }
++
++   period = (uint64_t)ctx->vrr_period_ns;
++   if (!vk->vrr_budget_ns)
++   {
++      RARCH_LOG("[Vulkan] Frames timed at the core's rate, %.3f ms apart.\n",
++            (double)period / 1e6);
++      vk->vrr_budget_ns = period / 2;
++   }
++
++   now_ns = (uint64_t)cpu_features_get_time_usec() * 1000;
++   if (     now_ns > (uint64_t)ctx->vrr_frame_start_ns
++         && now_ns - (uint64_t)ctx->vrr_frame_start_ns < period * 2)
++   {
++      vk->vrr_ready_us[vk->vrr_ready_count++ & 63] =
++         (uint32_t)((now_ns - (uint64_t)ctx->vrr_frame_start_ns) / 1000);
++      if (!(vk->vrr_ready_count & 63))
++      {
++         uint32_t sorted[64];
++         uint64_t need;
++         unsigned i, j;
++         memcpy(sorted, vk->vrr_ready_us, sizeof(sorted));
++         for (i = 1; i < 64; i++)
++         {
++            uint32_t v = sorted[i];
++            for (j = i; j > 0 && sorted[j - 1] > v; j--)
++               sorted[j] = sorted[j - 1];
++            sorted[j] = v;
++         }
++         need = (uint64_t)sorted[60] * 1000 + 1000000;
++         if (need >= vk->vrr_budget_ns || vk->vrr_ready_count == 64)
++            vk->vrr_budget_ns = need;
++         else if (vk->vrr_budget_ns - need > 500000)
++            vk->vrr_budget_ns -= 500000;
++         else
++            vk->vrr_budget_ns = need;
++         if (vk->vrr_budget_ns > period - 500000)
++            vk->vrr_budget_ns = period - 500000;
++      }
++   }
++
++   return (uint64_t)ctx->vrr_frame_start_ns + vk->vrr_budget_ns;
++}
++
+ static uint64_t vulkan_timed_present_target(gfx_ctx_vulkan_data_t *vk,
+       uint32_t present_id)
+ {
+@@ -3725,7 +3799,11 @@
+       ptime.presentID            = ++vk->present_id;
+       ptime.desiredPresentTime   = 0;
+       if (vk->context.flags & VK_CTX_FLAG_SWAP_INTERVAL_TIMED)
+-         ptime.desiredPresentTime = vulkan_timed_present_target(vk, ptime.presentID);
++      {
++         ptime.desiredPresentTime = vulkan_vrr_target(vk);
++         if (!ptime.desiredPresentTime)
++            ptime.desiredPresentTime = vulkan_timed_present_target(vk, ptime.presentID);
++      }
+       present.pNext              = &times;
+    }
+ 
+diff --git a/gfx/common/vulkan_common.h b/gfx/common/vulkan_common.h
+--- a/gfx/common/vulkan_common.h
++++ b/gfx/common/vulkan_common.h
+@@ -288,6 +288,13 @@
+     * that would not change the swapchain does not recreate it. */
+    VkPresentModeKHR swapchain_present_mode;
+ 
++   /* Set by the driver before each frame's present: whether the frame
++    * is timed at the core's rate, the runloop's start of the frame, and
++    * the frame period. */
++   int64_t vrr_frame_start_ns;
++   int64_t vrr_period_ns;
++   bool vrr_want;
++
+    int8_t swap_interval;
+    uint8_t flags;
+ 
+@@ -349,6 +356,11 @@
+    uint32_t last_present_id;
+    /* The swapchain's refresh period, 0 until asked. */
+    uint64_t refresh_duration_ns;
++   /* How long after its start a frame timed at the core's rate is
++    * presented: what the last 64 needed to be ready, with a margin. */
++   uint64_t vrr_budget_ns;
++   uint32_t vrr_ready_us[64];
++   unsigned vrr_ready_count;
+ #ifdef VULKAN_HDR_SWAPCHAIN
+    /* Loaded from VK_EXT_hdr_metadata when that optional device extension is
+     * present; NULL otherwise. Used to signal SMPTE-2086 mastering-display
+diff --git a/gfx/drivers/vulkan.c b/gfx/drivers/vulkan.c
+--- a/gfx/drivers/vulkan.c
++++ b/gfx/drivers/vulkan.c
+@@ -57,6 +57,7 @@
+ 
+ #include "../../record/record_driver.h"
+ #include "../../retroarch.h"
++#include "../../runloop.h"
+ #include "../../verbosity.h"
+ 
+ /* Write 4 unique vertices per quad for use with indexed drawing.
+@@ -8956,6 +8957,37 @@
+ 
+    vulkan_await_frame_before_present(vk, frame_index);
+ 
++   /* Timed at the core's rate while the runloop's timer paces it there
++    * (Sync to Exact Content Framerate), and not over the menu,
++    * fast-forward, slow motion, a pause, black frame insertion or
++    * shader subframes, which present on the display's refresh. */
++   if (!(vk->context->flags & VK_CTX_FLAG_SWAP_INTERVAL_EMULATION_LOCK))
++   {
++      runloop_state_t *runloop_st   = runloop_state_get_ptr();
++      vk->context->vrr_want         = config_get_ptr()->bools.vrr_runloop_enable
++            && (runloop_st->pace & RUNLOOP_PACE_TIMER)
++            && !black_frame_insertion
++            && !(video_info->shader_subframes > 1)
++            && !input_driver_nonblock_state
++            && !runloop_is_slowmotion
++            && !runloop_is_paused
++            && !(vk->flags & VK_FLAG_MENU_ENABLE)
++            && (vk->context->swap_interval == 1);
++      vk->context->vrr_frame_start_ns = runloop_st->frame_limit_anchor_ns;
++      vk->context->vrr_period_ns      = runloop_st->frame_limit_minimum_time_ns;
++
++      /* Such a frame counts as ready when the GPU has finished it, not
++       * when it was submitted, or it misses its time by the render.
++       * Nothing is lost waiting: the present is timed later. */
++      if (     vk->context->vrr_want
++            && vk->context->swapchain_fences_signalled[frame_index]
++            && vk->context->swapchain_fences[frame_index] != VK_NULL_HANDLE)
++         vkWaitForFences(vk->context->device, 1,
++               &vk->context->swapchain_fences[frame_index], true, UINT64_MAX);
++   }
++   else
++      vk->context->vrr_want           = false;
++
+    if (vk->ctx_driver->swap_buffers)
+       vk->ctx_driver->swap_buffers(vk->ctx_data);
+ 
