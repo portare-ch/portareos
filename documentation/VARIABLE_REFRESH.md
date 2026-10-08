@@ -270,6 +270,92 @@ The general form is LFC in the DPU driver, which would cover every
 client, not only timed VK_KHR_display presents. It waits until AVR has
 had more testing: #586.
 
+## Checked frame by frame
+
+Measured 2026-10-08 for #595, with the image of that day and RetroArch
+0020. A refresh count or an average frame rate cannot show that every
+frame was shown k times, so each run was traced and checked one refresh at
+a time: `tools/display-trace` records every vblank, every flip, the buffer
+each commit scans out, Mesa's commits (`mesa-007`: frame or repeat,
+present ID, target, when it was queued and committed) and, for
+present-probe, the DPU's CRC of every refresh. `tools/display-check` pairs
+each commit with the vblank its flip completed on. Each refresh is then a
+new frame, a repeat, or one with no commit: the panel refreshing on its
+own at its 90 Hz floor. Games ran 10 minutes with MangoHud observing
+(#596), present-probe 5 minutes per rate with every 600th frame presented
+3 ms late, the boundaries 60 s each.
+
+| | k, P/k | Frames | Shown k times | Without a commit | Late or tight presents | Not explained |
+|---|---|---|---|---|---|---|
+| Super Mario World, 60.099 Hz | 2, 8.320 ms | 35989 | 35986 | 4 | 428 / 3254 | 0 |
+| the same without MangoHud | | 35989 | 35987 | 3 | 268 / 3750 | 0 |
+| Tekken 3, 59.826 Hz | 2, 8.358 ms | 35818 | 35791 | 30 | 898 / 2476 | 1 phase jump |
+| Streets of Rage 2, 59.923 Hz | 2, 8.344 ms | 35884 | 35868 | 16 | 152 / 3480 | 1 frame |
+| present-probe, 60.099 Hz | 2, 8.320 ms | 17998 | 17992 | 3 | 77 / 22 | 0 |
+| present-probe, 59.94 Hz | 2, 8.342 ms | 17953 | 17907 | 44 | 74 / 3 | 3 phase jumps |
+| present-probe, 59.826 Hz | 2, 8.358 ms | 17917 | 17877 | 38 | 50 / 3 | 3 frames, 4 jumps |
+| present-probe, 50 Hz | 2, 10.000 ms | 14976 | 14912 | 62 | 36 / 5 | 24 frames, 149 jumps |
+| present-probe, 40 Hz | 3, 8.333 ms | 11981 | 11957 | 23 | 33 / 1 | 0 |
+| present-probe, 30 Hz | 4, 8.333 ms | 8984 | 8961 | 22 | 25 / 2 | 0 |
+
+Late is a present that reached Mesa after its target; tight, one that
+reached it after Mesa's own commit point, a millisecond before. Every frame
+not shown k times sits at one of those, with the exceptions in the last
+column. The mean display interval matched the content's period to 0.003%
+or better in every run, and against the content's own clock the panel
+stayed within a frame, minute by minute (the SNES's 8.9 ms range being
+the widest).
+
+- **Repeats show their frame.** Each repeat scanned out the buffer of the
+  frame before it, in all 21 runs. In present-probe, which draws its frame
+  number, the DPU's CRC agreed on all 283,415 refreshes: a repeat or a
+  refresh without a commit has its frame's pixels, a new frame new ones.
+- **MangoHud's display intervals are the trace's**: 189,433 rows in nine
+  runs, each equal to the vblank timestamps to the microsecond. Without
+  MangoHud the panel did the same, 35,987 frames shown twice against
+  35,986. With it, 428 presents came late against 268, the overlay's own
+  cost, and in two present-probe runs it held one present back about
+  20 ms some 3 s after start.
+- **The SNES cannot catch up.** Half its frame is the panel's shortest
+  refresh, so after a late frame the panel stays behind. The phase against
+  the targets moved between 5.5 and 10.6 ms, as RetroArch moved them: 91
+  of 94 jumps were 0018's budget stepping. Against the content's clock it
+  stayed within a frame. The other rates catch up k x (P/k - R) per
+  frame: after a 3 ms late frame, which slips a whole refresh, a median
+  138 frames at 59.826 Hz, 237 at 59.94, 255 at 40 and 191 at 30 Hz.
+- **The rest is on the display side**, a few times per run: the plane
+  programmed late after Mesa's commit (over 2 ms on 6 to 11 of about
+  72,000 commits per game, against a median of 0.09 ms; 2.9 to 3.1 ms
+  where it cost a refresh), or a repeat committed up to 2.2 ms after it
+  was due. A frame is held a refresh when that meets the panel's floor.
+  The cause is not found; the commit worker and the wait in patch 1098
+  are where to look.
+- **50 Hz runs close to the floor.** A repeat's 10 ms refresh is 1.1 ms
+  short of the 11.1 ms floor, and a repeat committed 0.9 ms late, with the
+  plane programmed 1.0 ms before the floor, did not start a refresh: the
+  panel refreshed on its own and the frame waited. 62 times in 5 minutes,
+  so a PAL game would hitch about every 5 s. A lower floor, or mesa-005
+  committing a repeat earlier when its refresh is close to the floor, are
+  the candidates.
+
+The edges of k, present-probe at 60 s each:
+
+| Rate | k, P/k | What the panel did |
+|---|---|---|
+| 60.05, 40.066, 30.049, 29.9 Hz | fits | every frame exactly k times |
+| 60.15, 40.2, 30.1 Hz | mesa-005's R/50 slack picks a k below the shortest refresh | 6, 24, 12 frames a minute shown one refresh short; the content 0.01-0.02% slow |
+| 60.5 Hz | 2, 8.264 ms | the panel at its fastest, the content 0.6% slow; RetroArch locks it to the display instead (0019) |
+| 45.1 Hz | 2, 11.086 ms, just inside the floor | 39% of frames with a refresh of the panel's own |
+| 44.9 Hz | 2, 11.136 ms, past the floor | 46% |
+| 42 Hz | 2, 11.905 ms: no k fits | 60% |
+
+The slack exists so a frame of exactly two refreshes, the SNES on its own
+mode, keeps both; microseconds would do that. At R/50 it also takes k at
+40.07 to 40.33 and 30.05 to 30.20 Hz, which RetroArch's check for content
+that does not fit twice does not catch. Between 40.07 and 45 Hz nothing
+fits the 90 Hz floor at all, and the floor's own margin pushes the usable
+lower edge for k = 2 up towards 50 Hz.
+
 ## The launch
 
 Every RetroArch game runs with variable refresh, with no setting to get

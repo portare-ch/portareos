@@ -79,15 +79,15 @@ class Run:
         self.vb_hdr = [v[0] for v in self.vblanks]
         self.seq_time = {v[1]: v[2] for v in self.vblanks}
 
-    def vblank_near(self, t, limit=3000000):
-        i = bisect.bisect_left(self.vb_hdr, t)
-        best = None
-        for j in (i - 1, i):
-            if 0 <= j < len(self.vblanks) and (best is None or abs(self.vb_hdr[j] - t) < abs(self.vb_hdr[best] - t)):
-                best = j
-        if best is None or abs(self.vb_hdr[best] - t) > limit:
+    def vblank_before(self, t, limit=8000000):
+        """The vblank a flip completed on: the last one traced before it.
+        The flip event is sent from a worker after that vblank's interrupt,
+        usually within 0.1 ms but seen 3.4 ms late, so the nearest vblank
+        can be the next one."""
+        i = bisect.bisect_right(self.vb_hdr, t) - 1
+        if i < 0 or t - self.vb_hdr[i] > limit:
             return None
-        return self.vblanks[best]
+        return self.vblanks[i]
 
     def pair(self):
         """Each commit with the flip it caused: the first flip after it not
@@ -102,7 +102,7 @@ class Run:
             if fi == len(self.flips):
                 c['vblank'] = None
                 continue
-            v = self.vblank_near(self.flips[fi])
+            v = self.vblank_before(self.flips[fi])
             c['vblank'] = v
             fi += 1
         si = 0
@@ -110,6 +110,7 @@ class Run:
             while si < len(self.scanouts) and self.scanouts[si][0] < c['commit'] - 20000000:
                 si += 1
             c['address'] = self.scanouts[si][1] if si < len(self.scanouts) else None
+            c['programmed'] = self.scanouts[si][0] if si < len(self.scanouts) else None
             si += 1
         return lost
 
@@ -149,6 +150,9 @@ def main():
                     help='the shortest refresh, default the 120.198 Hz mode')
     ap.add_argument('--bound-ms', type=float, default=0.46,
                     help="vrr-probe's p95 frame-length error for the rate (VARIABLE_REFRESH.md)")
+    ap.add_argument('--jump-ms', type=float, default=2.0,
+                    help='a phase change between two frames counted as a correction; a quarter of '
+                         'the fastest refresh, above the commit-to-frame jitter (up to 1.3 ms seen)')
     a = ap.parse_args()
 
     run = Run(a.run)
@@ -206,10 +210,14 @@ def main():
     timed = [c for c in frames if c['target'] and c['vblank'][2] - t0 > 2e9]
     phase = [(c['vblank'][2] - c['target']) / 1e6 for c in timed]
     late = [c for c in frames if c['target'] and c['queued'] and c['queued'] > c['target']]
+    # Mesa commits a timed frame 1 ms before its target; one that reaches it
+    # after that is committed on arrival, with no margin for the commit.
+    tight = [c for c in frames if c['target'] and c['queued'] and
+             c['target'] - 1000000 < c['queued'] <= c['target']]
     if phase:
         print('phase, first scanout - target, ms:', stats(phase))
-        print('frames presented after their target: %d; committed after it: %d'
-              % (len(late), sum(1 for c in frames if c['target'] and c['commit'] > c['target'])))
+        print('frames presented after their target: %d; within its last ms: %d; committed after it: %d'
+              % (len(late), len(tight), sum(1 for c in frames if c['target'] and c['commit'] > c['target'])))
 
     # Repeats show their frame's buffer.
     if frames[0]['address'] is not None:
@@ -259,7 +267,7 @@ def main():
         print('  refresh interval error vs P/k:', stats(errs))
         off = sum(1 for e in errs if e > a.bound_ms)
         print('  refreshes off by more than %.2f ms: %d' % (a.bound_ms, off))
-        late_set = {c['id'] for c in late}
+        late_set = {c['id'] for c in late + tight}
         unexplained, runs, run_len = [], collections.Counter(), 0
         for i, (c, n) in enumerate(zip(frames, frames[1:])):
             if n['vblank'][1] - c['vblank'][1] != k:
@@ -281,27 +289,63 @@ def main():
             mean = span / (len(frames) - 1)
             check(abs(mean - period) / period < 0.001, 'mean display interval %.4f ms vs 1/f %.4f ms' % (mean, period))
         if len(phase) > 20:
-            # Drift: the median phase of the last tenth against the first,
-            # robust to single late frames; jumps: a frame's phase off the
-            # one before by more than the bound, with what followed.
-            tenth = max(1, len(phase) // 10)
-            drift = statistics.median(phase[-tenth:]) - statistics.median(phase[:tenth])
-            span = (timed[-1]['vblank'][2] - timed[0]['vblank'][2]) / 1e9
-            check(abs(drift) < a.bound_ms, 'phase drift over the run %.3f ms in %.0f s (%.4f ms/s)'
-                  % (drift, span, drift / span if span else 0))
-            jumps = [i for i in range(1, len(phase)) if abs(phase[i] - phase[i - 1]) > a.bound_ms]
-            explained = sum(1 for i in jumps if timed[i]['id'] in late_set or timed[i - 1]['id'] in late_set)
-            print('  phase jumps over %.2f ms: %d, %d at a late frame' % (a.bound_ms, len(jumps), explained))
+            # The phase against the targets moves when the application moves
+            # them (RetroArch's budget, 0018) or a frame comes late; a jump
+            # with neither is unexplained. Drift is the panel against the
+            # content's own clock: scanout against the first one plus a
+            # period per present. It must stay within a frame.
+            steps = [0.0] + [(timed[i]['target'] - timed[i - 1]['target']) / 1e6 - period
+                             for i in range(1, len(timed))]
+            def explained(i, size):
+                return (timed[i]['id'] in late_set or timed[i - 1]['id'] in late_set
+                        or abs(steps[i]) > size / 2)
+            jitter = sorted(abs(phase[i] - phase[i - 1]) for i in range(1, len(phase))
+                            if not explained(i, 0.4))
+            print('  phase change between frames, neither late nor moved: p99 %.3f  max %.3f ms'
+                  % (pct(jitter, 0.99), jitter[-1] if jitter else 0))
+            jumps = [i for i in range(1, len(phase)) if abs(phase[i] - phase[i - 1]) > a.jump_ms]
+            bad = [i for i in jumps if not explained(i, a.jump_ms)]
+            # What the rest came from, on the display side: the refresh
+            # before the frame (a repeat, or the frame before) committed
+            # after it was due, or a commit slow to reach the screen.
+            order = {id(c): j for j, c in enumerate(run.commits)}
+            for i in bad[:10]:
+                c = timed[i]
+                prev = run.commits[order[id(c)] - 1]
+                due = prev['target'] + (period / k * 1e6 if prev['repeat'] else 0)
+                why = []
+                if prev['repeat'] and prev['commit'] > due:
+                    why.append('the repeat before it committed %.2f ms after it was due' % ((prev['commit'] - due) / 1e6))
+                for name, x in (('the refresh before', prev), ('the frame', c)):
+                    if x['vblank'] and x['vblank'][2] - x['commit'] > 2e6:
+                        why.append('%s took %.2f ms from commit to screen' % (name, (x['vblank'][2] - x['commit']) / 1e6))
+                    if x.get('programmed') and x['programmed'] - x['commit'] > 1e6:
+                        why.append('%s reached the plane %.2f ms after its commit' % (name, (x['programmed'] - x['commit']) / 1e6))
+                print('  jump at id %d, %.1f s: phase %.2f to %.2f ms; %s' % (
+                    c['id'], (c['vblank'][2] - t0) / 1e9, phase[i - 1], phase[i], '; '.join(why) or 'no cause found'))
+            check(not bad, 'every phase jump over %.1f ms is at a late frame or a moved target (%d of %d not)'
+                  % (a.jump_ms, len(bad), len(jumps)))
+            s0, v0 = timed[0]['serial'], timed[0]['vblank'][2]
+            grid = [((c['vblank'][2] - v0) / 1e6 - (c['serial'] - s0) * period) for c in timed]
+            minutes = collections.defaultdict(list)
+            for c, g in zip(timed, grid):
+                minutes[int((c['vblank'][2] - v0) / 60e9)].append(g)
+            med = [statistics.median(v) for _, v in sorted(minutes.items())]
+            print('  scanout against the content clock, median per minute, ms:', ' '.join('%.2f' % m for m in med))
+            print('  single frames: %.2f to %.2f ms (late frames, and the recovery after them)' % (min(grid), max(grid)))
+            check(max(med) - min(med) < period, 'no drift: the per-minute medians against the content clock '
+                  'stay within a frame (range %.2f ms)' % (max(med) - min(med)))
             base = statistics.median(phase)
             recover = []
             for i in range(len(timed)):
                 if timed[i]['id'] in late_set:
                     j = i + 1
-                    while j < len(phase) and abs(phase[j] - base) > a.bound_ms:
+                    while j < len(phase) and abs(phase[j] - phase[i - 1 if i else 0]) > a.bound_ms:
                         j += 1
                     recover.append(j - i - 1)
             if recover:
-                print('  frames until the phase is back within %.2f ms after a late frame:' % a.bound_ms, stats(recover))
+                print('  frames until the phase is back within %.2f ms of where it was before a late frame:'
+                      % a.bound_ms, stats(recover))
 
     # present-probe's records against the trace: actualPresentTime is the
     # vblank payload truncated to microseconds.
