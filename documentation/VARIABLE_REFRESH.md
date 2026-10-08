@@ -230,7 +230,8 @@ back porch cut from 142 lines to 135 (120.956 Hz) and 126 (121.946 Hz).
 The SoC delivered every frame exactly one period apart, within 10 us, at
 all three rates. By eye the moving block jumped at 121 and 122 Hz and was
 clean at 120.198: the panel does not show frames faster than its 120 Hz
-class evenly. Those boards keep a fixed mode.
+class evenly. Those boards are locked to the display instead, at half its
+rate (see the launch below).
 
 ## Showing a frame more than once
 
@@ -268,6 +269,41 @@ up, about a second after a loading stall.
 The general form is LFC in the DPU driver, which would cover every
 client, not only timed VK_KHR_display presents. It waits until AVR has
 had more testing: #586.
+
+## The launch
+
+Every RetroArch game runs with variable refresh, with no setting to get
+right. runemu decides it per launch and exports
+`MESA_VK_WSI_DISPLAY_VRR`, which Mesa and setsettings both read. It is 1
+on KMS, on a panel that says `vrr_capable` and is the only output (a dock
+brings a fixed-rate one), unless the game pins a `display_mode`.
+Otherwise it is 0.
+
+- Mesa (`mesa-006`) sets `VRR_ENABLED` in its first mode set, and clears
+  it when it lets the CRTC go. 0 clears one left on by a run that
+  crashed. Opt-in rather than Mesa's `adaptive_sync` default, because mpv
+  and SDL's KMS emulators present through the same backend without
+  timing their frames.
+- setsettings uses the fastest mode for every game, Sync to Exact Content
+  Framerate, vsync off whatever the vsync setting says, and no frame
+  delay. The table of a mode at twice each system's rate is for fixed
+  refresh.
+- RetroArch (`0019`) keeps presents timed under Sync to Exact Content
+  Framerate with vsync off. Vsync off would otherwise show each frame
+  whenever it was ready. Content that does not fit twice into the
+  display's rate is locked to the display for that session: vsync,
+  half its rate, audio resampled.
+
+`vrr=0` in `system.cfg`, for everything (`global.`), a system or a game,
+turns it off to compare. The fixed refresh path is then as before.
+
+Measured 2026-10-08 through runemu, flip traces:
+
+| | Refreshes | Longest refresh | |
+|---|---|---|---|
+| Super Mario World, 30 s | 3606, every frame twice | 8.42 ms | `VRR_ENABLED` 0 before, 1 while running, 0 after exit |
+| Super Mario World forced onto 119.88 Hz, 20 s | 2398 | 8.46 ms | "does not fit twice", swap interval 2, the core at 59.94 |
+| Tekken 3 with `global.vrr=0` | - | - | a `VRR_ENABLED` left on was turned off; 119.652 Hz mode |
 
 ## Do not
 

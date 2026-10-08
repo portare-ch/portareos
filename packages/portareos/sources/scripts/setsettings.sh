@@ -735,11 +735,40 @@ function exact_refresh_from_drm() {
         }'
 }
 
+### Variable refresh for this game, as runemu decided it: the variable that
+### also has Mesa turn VRR_ENABLED on (documentation/VARIABLE_REFRESH.md).
+function vrr() {
+    [ "${MESA_VK_WSI_DISPLAY_VRR}" = "1" ]
+}
+
+### The exact rate of the panel's fastest mode.
+function fastest_refresh_from_drm() {
+    /usr/bin/modetest -M msm -c 2>/dev/null | awk '
+        /^[[:space:]]*#[0-9]+[[:space:]]/ {
+            htot = $7 + 0; vtot = $11 + 0; clk = $12 + 0
+            if (htot <= 0 || vtot <= 0 || clk <= 0) next
+            rate = (clk * 1000.0) / (htot * vtot)
+            if (rate > best) best = rate
+        }
+        END { if (best > 0) printf "%.6f", best }'
+}
+
 function set_ra_refresh_rate() {
     local MODE="$(game_setting display_mode)"
     local RATE
     local EXACT
+    vrr && MODE="variable"
     case "${MODE}" in
+        variable)
+            ### The fastest mode for every game. AVR's shortest frame is the
+            ### mode's, so the fastest leaves room for each game's rate
+            ### doubled - the SNES's 60.0988 is exactly half of 120.198 - and
+            ### the panel follows the game's frames from there. The table
+            ### below, a mode at twice each system's rate, is for fixed
+            ### refresh.
+            RATE="$(fastest_refresh_from_drm)"
+            log "Variable refresh on the fastest mode, ${RATE} Hz"
+        ;;
         ""|default)
             RATE=$(/usr/bin/wlr-randr 2>/dev/null | awk '/current/ { for (i = 1; i <= NF; i++) if ($i == "Hz") { print $(i - 1); exit } }')
             EXACT="$(exact_refresh_from_drm "${RATE}")"
@@ -1195,9 +1224,13 @@ function set_vsync() {
     # loop: left to audio sync, rate control held every game at its 0.5%
     # limit, Daytona USA at 60.13 fps for 59.83. A missing key keeps vsync
     # on.
+    #
+    # With variable refresh it is always so: the frames are timed at the
+    # game's rate and the panel follows them. Vsync stays off whatever the
+    # vsync setting says.
     local VSYNC="true"
     local EXACT="false"
-    if [ "$(game_setting vsync)" = "0" ]
+    if vrr || [ "$(game_setting vsync)" = "0" ]
     then
         VSYNC="false"
         EXACT="true"
@@ -1217,8 +1250,11 @@ function set_frame_delay() {
     # add_setting also deletes the key from retroarch.cfg, so a value
     # written only where preemptive frames are on left every later game
     # without the delay.
+    # Nor with variable refresh: the delay is measured against a refresh the
+    # panel no longer keeps, and each frame is presented a measured time
+    # after its start anyway (RetroArch 0018).
     local DELAY_AUTO="true"
-    if preempt_enabled
+    if preempt_enabled || vrr
     then
         DELAY_AUTO="false"
     fi

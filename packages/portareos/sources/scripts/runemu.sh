@@ -175,6 +175,17 @@ function quit() {
         exit $1
 }
 
+### Whether the display is a variable refresh panel: exactly one connector
+### connected, and it says vrr_capable, which the kernel sets from the
+### panel's refresh range.
+function vrr_panel() {
+  /usr/bin/modetest -M msm -c 2>/dev/null | awk '
+    /^[0-9]+[[:space:]]/ { conn = ($3 == "connected"); n += conn }
+    /vrr_capable:/ { want = conn }
+    want && /^[[:space:]]*value:/ { cap = $2 + 0; want = 0 }
+    END { exit !(n == 1 && cap == 1) }'
+}
+
 function clear_screen() {
         ${VERBOSE} && log $0 "Clearing screen"
         clear
@@ -290,6 +301,26 @@ case ${EMULATOR} in
         fi
       ;;
     esac
+
+    ### Variable refresh (documentation/VARIABLE_REFRESH.md): RetroArch times
+    ### each frame at the game's own rate, Mesa turns VRR_ENABLED on and shows
+    ### every frame twice, and the panel follows. For every game, on KMS, on a
+    ### panel that says vrr_capable and is the only output (a dock brings a
+    ### fixed-rate one), unless the game pins a display_mode. vrr=0 for a
+    ### system or a game turns it off to compare. setsettings reads the same
+    ### variable for RetroArch's side; 0 has Mesa turn VRR_ENABLED off, in
+    ### case a run that crashed left it on.
+    MESA_VK_WSI_DISPLAY_VRR=0
+    DISPLAY_MODE_PIN=$(get_setting display_mode "${PLATFORM}" "${ROMNAME##*/}")
+    if [ "${KMSMODE}" = "1" ] &&
+       [ "$(get_setting vrr "${PLATFORM}" "${ROMNAME##*/}")" != "0" ] &&
+       [ -z "${DISPLAY_MODE_PIN}" -o "${DISPLAY_MODE_PIN}" = "default" ] &&
+       vrr_panel
+    then
+      MESA_VK_WSI_DISPLAY_VRR=1
+    fi
+    export MESA_VK_WSI_DISPLAY_VRR
+    ${VERBOSE} && log $0 "Variable refresh: ${MESA_VK_WSI_DISPLAY_VRR}"
 
 
     RUNTHIS='${EMUPERF} /usr/bin/${RABIN} -L /tmp/cores/${CORE}_libretro.so --config ${RETROARCH_TEMP_CONFIG} --appendconfig ${RETROARCH_APPEND_CONFIG} "${ROMNAME}"'

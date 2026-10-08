@@ -1,0 +1,146 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] wsi/display: turn VRR on when MESA_VK_WSI_DISPLAY_VRR asks for it
+
+Mesa leaves VRR_ENABLED as the last DRM master left it, on the grounds
+that something else chooses variable refresh. With VK_KHR_display the
+application is the DRM master, and no one else is there to choose.
+
+MESA_VK_WSI_DISPLAY_VRR=1 sets VRR_ENABLED in the first mode set on a
+connector that is vrr_capable, and 0 clears it, in case a client that
+crashed left it on. Unset keeps today's behaviour. It is opt-in, not the
+adaptive_sync default: only an application that times its presents gets
+an even cadence on a panel with a slowest refresh. A client that turned
+it on turns it off again when it releases the CRTC, while it still holds
+the CRTC and DRM master, so the next master finds it as it was.
+
+On the Retroid Pocket Nova, RetroArch launched with it set: VRR_ENABLED
+0 before, 1 while running, 0 after exit, with the kernel logging AVR on
+and off. Set to 0 over a VRR_ENABLED left on, it ran at fixed refresh.
+
+Signed-off-by: PortareOS <hello@portare.org>
+---
+--- a/src/vulkan/wsi/wsi_common_display.c
++++ b/src/vulkan/wsi/wsi_common_display.c
+@@ -197,6 +197,11 @@
+    uint32_t                     *formats;
+    enum vrr_tristate            vrr_capable;
+    enum vrr_tristate            vrr_enabled;
++   /* The CRTC's VRR_ENABLED property, 0 without one, and whether this
++    * client turned it on, to turn it off again when it lets the CRTC go.
++    */
++   uint32_t                     vrr_enabled_property;
++   bool                         vrr_set;
+    bool                         has_vblank;
+    uint64_t                     last_frame;
+    uint64_t                     last_nsec;
+@@ -231,6 +236,12 @@
+    int                          timer_fd;
+    struct wsi_display_image     *timer_image;
+ 
++   /* MESA_VK_WSI_DISPLAY_VRR: 1 turns VRR_ENABLED on at mode set on a
++    * connector that is vrr_capable, 0 turns it off, unset leaves it as the
++    * last DRM master left it.
++    */
++   int                          vrr_request;
++
+    /* On VRR the panel starts a refresh when a commit arrives, so a frame
+     * slower than the panel's range is shown again by committing the same
+     * buffer again: repeat_image, repeat_left more times, the next at
+@@ -438,8 +449,10 @@
+ 
+       if (!strcmp(prop->name, "vrr_capable"))
+          connector->vrr_capable = prop_values[p] != 0 ? VRR_TRISTATE_ENABLED : VRR_TRISTATE_DISABLED;
+-      if (!strcmp(prop->name, "VRR_ENABLED"))
++      if (!strcmp(prop->name, "VRR_ENABLED")) {
+          connector->vrr_enabled = prop_values[p] != 0 ? VRR_TRISTATE_ENABLED : VRR_TRISTATE_DISABLED;
++         connector->vrr_enabled_property = props[p];
++      }
+ 
+       drmModeFreeProperty(prop);
+    }
+@@ -1918,6 +1931,26 @@
+    return 0;
+ }
+ 
++/* Turn variable refresh off again once this client lets the CRTC go, while
++ * it still holds it and DRM master: the next DRM master may not time its
++ * frames.
++ */
++static void
++wsi_display_restore_vrr(struct wsi_display *wsi, wsi_display_connector *connector)
++{
++   if (!connector->vrr_set || !connector->crtc_id)
++      return;
++
++   drmModeAtomicReq *req = drmModeAtomicAlloc();
++   if (req) {
++      drmModeAtomicAddProperty(req, connector->crtc_id, connector->vrr_enabled_property, 0);
++      (void) drmModeAtomicCommit(wsi->fd, req, 0, NULL);
++      drmModeAtomicFree(req);
++   }
++   connector->vrr_set = false;
++   connector->vrr_enabled = VRR_TRISTATE_DISABLED;
++}
++
+ static VkResult
+ wsi_display_swapchain_destroy(struct wsi_swapchain *drv_chain,
+                               const VkAllocationCallbacks *allocator)
+@@ -1949,8 +1982,10 @@
+ 
+    wsi_display_mode *display_mode =
+       wsi_display_mode_from_handle(chain->surface->displayMode);
+-   if (p_atomic_dec_zero(&display_mode->connector->refcount))
++   if (p_atomic_dec_zero(&display_mode->connector->refcount)) {
++      wsi_display_restore_vrr(wsi, display_mode->connector);
+       display_mode->connector->crtc_id = 0;
++   }
+ 
+    wsi_swapchain_finish(&chain->base);
+ 
+@@ -3110,6 +3145,7 @@
+    uint32_t crtc_id = connector->crtc_id;
+    uint32_t plane_id = connector->plane_id;
+    uint32_t blob_id;
++   int set_vrr = -1;
+    int ret;
+ 
+    req = drmModeAtomicAlloc();
+@@ -3128,6 +3164,16 @@
+       drmModeAtomicAddProperty(req, crtc_id, connector->crtc_property[MODE_ID], blob_id);
+       drmModeAtomicAddProperty(req, crtc_id, connector->crtc_property[ACTIVE], 1);
+ 
++      /* Variable refresh is the DRM master's to choose, and with
++       * VK_KHR_display that is the application. One that times its presents
++       * can ask for it here.
++       */
++      if (connector->wsi->vrr_request >= 0 && connector->vrr_enabled_property &&
++          connector->vrr_capable == VRR_TRISTATE_ENABLED) {
++         set_vrr = connector->wsi->vrr_request;
++         drmModeAtomicAddProperty(req, crtc_id, connector->vrr_enabled_property, set_vrr);
++      }
++
+       /* PortareOS: the CRTC's color transforms - DEGAMMA_LUT, CTM,
+        * GAMMA_LUT - are the panel's calibration, set once by the launcher
+        * for everything that is ever scanned out. Upstream clears them here
+@@ -3194,6 +3240,11 @@
+    if (ret)
+       goto out;
+ 
++   if (set_vrr >= 0 && !test_only) {
++      connector->vrr_enabled = set_vrr ? VRR_TRISTATE_ENABLED : VRR_TRISTATE_DISABLED;
++      connector->vrr_set = set_vrr;
++   }
++
+ out:
+    drmModeAtomicFree(req);
+ 
+@@ -3977,6 +4028,9 @@
+    wsi->timer_fd = -1;
+    wsi->repeat_fd = -1;
+ 
++   const char *vrr = getenv("MESA_VK_WSI_DISPLAY_VRR");
++   wsi->vrr_request = vrr && *vrr ? atoi(vrr) != 0 : -1;
++
+    int ret = mtx_init(&wsi->wait_mutex, mtx_plain);
+    if (ret != thrd_success) {
+       result = VK_ERROR_OUT_OF_HOST_MEMORY;
