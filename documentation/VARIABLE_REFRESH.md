@@ -26,7 +26,7 @@ variable-refresh properties.
   (`DSI_VIDEO_MODE_CTRL`, mainline's `REG_DSI_VID_CFG0` plus the 6G
   shift, 0xae94010 on the Nova), when it switches Qsync on.
 - **Kernel patch 1097** adds it as DRM's standard interface:
-  - The panel driver declares its range, 90 Hz up to its fastest mode,
+  - The panel driver declares its range, 80 Hz up to its fastest mode,
     120.198 Hz rounded up to 121, in the connector's
     `display_info.monitor_range` and sets `vrr_capable`, which DSI
     connectors now carry.
@@ -176,7 +176,7 @@ vrr-probe /dev/null 6 idle vrr &
 sleep 2
 devmem 0xae36270 32          # 0x80000001: AVR active
 F=0xae360ac; a=$(devmem $F 32); sleep 2; b=$(devmem $F 32)
-echo $(( (b - a) / 2 )) frames/s   # about 90, not 120
+echo $(( (b - a) / 2 )) frames/s   # about 80, not 120
 wait
 ```
 
@@ -219,8 +219,10 @@ to be the fastest one, 120.198 Hz, twice the SNES. On the 119.652 Hz
 mode, the PlayStation's, doubled SNES would not fit.
 
 The multiple for a game is the largest k with k times its rate at most
-120.198 Hz and at least the 90 Hz floor: 2 for 45 to 60.1 Hz, 3 for 30 to
-40 Hz, 4 for 22.5 to 30 Hz. DRM keeps `monitor_range` inside the kernel
+120.198 Hz and at least the 80 Hz floor: 2 for 40 to 60.1 Hz, 3 for 26.7
+to 40.07 Hz, 4 for 20 to 30.05 Hz. The floor is just under two thirds of
+the fastest refresh, so every rate between has one; at 90 Hz, 40.07 to
+45 Hz had none. DRM keeps `monitor_range` inside the kernel
 for a panel without EDID; the repeat below needs only the mode's refresh.
 
 Rates between 60.1 and 61 Hz, a few arcade boards, have no multiple in
@@ -294,7 +296,7 @@ own at its 90 Hz floor. Games ran 10 minutes with MangoHud observing
 | present-probe, 60.099 Hz | 2, 8.320 ms | 17998 | 17992 | 3 | 77 / 22 | 0 |
 | present-probe, 59.94 Hz | 2, 8.342 ms | 17953 | 17907 | 44 | 74 / 3 | 3 phase jumps |
 | present-probe, 59.826 Hz | 2, 8.358 ms | 17917 | 17877 | 38 | 50 / 3 | 3 frames, 4 jumps |
-| present-probe, 50 Hz | 2, 10.000 ms | 14976 | 14912 | 62 | 36 / 5 | 24 frames, 149 jumps |
+| present-probe, 50 Hz | 2, 10.000 ms | 14976 | 14912 | 62 | 36 / 5 | 24 frames, 24 jumps |
 | present-probe, 40 Hz | 3, 8.333 ms | 11981 | 11957 | 23 | 33 / 1 | 0 |
 | present-probe, 30 Hz | 4, 8.333 ms | 8984 | 8961 | 22 | 25 / 2 | 0 |
 
@@ -334,9 +336,8 @@ the widest).
   short of the 11.1 ms floor, and a repeat committed 0.9 ms late, with the
   plane programmed 1.0 ms before the floor, did not start a refresh: the
   panel refreshed on its own and the frame waited. 62 times in 5 minutes,
-  so a PAL game would hitch about every 5 s. A lower floor, or mesa-005
-  committing a repeat earlier when its refresh is close to the floor, are
-  the candidates.
+  so a PAL game would hitch about every 5 s. The floor is 80 Hz since,
+  below.
 
 The edges of k, present-probe at 60 s each:
 
@@ -350,11 +351,72 @@ The edges of k, present-probe at 60 s each:
 | 42 Hz | 2, 11.905 ms: no k fits | 60% |
 
 The slack exists so a frame of exactly two refreshes, the SNES on its own
-mode, keeps both; microseconds would do that. At R/50 it also takes k at
-40.07 to 40.33 and 30.05 to 30.20 Hz, which RetroArch's check for content
-that does not fit twice does not catch. Between 40.07 and 45 Hz nothing
-fits the 90 Hz floor at all, and the floor's own margin pushes the usable
-lower edge for k = 2 up towards 50 Hz.
+mode, keeps both, and that takes more than microseconds: RetroArch lowers
+its budget 0.5 ms at a time (0018), mesa-005's period takes an eighth of
+the step, and in the 10 minutes above Super Mario World's period fell
+62.5 us short of two refreshes 44 times. At R/50, 166 us, it also takes k
+at 40.07 to 40.33 and 30.05 to 30.20 Hz, which RetroArch's check for
+content that does not fit twice does not catch. On the 90 Hz floor one
+refresh fewer would have been worse at all three: 60.15 Hz shown once is
+past the floor, 40.2 Hz twice is 12.44 ms, past it too, and 30.1 Hz three
+times is 11.07 ms, 0.03 ms inside it (45.1 Hz above was 0.02). Between
+40.07 and 45 Hz nothing fits the 90 Hz floor at all, and the floor's own
+margin pushes the usable lower edge for k = 2 up towards 50 Hz.
+
+### On an 80 Hz floor
+
+Patch 1097 declares 80 Hz since, just under two thirds of 120.198 Hz: the
+longest frame AVR holds is 1676 lines, 12.49 ms, and the idle check above
+reads 80 frames/s. Every rate from 20 to 60.1 Hz has a multiple now, and a
+repeat at 50 Hz has 2.5 ms to the floor instead of 1.1. Measured
+2026-10-08 on a kernel-only build over that day's image, with the same
+Mesa, RetroArch and runs. Frames over 11.1 ms have not been watched at
+low backlight yet. Refreshes the panel made on its own:
+
+| | P/k | To the 80 Hz floor | At 90 Hz | At 80 Hz |
+|---|---|---|---|---|
+| present-probe 50 Hz, 5 min, every 600th frame late | 10.000 ms | 2.49 ms | 62 | 31, all at late presents |
+| 49.76 Hz, 60 s | 10.048 ms | 2.45 ms | | 4 |
+| 45.1 Hz | 11.086 ms | 1.41 ms | 1039 | 3 |
+| 44 Hz | 11.364 ms | 1.13 ms | | 8 |
+| 43 Hz | 11.628 ms | 0.87 ms | | 19 |
+| 42 Hz | 11.905 ms | 0.59 ms | 1496 | 125 |
+| 41 Hz | 12.195 ms | 0.30 ms | | 197 |
+| 40.4 Hz | 12.376 ms | 0.12 ms | | 693 |
+| Tekken 3, the first 290 s | 8.358 ms | 4.14 ms | 20 | 6 |
+| present-probe 59.826 Hz, 5 min, every 600th frame late | 8.358 ms | 4.14 ms | 38 | 34 |
+
+40.066, 40, 30.049 and 29.9 Hz showed every frame k times, and 40.2 and
+30.1 Hz one refresh short 24 and 13 times a minute, as before.
+
+- **A repeat needs about 1.4 ms to the floor.** Below that the panel
+  refreshes on its own more often the closer the repeat comes, as 45.1 Hz
+  did on the 90 Hz floor with 0.02 ms. 50 Hz no longer misses one: the
+  rest of its 31 are at the deliberately late frames, and its 2 phase
+  jumps not explained are the plane programmed 2.3 and 2.5 ms after the
+  commit, the display-side delay above.
+- **On a 60 Hz game it only matters to a late frame.** A frame on time is
+  refreshed every 8.4 ms, far from either floor. A late one is committed
+  at once, and a commit still starts the refresh if it lands 1.6 to 1.8 ms
+  before the floor runs out: 10.9 ms after the refresh before at 80 Hz,
+  9.3 ms at 90 Hz. For a 60 Hz game that is a present up to about 3 ms
+  after its target, against 1.3 ms; later, the panel refreshes on its own
+  and the frame before is shown a third time. In Tekken 3, frames shown
+  three times in the same 290 s fell from 13 to 4, those 4 presented more
+  than 4 ms late, while loading. present-probe's late frames reach Mesa
+  3.9 ms after their target, past both floors, and on the lower one the
+  panel's own refresh and the frame after it come 1.4 ms later.
+- **The slack stays at R/50.** One refresh fewer at 40.2 Hz would be
+  12.44 ms, 0.06 ms from the floor, worse than 40.4 Hz above; at 30.1 Hz,
+  11.07 ms, 1.42 ms from it, about 45.1 Hz's 3 a minute. So less slack
+  would help only 30.05 to 30.20 Hz, where nothing runs, and the SNES needs
+  more than 62.5 us of it.
+
+`tools/display-check` takes the floor as `--floor-hz` (80 by default; 90
+for the runs before), and counts a phase jump back towards the usual
+phase as the panel catching up, k x (P/k - R) a frame: 3.4 ms at 50 Hz,
+over the 2 ms jump. Of the 149 jumps at 50 Hz on the 90 Hz floor, 125
+were that.
 
 ## The launch
 
