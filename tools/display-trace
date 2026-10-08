@@ -28,7 +28,8 @@ if [ "$1" != "--remote" ]; then
   # word by word, is quoted once more as a whole.
   CMD=$(printf '%q ' "$@")
   ssh "${HOST}" bash -s -- --remote "${NAME}" "${SECS}" "${CRC}" "$(printf '%q' "${CMD}")" <"$0" || exit 1
-  scp -q "${HOST}:/storage/display-trace/${NAME}.*" . && ls -l "${NAME}".*
+  # NAME.[a-z]*, not NAME.*: a run named f40 must not take f40.2's files.
+  scp -q "${HOST}:/storage/display-trace/${NAME}.[a-z]*" . && ls -l "${NAME}".[a-z]*
   exit
 fi
 
@@ -39,7 +40,7 @@ T=/sys/kernel/tracing
 DIR=/storage/display-trace
 RUN=${DIR}/${NAME}
 EVENTS="drm/drm_vblank_event dpu/dpu_crtc_complete_flip dpu/dpu_plane_set_scanout"
-mkdir -p ${DIR}; rm -f ${RUN}.*
+mkdir -p ${DIR}; rm -f ${RUN}.[a-z]*
 
 systemctl stop portarelauncher; sleep 1
 # A player left over keeps DRM master and the launcher cannot take it back.
