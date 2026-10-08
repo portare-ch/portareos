@@ -220,9 +220,8 @@ mode, the PlayStation's, doubled SNES would not fit.
 
 The multiple for a game is the largest k with k times its rate at most
 120.198 Hz and at least the 90 Hz floor: 2 for 45 to 60.1 Hz, 3 for 30 to
-40 Hz, 4 for 22.5 to 30 Hz. Userspace has to know the range from a device
-quirk: DRM keeps `monitor_range` inside the kernel for a panel without
-EDID.
+40 Hz, 4 for 22.5 to 30 Hz. DRM keeps `monitor_range` inside the kernel
+for a panel without EDID; the repeat below needs only the mode's refresh.
 
 Rates between 60.1 and 61 Hz, a few arcade boards, have no multiple in
 range, and the range cannot grow upward. `vrr-probe fast`, 2026-10-08:
@@ -232,6 +231,43 @@ The SoC delivered every frame exactly one period apart, within 10 us, at
 all three rates. By eye the moving block jumped at 121 and 122 Hz and was
 clean at 120.198: the panel does not show frames faster than its 120 Hz
 class evenly. Those boards keep a fixed mode.
+
+## Showing a frame more than once
+
+The repeat lives in Mesa's KMS backend (`mesa-005`). RetroArch presents
+each frame once (`0018`), aimed at the frame's start plus a budget: what
+the last 64 frames needed to be ready, measured after the GPU fence, and
+a millisecond. Mesa takes the frame period from the distance between
+targets. If that is at least twice the mode's refresh, Mesa commits the
+same buffer again at target + period / N once the frame has flipped. The
+application keeps both swapchain images and the whole frame period, and a
+repeat costs one atomic commit and no rendering. Mesa derives N from the
+mode's refresh alone, so it needs no range quirk.
+
+Rejected first: RetroArch re-rendering each frame twice. The second
+present held the image the next frame needed until it was on screen, so
+with two images the core had about half a frame instead of a whole one,
+and the shader ran twice. Tekken 3 at 4x with a 12-pass shader: 20% of
+frames started late and 62 refreshes in 30 s fell to the 11.1 ms floor.
+Three images hid that, but the design was the fault, not the image
+count.
+
+Measured 2026-10-08, VRR on, two swapchain images, flip traces:
+
+| | Frames | Refreshes | Self-refreshes | Longest refresh |
+|---|---|---|---|---|
+| Super Mario World, 30 s | 1804 | 3607 | 0 | 8.51 ms |
+| Tekken 3 attract, 60 s | 3588 | 7181 | 5, all on frames the game delivered late while loading | 11.13 ms |
+
+The SNES is the edge case: half its frame is the fastest refresh, so the
+panel cannot catch up once it is behind. It sat a steady 7.5 ms behind
+the targets: fixed latency, as on a fixed 120 Hz mode, with every frame
+still shown twice. A PlayStation frame leaves 0.038 ms a refresh to catch
+up, about a second after a loading stall.
+
+The general form is LFC in the DPU driver, which would cover every
+client, not only timed VK_KHR_display presents. It waits until AVR has
+had more testing: #586.
 
 ## Do not
 

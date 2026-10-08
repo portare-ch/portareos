@@ -1,0 +1,340 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] wsi/display: show a VRR frame again when it is too slow for the panel
+
+A variable refresh panel has a slowest refresh. A frame that stays up
+longer is refreshed by the panel on its own, at a time unrelated to the
+next frame, which then waits out the panel's shortest frame. On the
+Retroid Pocket Nova (90 to 120 Hz) a 60 Hz game showed some frames for
+11.1 + 8.3 ms and others for 8.3 ms.
+
+When the application times its presents with absolute targets
+(VK_GOOGLE_display_timing, VK_EXT_present_timing), the frame period is
+the distance between targets. If that is at least twice the mode's
+refresh, show each frame as many times as fit, evenly from its target:
+after a timed frame flips, the wait thread commits the same buffer again
+at target + period / N, from a second timerfd beside the one for held
+presents. The application still presents each frame once, so it keeps
+every swapchain image and the whole frame period. A repeat costs one
+atomic commit and no rendering.
+
+The period is smoothed. One distance off it, from the application moving
+its targets or dropping a frame, is noise; a new period is taken once it
+is seen twice. Counting allows a fiftieth of a refresh, so a frame of
+exactly two refreshes still gets both. A repeat is skipped when another
+image is in flight or the next one wants the panel within a refresh. A
+repeat already due because the panel runs behind goes at once and waits
+for the panel. Repeats are not reported as presents.
+
+Measured on SM8550, VRR on, two swapchain images, RetroArch timing each
+frame at its core's rate:
+- Super Mario World (60.099 Hz): 3607 refreshes for 1804 frames in 30 s,
+  every frame twice, none longer than 8.51 ms.
+- Tekken 3 (59.826 Hz): 7181 refreshes for 3588 frames in 60 s, repeats
+  committed a median 0.13 ms after their time. The panel refreshed on
+  its own 5 times, each on a frame the game delivered late while
+  loading.
+
+Signed-off-by: PortareOS <hello@portare.org>
+---
+--- a/src/vulkan/wsi/wsi_common_display.c
++++ b/src/vulkan/wsi/wsi_common_display.c
+@@ -231,6 +231,18 @@
+    int                          timer_fd;
+    struct wsi_display_image     *timer_image;
+ 
++   /* On VRR the panel starts a refresh when a commit arrives, so a frame
++    * slower than the panel's range is shown again by committing the same
++    * buffer again: repeat_image, repeat_left more times, the next at
++    * repeat_ns and every repeat_step_ns after it. The wait thread does it
++    * when repeat_fd fires. -1 until the wait thread starts.
++    */
++   int                          repeat_fd;
++   struct wsi_display_image     *repeat_image;
++   uint64_t                     repeat_ns;
++   uint64_t                     repeat_step_ns;
++   unsigned                     repeat_left;
++
+    struct u_cnd_monotonic       hotplug_cond;
+    pthread_t                    hotplug_thread;
+ 
+@@ -508,6 +520,11 @@
+    struct wsi_image_timing_request timing_request;
+    struct wsi_display_fence        *fence;
+    uint64_t                        minimum_ns;
++   /* On VRR, the absolute time this present asked for, 0 for an untimed
++    * one; and whether the commit in flight shows it again.
++    */
++   uint64_t                        vrr_target_ns;
++   bool                            repeating;
+ };
+ 
+ struct wsi_display_swapchain {
+@@ -530,6 +547,14 @@
+    uint64_t                        last_presented_vblank;
+    uint64_t                        last_presented_nsec;
+ 
++   /* On VRR, the target of the last timed present, how far it was from
++    * the one before, and the frame period the repeats divide: those
++    * distances, smoothed.
++    */
++   uint64_t                        vrr_last_target_ns;
++   uint64_t                        vrr_last_interval_ns;
++   uint64_t                        vrr_interval_ns;
++
+    struct wsi_display_image        images[0];
+ };
+ 
+@@ -1907,6 +1932,11 @@
+       (void) timerfd_settime(wsi->timer_fd, 0, &off, NULL);
+       wsi->timer_image = NULL;
+    }
++   if (wsi->repeat_image && wsi->repeat_image->chain == chain) {
++      struct itimerspec off = { 0 };
++      (void) timerfd_settime(wsi->repeat_fd, 0, &off, NULL);
++      wsi->repeat_image = NULL;
++   }
+    mtx_unlock(&wsi->wait_mutex);
+ 
+    _wsi_display_cleanup_state(chain);
+@@ -1998,6 +2028,63 @@
+    mtx_unlock(&swapchain->present_id_mutex);
+ }
+ 
++/* Arm the next repeat of the image on screen, or stop repeating. The commit
++ * goes 1 ms before the time, as the first one did, so all of a frame's
++ * refreshes keep the same distance from what was asked. A repeat already
++ * due - the panel running behind, at its fastest refresh - goes at once
++ * and waits for the panel, so the frame still gets all of its refreshes.
++ */
++static void
++wsi_display_arm_repeat(struct wsi_display *wsi)
++{
++   struct itimerspec at = { 0 };
++
++   if (wsi->repeat_image && wsi->repeat_left) {
++      uint64_t ns = MAX2(wsi->repeat_ns - 1000 * 1000,
++                         (uint64_t)os_time_get_nano() + 1000);
++      at.it_value.tv_sec = ns / 1000000000ull;
++      at.it_value.tv_nsec = ns % 1000000000ull;
++   } else {
++      wsi->repeat_image = NULL;
++   }
++   (void) timerfd_settime(wsi->repeat_fd, TFD_TIMER_ABSTIME, &at, NULL);
++}
++
++/* A timed VRR frame reached the display. If the frames come slower than
++ * twice the panel's fastest refresh, show this one as many times as fit
++ * a frame period at that rate or slower, evenly spaced from its own
++ * target, so every frame stays on screen equally long. The next frame is
++ * expected one period after this one.
++ */
++static void
++wsi_display_plan_repeats(struct wsi_display_image *image)
++{
++   struct wsi_display_swapchain *chain = image->chain;
++   struct wsi_display *wsi = chain->wsi;
++   uint64_t refresh = chain->base.present_timing.refresh_duration;
++   uint64_t interval = chain->vrr_interval_ns;
++   unsigned count;
++
++   wsi->repeat_image = NULL;
++   if (wsi->repeat_fd < 0 || !image->vrr_target_ns || !interval || !refresh ||
++       interval > 100 * 1000 * 1000)
++      return;
++
++   /* A fiftieth of a refresh of slack keeps a frame of exactly two
++    * refreshes, as the SNES is on a mode made for it, from rounding down
++    * to one. A repeat that comes that much early waits for the panel.
++    */
++   count = (unsigned)((interval + refresh / 50) / refresh);
++   if (count < 2)
++      return;
++
++   wsi->repeat_image = image;
++   wsi->repeat_step_ns = interval / count;
++   wsi->repeat_ns = image->vrr_target_ns + wsi->repeat_step_ns;
++   wsi->repeat_left = count - 1;
++   wsi_display_arm_repeat(wsi);
++}
++
+ /**
+  * libdrm callback for when we get a DRM_EVENT_PAGE_FLIP in response to our
+  * atomic commit with DRM_MODE_PAGE_FLIP_EVENT.  That event can happen at any
+@@ -2068,6 +2155,22 @@
+    chain->last_presented_nsec = nsec;
+    connector->last_nsec = nsec;
+ 
++   /* A repeat shows a present the application has already been told
++    * about; it only moves on to the next one.
++    */
++   if (image->repeating) {
++      image->repeating = false;
++      image->state = WSI_IMAGE_DISPLAYING;
++      if (chain->wsi->repeat_image == image) {
++         chain->wsi->repeat_ns += chain->wsi->repeat_step_ns;
++         wsi_display_arm_repeat(chain->wsi);
++      }
++      VkResult result = _wsi_display_queue_next(&(chain->base));
++      if (result != VK_SUCCESS)
++         chain->status = result;
++      return;
++   }
++
+    /* Never update the refresh rate estimate. It's static based on the mode.
+     * Update this before we signal present wait so that applications
+     * get lowest possible latency for present time. */
+@@ -2081,6 +2184,7 @@
+                      image - &(image->chain->images[0]), frame);
+    image->state = WSI_IMAGE_DISPLAYING;
+    wsi_display_present_complete(chain, image);
++   wsi_display_plan_repeats(image);
+ 
+    wsi_display_idle_old_displaying(image);
+ 
+@@ -2136,25 +2240,75 @@
+    }
+ }
+ 
++static int
++drm_atomic_commit(wsi_display_connector *connector, struct wsi_display_image *image, bool test_only);
++
++/* Time to show the image on screen again: commit it again, unless it is no
++ * longer the last thing committed, or the next present wants the panel
++ * before this refresh would be over. Called by the wait thread with
++ * wait_mutex held.
++ */
++static void
++wsi_display_repeat_expired(struct wsi_display *wsi)
++{
++   struct wsi_display_image *image = wsi->repeat_image;
++   uint64_t expirations;
++
++   (void) read(wsi->repeat_fd, &expirations, sizeof(expirations));
++   if (!image || image->state != WSI_IMAGE_DISPLAYING) {
++      wsi->repeat_image = NULL;
++      return;
++   }
++
++   struct wsi_display_swapchain *chain = image->chain;
++   uint64_t refresh = chain->base.present_timing.refresh_duration;
++   for (uint32_t i = 0; i < chain->base.image_count; i++) {
++      struct wsi_display_image *other = &chain->images[i];
++      if (other->state == WSI_IMAGE_FLIPPING ||
++          other->state == WSI_IMAGE_QUEUED ||
++          other->state == WSI_IMAGE_QUEUED_AFTER_WAIT ||
++          (other->state == WSI_IMAGE_WAITING &&
++           (!other->vrr_target_ns ||
++            other->vrr_target_ns + refresh / 50 < wsi->repeat_ns + refresh))) {
++         wsi->repeat_image = NULL;
++         return;
++      }
++   }
++
++   wsi_display_mode *display_mode =
++      wsi_display_mode_from_handle(chain->surface->displayMode);
++   image->repeating = true;
++   image->state = WSI_IMAGE_FLIPPING;
++   wsi->repeat_left--;
++   if (drm_atomic_commit(display_mode->connector, image, false) != 0) {
++      image->repeating = false;
++      image->state = WSI_IMAGE_DISPLAYING;
++      wsi->repeat_image = NULL;
++   }
++}
++
+ static void *
+ wsi_display_wait_thread(void *data)
+ {
+    struct wsi_display *wsi = data;
+-   struct pollfd pollfd[2] = {
++   /* poll() skips a negative fd. */
++   struct pollfd pollfd[3] = {
+       { .fd = wsi->fd, .events = POLLIN },
+       { .fd = wsi->timer_fd, .events = POLLIN },
++      { .fd = wsi->repeat_fd, .events = POLLIN },
+    };
+-   nfds_t nfds = wsi->timer_fd >= 0 ? 2 : 1;
+ 
+    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+    for (;;) {
+-      int ret = poll(pollfd, nfds, -1);
++      int ret = poll(pollfd, 3, -1);
+       if (ret > 0) {
+          mtx_lock(&wsi->wait_mutex);
+          if (pollfd[0].revents)
+             (void) drmHandleEvent(wsi->fd, &event_context);
+-         if (nfds > 1 && (pollfd[1].revents & POLLIN))
++         if (pollfd[1].revents & POLLIN)
+             wsi_display_timer_expired(wsi);
++         if (pollfd[2].revents & POLLIN)
++            wsi_display_repeat_expired(wsi);
+          u_cnd_monotonic_broadcast(&wsi->wait_cond);
+          mtx_unlock(&wsi->wait_mutex);
+       }
+@@ -2168,6 +2322,8 @@
+    if (!wsi->wait_thread) {
+       if (wsi->timer_fd < 0)
+          wsi->timer_fd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK);
++      if (wsi->repeat_fd < 0)
++         wsi->repeat_fd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK);
+       int ret = pthread_create(&wsi->wait_thread, NULL,
+                                wsi_display_wait_thread, wsi);
+       if (ret)
+@@ -3201,6 +3357,40 @@
+       bool is_vrr = connector->vrr_enabled == VRR_TRISTATE_ENABLED &&
+                     connector->vrr_capable == VRR_TRISTATE_ENABLED;
+ 
++      /* The frame period, from the distance between targets, met or not.
++       * One distance off the period - the application moving its targets,
++       * or dropping a frame - is noise, and the repeats of a single frame
++       * must not follow it; a new period is taken once it is seen twice.
++       */
++      if (image->state == WSI_IMAGE_QUEUED) {
++         if (is_vrr && !skip_timing && is_absolute_time) {
++            uint64_t target = image->timing_request.time;
++            uint64_t last = chain->vrr_last_target_ns;
++            uint64_t period = chain->vrr_interval_ns;
++            uint64_t prev = chain->vrr_last_interval_ns;
++            uint64_t seen = last && target > last ? target - last : 0;
++
++            if (!seen)
++               period = 0;
++            else if (!period)
++               period = seen;
++            else if (seen > period - period / 4 && seen < period + period / 4)
++               period = period - period / 8 + seen / 8;
++            else if (prev && seen > prev - prev / 16 && seen < prev + prev / 16)
++               period = seen;
++
++            image->vrr_target_ns = target;
++            chain->vrr_last_target_ns = target;
++            chain->vrr_last_interval_ns = seen;
++            chain->vrr_interval_ns = period;
++         } else {
++            image->vrr_target_ns = 0;
++            chain->vrr_last_target_ns = 0;
++            chain->vrr_last_interval_ns = 0;
++            chain->vrr_interval_ns = 0;
++         }
++      }
++
+       /* Nor as a threshold: on VRR a target less than a refresh after the last vblank is still a
+        * time to start the next refresh at, and the hardware's shortest frame bounds it anyway. The
+        * last vblank is stamped at the end of vblank, so a present aimed one refresh after the
+@@ -3785,6 +3975,7 @@
+    list_inithead(&wsi->connectors);
+ 
+    wsi->timer_fd = -1;
++   wsi->repeat_fd = -1;
+ 
+    int ret = mtx_init(&wsi->wait_mutex, mtx_plain);
+    if (ret != thrd_success) {
+@@ -3848,6 +4039,8 @@
+       wsi_display_stop_wait_thread(wsi);
+       if (wsi->timer_fd >= 0)
+          close(wsi->timer_fd);
++      if (wsi->repeat_fd >= 0)
++         close(wsi->repeat_fd);
+ 
+       if (wsi->hotplug_thread) {
+          pthread_cancel(wsi->hotplug_thread);
