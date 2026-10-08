@@ -525,6 +525,24 @@ static uint64_t read_timings(int read_mode, uint32_t *newest_id)
 	return newest;
 }
 
+static uint64_t first_frame_on_screen(int read_mode)
+{
+	uint64_t deadline = now_ns() + 2000000000ull;
+	uint32_t id = 0;
+
+	if (read_mode < 0) {
+		sleep_until(now_ns() + 1000000000ull);
+		return now_ns();
+	}
+	while (now_ns() < deadline && !stop) {
+		uint64_t t = read_timings(read_mode, &id);
+		if (t)
+			return t;
+		sleep_until(now_ns() + 2000000ull);
+	}
+	return now_ns();
+}
+
 static void wait_vblank(void)
 {
 	VkDisplayEventInfoEXT ei = {
@@ -690,7 +708,7 @@ int main(int argc, char **argv)
 		// An untimed frame's record would start a second schedule beside
 		// the first. Each present goes in a few ms before its target.
 		uint64_t period = rate > 0 ? (uint64_t)(1e9 / rate) : 0;
-		uint64_t t0 = start + 50000000ull;
+		uint64_t t0 = 0;
 		uint64_t anchor_time = 0, cum = 0;
 		uint32_t anchor_id = 0;
 		uint64_t *starts = NULL;
@@ -712,7 +730,16 @@ int main(int argc, char **argv)
 			uint64_t target = 0;
 
 			if (period) {
-				target = t0 + (uint64_t)k * period;
+				// The first present sets the mode, which takes a few
+				// hundred ms: the schedule starts a period after that
+				// frame reached the screen, from its record, or a second
+				// on when the records are not read.
+				if (k == 1)
+					t0 = first_frame_on_screen(read_mode) + period;
+				if (k == 1 && t0 < now_ns() + 4000000ull)
+					t0 = now_ns() + 4000000ull;
+				if (k)
+					target = t0 + (uint64_t)(k - 1) * period;
 			} else {
 				if (nstarts == maxstarts)
 					starts = grow(starts, &maxstarts, sizeof(*starts));
