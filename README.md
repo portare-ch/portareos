@@ -9,8 +9,9 @@
 > Black coffee without sugar and milk. With the right amount of beans and water.
 
 PortareOS tunes the whole stack for low latency, consistent frame delivery
-and faithful console timing on the Nova's 1280×960, 120 Hz panel. Hardware
-follows the console's refresh and audio rates wherever possible. Correctness
+and faithful console timing on the Nova's 1280×960 panel, at variable
+refresh up to 120 Hz. Hardware follows the console's refresh and audio
+rates wherever possible. Correctness
 comes first, then latency; features that serve neither come out.
 
 Write the card, copy your games across, and play. One emulator per system,
@@ -107,13 +108,28 @@ brightness, battery and time.
 Kernel, emulators, DSP topology, display driver, input path and frontend are
 all open to change. Measurements guide the work.
 
-### Panel modes matched to the console
+### Variable refresh at the console's rate
 
-The Nova has no variable refresh rate. Its panel driver carries one mode
-per console family at twice the console's frame rate. RetroArch selects
-the mode and presents each frame once, at the vblank two refreshes after
-the last. The panel paces the core, preserving console timing without
-periodically dropping or repeating frames to fit 60 Hz.
+The panel refreshes when a frame arrives, anywhere from 90 to 120.198 Hz.
+This uses the display controller's AVR, the hardware behind Qualcomm's
+Qsync, which the vendor never enabled for this panel. RetroArch runs each
+game at the console's own frame rate and times every frame. Mesa then shows
+it twice, so each frame stays on screen for two equal refreshes:
+2 × 59.8261 Hz for the PlayStation, 2 × 60.0988 Hz for the SNES. There is
+no mode change per system, nothing is dropped or repeated to fit 60 Hz,
+and vsync is off. The few arcade boards at 60.1 to 61 Hz do not fit twice
+into 120.198 Hz; they are locked to the display at half its rate instead.
+
+Flip traces show every frame twice. Super Mario World: 3607 refreshes for
+1804 frames in 30 s, none longer than 8.51 ms. See
+[variable refresh](documentation/VARIABLE_REFRESH.md) for the hardware,
+measurements and design.
+
+Fixed refresh remains for xemu and Steam, which do not time their frames,
+and for comparison (`vrr=0` in `system.cfg`, for everything, a system or a
+game). There the panel driver carries one mode per console family at twice
+its frame rate. RetroArch selects the mode and presents each frame once,
+at the vblank two refreshes after the last.
 
 | Panel mode | Console | Frame rate |
 | --- | --- | --- |
@@ -127,15 +143,16 @@ periodically dropping or repeating frames to fit 60 Hz.
 | 120.000 Hz | Steam: PC games capped at 60 or 120 by a timer | 60 |
 
 Panel timing was measured to better than one part per million against the
-SoC clock. SNES/NES gets wider vertical blanking for BFI experiments; the
-panel stays in its 120 Hz class. SwanStation does not yet follow real
+SoC clock. The SNES/NES mode, the fastest, is the base for variable
+refresh; its wider vertical blanking began as a BFI experiment. SwanStation does not yet follow real
 PlayStation mid-game rate changes. See
 [refresh rates](documentation/PER_DEVICE_DOCUMENTATION/SM8550/REFRESH_RATES.md)
 for implementation and measurements.
 
 **Black frame insertion is experimental and off by default.** It aims for
 CRT-like motion clarity by inserting black refreshes; rolling bands and
-cadence stability remain unresolved.
+cadence stability remain unresolved, and it is untested with variable
+refresh.
 
 ### Audio at the console's sample rate
 
@@ -186,8 +203,10 @@ improvement, though audio latency remains somewhat higher than Android.
 ### Latency and input
 
 A 1000 Hz kernel tick, selectable preemption, teo idle governor, schedutil
-with the chip's energy model, per-core swapchain sizes, no threaded video
-and RetroArch's automatic frame delay reduce buffering and jitter.
+with the chip's energy model, per-core swapchain sizes and no threaded video
+reduce buffering and jitter. With variable refresh, each frame goes to the
+panel a measured few milliseconds after the core starts it, replacing
+RetroArch's automatic frame delay.
 
 A community tester reports latency variation down to one frame and
 button-to-screen latency about one frame lower than Android. These results
@@ -206,7 +225,8 @@ Each program controls presentation directly, without a desktop compositor's
 frame queue or EmulationStation:
 
 * **portarelauncher:** KMS with a CPU-written dumb buffer; no GPU rendering.
-* **RetroArch:** Vulkan direct display (`VK_KHR_display`).
+* **RetroArch:** Vulkan direct display (`VK_KHR_display`), with variable
+  refresh.
 * **mpv:** Vulkan direct display, the same path as games.
 * **xemu:** SDL's KMS driver.
 * **Steam:** the exception, using gamescope on the DRM backend.
@@ -247,6 +267,8 @@ are kept current; a daily workflow opens pull requests for emulator updates.
 Unofficial debug builds include gdb, strace and tools for measuring changes:
 
 * **vblank-rate:** measures actual panel timing.
+* **vrr-probe:** drives the panel through KMS with stretched modes, frame
+  schedules and `VRR_ENABLED`, to probe variable refresh.
 * **tear-test:** counts torn and dropped frames using DPU CRCs, with
   deliberate tearing to validate detection.
 * **pcm-flags:** reads driver flags and period constraints.
