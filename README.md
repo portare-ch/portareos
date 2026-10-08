@@ -111,15 +111,19 @@ brightness, battery and time.
 Kernel, emulators, DSP topology, display driver, input path and frontend are
 all open to change. Measurements guide the work.
 
-### Variable refresh at the console's rate
+### Integer-multiple variable refresh at the console's rate
 
 RetroArch enables variable refresh automatically on the built-in panel
 when it is the only connected display and no display mode is pinned.
 The panel follows timed frames within a 90–120.198 Hz range, using the
 display controller's AVR, the hardware behind Qualcomm's Qsync.
 
-RetroArch paces the game at the core's reported frame rate. For the usual
-NTSC rates, Mesa scans each frame twice without rendering it again:
+RetroArch paces the game at the core's reported frame rate. Our Mesa Vulkan
+WSI patches schedule integer-multiple scanout: each game frame is scanned
+an integer number of times, evenly spaced, to keep the panel within its
+refresh range. This requires support in both Mesa and the kernel's display
+driver. For the usual NTSC rates, Mesa schedules two scans without rendering
+the frame again:
 2 × 59.8261 Hz for the PlayStation, 2 × 60.0988 Hz for the SNES. All systems
 use the fastest panel mode as the base for variable refresh, with no
 periodic frame drops or extra repeats to fit 60 Hz. RetroArch's vsync
@@ -163,6 +167,34 @@ for implementation and measurements.
 CRT-like motion clarity by inserting black refreshes; rolling bands and
 cadence stability remain unresolved, and it is untested with variable
 refresh.
+
+### Audio stack
+
+Audio flows from the application through PipeWire to the selected output.
+The solid arrows carry audio; the dotted arrow shows WirePlumber's routing
+and device policy.
+
+```mermaid
+flowchart TD
+    RA["Libretro core → RetroArch"] -->|Native PipeWire| PW
+    MPV["mpv / PORTAMP"] -->|Native PipeWire| PW
+    APPS["Other audio clients"] --> COMPAT["PulseAudio / ALSA compatibility"]
+    COMPAT --> PW["PipeWire mixer and graph<br/>32 / 44.1 / 48 kHz; 3 ms minimum quantum"]
+    WP["WirePlumber<br/>Device selection and routing"] -.-> PW
+    PW --> ALSA["ALSA / ASoC kernel drivers"]
+    ALSA -->|Shared-memory pull mode| DSP["Qualcomm AudioReach DSP"]
+    DSP -->|MI2S| AMP["Two aw88166 amplifiers"]
+    AMP --> SPK["Built-in speakers"]
+    DSP -->|Codec DMA| CODEC["WCD938x codec"]
+    CODEC --> HP["Wired headphones"]
+    DSP --> DP["DisplayPort audio<br/>USB-C external display"]
+    PW --> BT["BlueZ / Bluetooth audio"]
+    BT --> WIRELESS["Bluetooth headphones / speakers"]
+```
+
+The built-in speaker and headphone links follow supported stream rates.
+Bluetooth and external displays negotiate their own formats and buffering;
+the graph's quantum is not the end-to-end audio latency.
 
 ### Audio at the console's sample rate
 
@@ -230,17 +262,41 @@ suspend/resume cycles ([#466](https://github.com/portare-ch/portareos/pull/466))
 At 250 Hz, about 19% of reports failed to reach evdev, so 200 Hz is the
 default. The effect on button-to-screen latency still needs measurement.
 
-### KMS, no desktop
+### Video stack: KMS, no desktop
 
 Each program controls presentation directly, without a desktop compositor's
 frame queue or EmulationStation:
 
-* **portarelauncher:** KMS with a CPU-written dumb buffer; no GPU rendering.
-* **RetroArch:** Vulkan direct display (`VK_KHR_display`), with variable
-  refresh.
-* **mpv:** Vulkan direct display, the same path as games.
-* **xemu:** SDL's KMS driver.
-* **Steam:** the exception, using gamescope on the DRM backend.
+```mermaid
+flowchart TD
+    RA["Libretro core → RetroArch<br/>Core timing, scaling and shaders<br/>Timed presents for integer-multiple VRR"] --> VK
+    MPV["mpv<br/>Decode, scale and shaders<br/>Fixed refresh"] --> VK
+    XEMU["xemu<br/>Vulkan renderer by default; fixed refresh"] --> SDL["SDL3 KMSDRM<br/>Vulkan display surface"]
+    SDL --> VK
+    VK["Mesa Turnip / Vulkan<br/>Adreno GPU rendering"] --> WSI["Mesa Vulkan WSI / VK_KHR_display<br/>PortareOS patches: timed presents,<br/>integer-multiple repeats and VRR control"]
+    WSI -->|Page flips; timed repeats with VRR| KMS
+    STEAM["Steam / PC games"] --> GS["gamescope compositor<br/>Mesa / GPU rendering; DRM backend"]
+    GS --> KMS
+    LAUNCHER["portarelauncher<br/>CPU-written dumb buffer"] --> KMS
+    KMS["Linux DRM/KMS<br/>Patched msm driver: DSI VRR / AVR control"] --> DPU["Qualcomm display controller<br/>Scanout, optional color correction and AVR"]
+    DPU -->|MIPI DSI| PANEL["Nova AMOLED panel<br/>1280 × 960; up to 120.198 Hz"]
+```
+
+The diagram follows the built-in panel. The launcher releases display
+ownership while a game or player runs and takes it back on exit. xemu's
+default Vulkan renderer uses Turnip, with SDL3 KMSDRM creating the direct
+display surface. Steam uses gamescope for composition.
+
+**Integer-multiple VRR spans RetroArch, Mesa and the kernel.** RetroArch
+submits each frame once with a presentation target. Our Mesa Vulkan WSI
+patches time the page flips, repeat the same buffer at evenly spaced
+intervals without rendering it again, and enable `VRR_ENABLED`. The patched
+msm driver exposes DSI variable refresh through the display controller's
+AVR, keeping scanout within 90–120.198 Hz. For example, 59.8261 fps becomes
+119.6522 Hz (2×), and 30 fps can become 120 Hz (4×). This repeat scheduling
+is specific to timed direct-display presents; mpv, xemu and Steam currently
+use fixed refresh. See [variable refresh](documentation/VARIABLE_REFRESH.md)
+for the Mesa patches and measured behavior.
 
 Small services handle the rest:
 
