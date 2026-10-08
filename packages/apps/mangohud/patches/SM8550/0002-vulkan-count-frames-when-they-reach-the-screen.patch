@@ -1,0 +1,939 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] vulkan: count frames when they reach the screen
+
+The frametime was the CPU time between two vkQueuePresentKHR calls. On a
+presentation engine that holds a present until its target and repeats it
+(PortareOS mesa-003, mesa-005), that is how long the application took
+per frame, not what the display showed.
+
+Where the device offers VK_GOOGLE_display_timing and the swapchain is on
+a VK_KHR_display surface, a present is now counted when its record says
+when it reached the screen, and the interval between two such times is
+the frame's display interval. If the application enabled the extension,
+the layer only observes: presents go down unchanged and it copies what
+the application's own vkGetPastPresentationTimingGOOGLE returns, since
+a record is handed out once and the application times frames from it.
+If not, the layer enables it, tags each present with its own ID and
+target 0, and reads everything after each present; the application does
+not see the extension.
+
+A present is counted once, in order: when its record comes (ok), when a
+later one's comes first (skipped), after 500 ms (timeout), or when the
+swapchain is destroyed or falls back to counting at present (end). It
+falls back for good at a present that is untagged, shared with another
+swapchain, or reuses a pending ID, and when a present times out without
+the application having read since. update_hud_info_with_frametime is
+split into a periodic part, run at every present, and a frame part, run
+per counted present.
+
+The log replaces frametime with application_interval_ms and
+display_interval_ms and adds present_id, target_error_ms and record;
+missing values are empty. The summary's percentiles use display
+intervals when there are any and count the timeouts and missing records.
+The HUD shows the mean display interval, or -- when none came.
+
+A present split from one of several swapchains used to carry the whole
+VkPresentTimesInfoGOOGLE, so every swapchain got the first entry; each
+now gets its own.
+
+Measured on SM8550 (Retroid Pocket Nova) against a DRM/DPU flip trace:
+every display interval equal to the trace's vblank timestamps to the
+microsecond, in RetroArch at variable (1201 frames) and fixed refresh
+(3589) and in a test client. The unpatched layer's frametimes missed
+all 19 frames held for three refreshes in the fixed refresh run.
+Present hook median 204 us against 200-214 us unpatched.
+
+Signed-off-by: PortareOS <hello@portare.org>
+---
+diff --git a/src/hud_elements.cpp b/src/hud_elements.cpp
+index 34a1e49..3a42251 100644
+--- a/src/hud_elements.cpp
++++ b/src/hud_elements.cpp
+@@ -861,7 +861,12 @@ void HudElements::fps(){
+         }
+         if (HUDElements.params->enabled[OVERLAY_PARAM_ENABLED_frametime]){
+             ImguiNextColumnOrNewRow();
+-            right_aligned_text(HUDElements.colors.text, HUDElements.ralign_width, "%.1f", 1000 / HUDElements.sw_stats->fps);
++            if (!HUDElements.sw_stats->display_timing)
++                right_aligned_text(HUDElements.colors.text, HUDElements.ralign_width, "%.1f", 1000 / HUDElements.sw_stats->fps);
++            else if (std::isnan(HUDElements.sw_stats->display_ms))
++                right_aligned_text(HUDElements.colors.text, HUDElements.ralign_width, "--");
++            else
++                right_aligned_text(HUDElements.colors.text, HUDElements.ralign_width, "%.1f", HUDElements.sw_stats->display_ms);
+             ImGui::SameLine(0, 1.0f);
+             ImGui::PushFont(HUDElements.sw_stats->font_small);
+             HUDElements.TextColored(HUDElements.colors.text, "ms");
+@@ -976,7 +981,8 @@ void HudElements::frame_timing(){
+         ImGui::PushFont(HUDElements.sw_stats->font_small);
+         if (!HUDElements.params->enabled[OVERLAY_PARAM_ENABLED_horizontal] && !HUDElements.params->enabled[OVERLAY_PARAM_ENABLED_hud_compact]){
+             ImGui::Dummy(ImVec2(0.0f, real_font_size.y));
+-            HUDElements.TextColored(HUDElements.colors.engine, "%s", "Frametime");
++            HUDElements.TextColored(HUDElements.colors.engine, "%s",
++                                    HUDElements.sw_stats->display_timing ? "Display" : "Frametime");
+             ImGui::TableSetColumnIndex(ImGui::TableGetColumnCount() - 1);
+             ImGui::Dummy(ImVec2(0.0f, real_font_size.y));
+             right_aligned_text(HUDElements.colors.text, ImGui::GetContentRegionAvail().x, "min: %.1fms, max: %.1fms", min_frametime, max_frametime);
+diff --git a/src/logging.cpp b/src/logging.cpp
+index f542fcf..6c0f53b 100644
+--- a/src/logging.cpp
++++ b/src/logging.cpp
+@@ -2,6 +2,7 @@
+ #include <iomanip>
+ #include <array>
+ #include <algorithm>
++#include <cmath>
+ #include <spdlog/spdlog.h>
+ #include "logging.h"
+ #include "overlay.h"
+@@ -17,6 +18,9 @@ string os, cpu, gpu, ram, kernel, driver, cpusched;
+ bool sysInfoFetched = false;
+ double fps;
+ float frametime;
++float frame_display_ms = NAN, frame_target_error_ms = NAN;
++int64_t frame_present_id = -1;
++frame_record frame_record_state = frame_record::none;
+ logData currentLogData = {};
+ std::shared_ptr<Logger> logger;
+ ofstream output_file;
+@@ -60,9 +64,40 @@ static void upload_files(const std::vector<std::string>& logFiles){
+   exec("xdg-open " + url);
+ }
+ 
+-static bool compareByFps(const logData &a, const logData &b)
++/* The intervals frames were counted by: display intervals when the log has
++ * any, else application intervals. Rows without one are left out.
++ */
++static std::vector<float> counted_intervals(const std::vector<logData>& rows)
+ {
+-    return a.fps < b.fps;
++  bool display = std::any_of(rows.begin(), rows.end(),
++                             [](const logData& d) { return !std::isnan(d.display_interval); });
++  std::vector<float> values;
++  for (auto& d : rows) {
++    float v = display ? d.display_interval : d.frametime;
++    if (!std::isnan(v))
++      values.push_back(v);
++  }
++  return values;
++}
++
++static const char *record_name(frame_record r)
++{
++  switch (r) {
++  case frame_record::ok: return "ok";
++  case frame_record::skipped: return "skipped";
++  case frame_record::timeout: return "timeout";
++  case frame_record::end: return "end";
++  default: return "";
++  }
++}
++
++static std::string format_ms(float v)
++{
++  if (std::isnan(v))
++    return "";
++  char buf[32];
++  snprintf(buf, sizeof(buf), "%.3f", v);
++  return buf;
+ }
+ 
+ static void writeSummary(string filename){
+@@ -85,9 +120,10 @@ static void writeSummary(string filename){
+         << "Average GPU Temp," << "Average CPU Temp," << "Average VRAM Used,"
+         << "Average RAM Used," << "Average Swap Used," << "Peak GPU Load,"
+         << "Peak CPU Load," << "Peak GPU Temp," << "Peak CPU Temp,"
+-        << "Peak VRAM Used," << "Peak RAM Used," << "Peak Swap Used" << "\n";
++        << "Peak VRAM Used," << "Peak RAM Used," << "Peak Swap Used,"
++        << "Presents Without Display Interval," << "Records Timed Out,"
++        << "Records Missing" << "\n";
+     std::vector<logData> sorted = logArray;
+-    std::sort(sorted.begin(), sorted.end(), compareByFps);
+     float total = 0.0f;
+     float total_gpu = 0.0f;
+     float total_cpu = 0.0f;
+@@ -104,9 +140,7 @@ static void writeSummary(string filename){
+     float peak_ram = 0.0f;
+     float peak_swap = 0.0f;
+     float result;
+-    std::vector<float> fps_values;
+-    for (auto& data : sorted)
+-      fps_values.push_back(data.frametime);
++    std::vector<float> fps_values = counted_intervals(sorted);
+ 
+     std::unique_ptr<fpsMetrics> fpsmetrics;
+     std::vector<std::string> metrics {"0.001", "0.01", "0.97"};
+@@ -118,8 +152,16 @@ static void writeSummary(string filename){
+     fpsmetrics.reset();
+ 
+     total = 0;
++    for (float v : fps_values)
++      total = total + v;
++    size_t no_display = 0, timed_out = 0, missing = 0;
+     for (auto input : sorted){
+-      total = total + input.frametime;
++      if (std::isnan(input.display_interval))
++        no_display++;
++      if (input.record == frame_record::timeout)
++        timed_out++;
++      if (input.record == frame_record::skipped || input.record == frame_record::end)
++        missing++;
+       total_gpu = total_gpu + input.gpu_load;
+       total_cpu = total_cpu + input.cpu_load;
+       total_gpu_temp = total_gpu_temp + input.gpu_temp;
+@@ -136,7 +178,7 @@ static void writeSummary(string filename){
+       peak_swap = std::max(peak_swap, input.swap_used);
+     }
+     // Average FPS
+-    result = 1000 / (total / sorted.size());
++    result = fps_values.empty() ? 0 : 1000 / (total / fps_values.size());
+     out << fixed << setprecision(1) << result << ",";
+     // GPU Load (Average)
+     result = total_gpu / sorted.size();
+@@ -145,7 +187,7 @@ static void writeSummary(string filename){
+     result = total_cpu / sorted.size();
+     out << result << ",";
+     // Average Frame Time
+-    result = total / sorted.size();
++    result = fps_values.empty() ? 0 : total / fps_values.size();
+     out << result << ",";
+     // Average GPU Temp
+     result = total_gpu_temp / sorted.size();
+@@ -175,7 +217,8 @@ static void writeSummary(string filename){
+     // Peak RAM Used
+     out << peak_ram << ",";
+     // Peak Swap Used
+-    out << peak_swap;
++    out << peak_swap << ",";
++    out << no_display << "," << timed_out << "," << missing;
+   } else {
+     SPDLOG_ERROR("Failed to write log file");
+   }
+@@ -197,7 +240,8 @@ static void writeFileHeaders(ofstream& out){
+     if (params->enabled[OVERLAY_PARAM_ENABLED_log_versioning])
+       out << "--------------------FRAME METRICS--------------------" << endl;
+ 
+-    out << "fps," << "frametime," << "cpu_load," << "cpu_power," << "gpu_load,"
++    out << "fps," << "application_interval_ms," << "display_interval_ms,"
++        << "present_id," << "target_error_ms," << "record," << "cpu_load," << "cpu_power," << "gpu_load,"
+         << "cpu_temp," << "gpu_temp," << "gpu_core_clock," << "gpu_mem_clock,"
+         << "gpu_vram_used," << "gpu_power," << "ram_used," << "swap_used,"
+         << "process_rss," << "cpu_mhz," << "elapsed" << endl;
+@@ -213,7 +257,13 @@ void Logger::writeToFile(){
+   auto& logArray = logger->get_log_data();
+   if (output_file && !logArray.empty()){
+     output_file << logArray.back().fps << ",";
+-    output_file << logArray.back().frametime << ",";
++    output_file << format_ms(logArray.back().frametime) << ",";
++    output_file << format_ms(logArray.back().display_interval) << ",";
++    if (logArray.back().present_id >= 0)
++      output_file << logArray.back().present_id;
++    output_file << ",";
++    output_file << format_ms(logArray.back().target_error) << ",";
++    output_file << record_name(logArray.back().record) << ",";
+     output_file << logArray.back().cpu_load << ",";
+     output_file << logArray.back().cpu_power << ",";
+     output_file << logArray.back().gpu_load << ",";
+@@ -322,6 +372,10 @@ void Logger::try_log() {
+   currentLogData.previous = elapsedLog;
+   currentLogData.fps = fps;
+   currentLogData.frametime = frametime;
++  currentLogData.display_interval = frame_display_ms;
++  currentLogData.present_id = frame_present_id;
++  currentLogData.target_error = frame_target_error_ms;
++  currentLogData.record = frame_record_state;
+   m_log_array.push_back(currentLogData);
+   writeToFile();
+ 
+@@ -358,9 +412,7 @@ void autostart_log(int sleep) {
+ }
+ 
+ void Logger::calculate_benchmark_data(){
+-  vector<float> fps_values {};
+-  for (auto& point : m_log_array)
+-    fps_values.push_back(point.frametime);
++  vector<float> fps_values = counted_intervals(m_log_array);
+ 
+   benchmark.percentile_data.clear();
+ 
+diff --git a/src/logging.h b/src/logging.h
+index 62d34c7..a594dc7 100644
+--- a/src/logging.h
++++ b/src/logging.h
+@@ -13,9 +13,21 @@
+ 
+ #include "overlay_params.h"
+ 
++/* What became of a present's display timing record: none when frames are
++ * counted at present; ok; skipped, when a later present's record came first;
++ * timeout; end, when the swapchain stopped counting by display time first.
++ * Only ok gives a display interval. None of them says the frame was not shown.
++ */
++enum class frame_record { none, ok, skipped, timeout, end };
++
+ struct logData{
+   double fps;
+-  float frametime;
++  /* Milliseconds; NAN, or -1 for present_id, when the frame has none. */
++  float frametime; /* application interval */
++  float display_interval;
++  int64_t present_id;
++  float target_error;
++  frame_record record;
+   float cpu_load;
+   float cpu_power;
+   int cpu_mhz;
+@@ -82,6 +94,9 @@ extern std::string os, cpu, gpu, ram, kernel, driver, cpusched;
+ extern bool sysInfoFetched;
+ extern double fps;
+ extern float frametime;
++extern float frame_display_ms, frame_target_error_ms;
++extern int64_t frame_present_id;
++extern frame_record frame_record_state;
+ extern logData currentLogData;
+ 
+ std::string exec(std::string command);
+diff --git a/src/overlay.cpp b/src/overlay.cpp
+index 2196953..0c2ca36 100644
+--- a/src/overlay.cpp
++++ b/src/overlay.cpp
+@@ -1,4 +1,5 @@
+ #include <sstream>
++#include <cmath>
+ #include <iomanip>
+ #include <algorithm>
+ #include <thread>
+@@ -228,19 +229,11 @@ void stop_hw_updater()
+       hw_update_thread.reset();
+ }
+ 
+-void update_hud_info_with_frametime(struct swapchain_stats& sw_stats, const struct overlay_params& params, uint32_t vendorID, uint64_t frametime_ns){
++void update_hud_periodic(struct swapchain_stats& sw_stats, const struct overlay_params& params, uint32_t vendorID){
+    auto real_params = get_params();
+-   uint32_t f_idx = sw_stats.n_frames % ARRAY_SIZE(sw_stats.frames_stats);
+    uint64_t now = os_time_get_nano(); /* ns */
+    auto elapsed = now - sw_stats.last_fps_update; /* ns */
+-   float frametime_ms = frametime_ns / 1000000.f;
+ 
+-   if (sw_stats.last_present_time) {
+-        sw_stats.frames_stats[f_idx].stats[OVERLAY_PLOTS_frame_timing] =
+-            frametime_ns;
+-      frametime_data.push_back(frametime_ms);
+-      frametime_data.erase(frametime_data.begin());
+-   }
+ #ifdef __linux__
+    if (gpus)
+       gpus->update_throttling();
+@@ -255,9 +248,6 @@ void update_hud_info_with_frametime(struct swapchain_stats& sw_stats, const stru
+       FTrace::object->update();
+    }
+ #endif
+-   frametime = frametime_ms;
+-   fps = double(1000 / frametime_ms);
+-   if (fpsmetrics) fpsmetrics->update(frametime_ms);
+ 
+    if (elapsed >= real_params->fps_sampling_period) {
+       if (!hw_update_thread)
+@@ -270,6 +260,10 @@ void update_hud_info_with_frametime(struct swapchain_stats& sw_stats, const stru
+ #endif
+ 
+       sw_stats.fps = 1000000000.0 * sw_stats.n_frames_since_update / elapsed;
++      sw_stats.display_ms = sw_stats.display_n ?
++         sw_stats.display_sum_ns / 1000000.0 / sw_stats.display_n : NAN;
++      sw_stats.display_sum_ns = 0;
++      sw_stats.display_n = 0;
+ 
+       if (real_params->enabled[OVERLAY_PARAM_ENABLED_time]) {
+          std::time_t t = std::time(nullptr);
+@@ -287,28 +281,66 @@ void update_hud_info_with_frametime(struct swapchain_stats& sw_stats, const stru
+ 
+       sw_stats.n_frames_since_update = 0;
+       sw_stats.last_fps_update = now;
+-
+    }
+-   auto min = std::min_element(frametime_data.begin(), frametime_data.end());
+-   auto max = std::max_element(frametime_data.begin(), frametime_data.end());
+-   min_frametime = min[0];
+-   max_frametime = max[0];
+-   // double min_time = UINT64_MAX, max_time = 0;
+-   // for (auto& stat : sw_stats.frames_stats ){
+-   //    min_time = MIN2(stat.stats[0], min_time);
+-   //    max_time = MAX2(stat.stats[0], min_time);
+-   // }
+-   // min_frametime = min_time / sw_stats.time_dividor;
+-   // max_frametime = max_time / sw_stats.time_dividor;
++}
++
++static float interval_ms(uint64_t ns)
++{
++   return ns ? ns / 1000000.f : NAN;
++}
++
++void update_hud_frame(struct swapchain_stats& sw_stats, const struct overlay_params& params, const frame_sample& sample){
++   auto real_params = get_params();
++   uint32_t f_idx = sw_stats.n_frames % ARRAY_SIZE(sw_stats.frames_stats);
++   /* The graph shows the interval frames are counted by; none is a gap. */
++   uint64_t graph_ns = sw_stats.display_timing ? sample.display_ns : sample.app_ns;
++   float graph_ms = interval_ms(graph_ns);
++
++   sw_stats.frames_stats[f_idx].stats[OVERLAY_PLOTS_frame_timing] = graph_ns;
++   frametime_data.push_back(graph_ms);
++   frametime_data.erase(frametime_data.begin());
++
++   frametime = interval_ms(sample.app_ns);
++   frame_display_ms = interval_ms(sample.display_ns);
++   frame_present_id = sample.present_id;
++   frame_record_state = sample.record;
++   frame_target_error_ms = sample.has_target_error ? sample.target_error_ns / 1000000.f : NAN;
++   fps = sample.app_ns ? 1000000000.0 / sample.app_ns : 0;
++   if (fpsmetrics && graph_ns) fpsmetrics->update(graph_ms);
++   if (sw_stats.display_timing && sample.display_ns) {
++      sw_stats.display_sum_ns += sample.display_ns;
++      sw_stats.display_n++;
++   }
++
++   bool any = false;
++   for (float v : frametime_data) {
++      if (std::isnan(v))
++         continue;
++      if (!any || v < min_frametime) min_frametime = v;
++      if (!any || v > max_frametime) max_frametime = v;
++      any = true;
++   }
++   if (!any)
++      min_frametime = max_frametime = 0;
++
+    if (real_params->log_interval == 0){
+       logger->try_log();
+    }
+ 
+-   sw_stats.last_present_time = now;
+    sw_stats.n_frames++;
+    sw_stats.n_frames_since_update++;
+ }
+ 
++void update_hud_info_with_frametime(struct swapchain_stats& sw_stats, const struct overlay_params& params, uint32_t vendorID, uint64_t frametime_ns){
++   uint64_t now = os_time_get_nano(); /* ns */
++   frame_sample sample;
++   if (sw_stats.last_present_time)
++      sample.app_ns = frametime_ns;
++   update_hud_periodic(sw_stats, params, vendorID);
++   update_hud_frame(sw_stats, params, sample);
++   sw_stats.last_present_time = now;
++}
++
+ void update_hud_info(struct swapchain_stats& sw_stats, const struct overlay_params& params, uint32_t vendorID){
+    uint64_t now = os_time_get_nano(); /* ns */
+    uint64_t frametime_ns = now - sw_stats.last_present_time;
+diff --git a/src/overlay.h b/src/overlay.h
+index a5993aa..64d0648 100644
+--- a/src/overlay.h
++++ b/src/overlay.h
+@@ -58,6 +58,15 @@ struct swapchain_stats {
+    uint64_t last_fps_update;
+    ImVec2 main_window_pos;
+ 
++   /* Frames counted when they reached the screen (VK_GOOGLE_display_timing)
++    * rather than at present. display_ms is the mean display interval of the
++    * last sampling period, NAN when none came.
++    */
++   bool display_timing = false;
++   double display_ms = 0;
++   uint64_t display_sum_ns = 0;
++   unsigned display_n = 0;
++
+    struct {
+       int32_t major;
+       int32_t minor;
+@@ -154,6 +163,21 @@ void position_layer(struct swapchain_stats& data, const struct overlay_params& p
+ void render_imgui(swapchain_stats& data, struct overlay_params& params, ImVec2& window_size, bool is_vulkan);
+ void update_hud_info(struct swapchain_stats& sw_stats, const struct overlay_params& params, uint32_t vendorID);
+ void update_hud_info_with_frametime(struct swapchain_stats& sw_stats, const struct overlay_params& params, uint32_t vendorID, uint64_t frametime_ns);
++
++/* One counted frame. An interval of 0 is none: the application interval of
++ * the first present, the display interval of a frame whose predecessor was
++ * counted without a display time.
++ */
++struct frame_sample {
++   uint64_t app_ns = 0;
++   uint64_t display_ns = 0;
++   int64_t present_id = -1;
++   bool has_target_error = false;
++   int64_t target_error_ns = 0;
++   frame_record record = frame_record::none;
++};
++void update_hud_periodic(struct swapchain_stats& sw_stats, const struct overlay_params& params, uint32_t vendorID);
++void update_hud_frame(struct swapchain_stats& sw_stats, const struct overlay_params& params, const frame_sample& sample);
+ void update_hw_info(const struct overlay_params& params, uint32_t vendorID);
+ void init_cpu_stats(overlay_params& params);
+ void check_keybinds(overlay_params& params);
+diff --git a/src/vulkan.cpp b/src/vulkan.cpp
+index 7030d29..adb3910 100644
+--- a/src/vulkan.cpp
++++ b/src/vulkan.cpp
+@@ -33,6 +33,8 @@
+ #include <mutex>
+ #include <vector>
+ #include <list>
++#include <deque>
++#include <unordered_set>
+ #include <array>
+ #include <iomanip>
+ #include <sstream>
+@@ -91,6 +93,12 @@ struct instance_data {
+    uint32_t applicationVersion;
+ };
+ 
++/* VK_GOOGLE_display_timing on a device: the application enabled it and reads
++ * the records itself (observe), the layer enabled it and reads them (own), or
++ * the device does not offer it (none).
++ */
++enum class display_timing_mode { none, observe, own };
++
+ /* Mapped from VkDevice */
+ struct queue_data;
+ struct device_data {
+@@ -107,6 +115,8 @@ struct device_data {
+    struct queue_data *graphic_queue;
+ 
+    std::vector<struct queue_data *> queues;
++
++   display_timing_mode timing;
+ };
+ 
+ /* Mapped from VkCommandBuffer */
+@@ -186,12 +196,35 @@ struct swapchain_data {
+    ImVec2 window_size;
+ 
+    struct swapchain_stats sw_stats;
++
++   /* Display accounting (sw_stats.display_timing): a present is counted when
++    * its record says when it reached the screen; see take_record().
++    */
++   struct pending_present {
++      uint32_t id;
++      uint64_t call_ns;
++      uint64_t app_ns;
++   };
++   std::deque<pending_present> pending;
++   uint32_t timing_capacity;
++   uint32_t next_present_id;
++   uint64_t last_call_ns;
++   uint64_t last_actual_ns;
++   std::vector<VkPastPresentationTimingGOOGLE> own_records;
++
++   /* Records the application read, until its next present. */
++   std::mutex arrived_mutex;
++   bool collecting;
++   uint64_t last_read_ns;
++   std::vector<VkPastPresentationTimingGOOGLE> arrived;
+ };
+ 
+ // single global lock, for simplicity
+ std::mutex global_lock;
+ typedef std::lock_guard<std::mutex> scoped_lock;
+ std::unordered_map<uint64_t, void *> vk_object_to_data;
++/* Surfaces on a VK_KHR_display plane, the only ones with display timings. */
++std::unordered_set<uint64_t> display_surfaces;
+ 
+ thread_local ImGuiContext* __MesaImGui;
+ 
+@@ -483,11 +516,179 @@ static struct overlay_draw *get_overlay_draw(struct swapchain_data *data, unsign
+    return draw;
+ }
+ 
++static bool hud_wants_frames()
++{
++   return !get_params()->no_display || logger->is_active();
++}
++
++/* A present that waited this long for its record is counted without one. */
++static const uint64_t record_timeout_ns = 500 * 1000 * 1000;
++
++static void count_present(struct swapchain_data *data,
++                          const swapchain_data::pending_present &p,
++                          const VkPastPresentationTimingGOOGLE *rec,
++                          frame_record why)
++{
++   frame_sample sample;
++   sample.app_ns = p.app_ns;
++   sample.present_id = p.id;
++   sample.record = why;
++   if (rec && rec->actualPresentTime) {
++      if (data->last_actual_ns && rec->actualPresentTime > data->last_actual_ns)
++         sample.display_ns = rec->actualPresentTime - data->last_actual_ns;
++      if (rec->desiredPresentTime) {
++         sample.has_target_error = true;
++         sample.target_error_ns = (int64_t)(rec->actualPresentTime - rec->desiredPresentTime);
++      }
++      data->last_actual_ns = rec->actualPresentTime;
++   } else {
++      data->last_actual_ns = 0;
++   }
++   if (hud_wants_frames())
++      update_hud_frame(data->sw_stats, data->device->instance->params, sample);
++}
++
++static void count_first_pending(struct swapchain_data *data,
++                                const VkPastPresentationTimingGOOGLE *rec,
++                                frame_record why)
++{
++   swapchain_data::pending_present p = data->pending.front();
++   data->pending.pop_front();
++   count_present(data, p, rec, why);
++}
++
++/* Records retire in present order, so the presents before the one a record
++ * is for will never get theirs. A record for a present already counted, after
++ * the timeout, is dropped.
++ */
++static void take_record(struct swapchain_data *data,
++                        const VkPastPresentationTimingGOOGLE &rec)
++{
++   size_t n = 0;
++   while (n < data->pending.size() && data->pending[n].id != rec.presentID)
++      n++;
++   if (n == data->pending.size())
++      return;
++   for (; n > 0; n--)
++      count_first_pending(data, nullptr, frame_record::skipped);
++   count_first_pending(data, &rec, frame_record::ok);
++}
++
++/* Back to counting at present, for the rest of the swapchain's life. What is
++ * still pending is counted once, without a record.
++ */
++static void stop_display_timing(struct swapchain_data *data)
++{
++   {
++      std::lock_guard<std::mutex> lk(data->arrived_mutex);
++      data->collecting = false;
++      data->arrived.clear();
++   }
++   while (!data->pending.empty())
++      count_first_pending(data, nullptr, frame_record::end);
++   data->sw_stats.display_timing = false;
++   data->sw_stats.last_present_time = data->last_call_ns;
++}
++
++/* Everything the driver has, with an array as large as its queue, so it
++ * never drops a record.
++ */
++static void read_own_records(struct swapchain_data *data)
++{
++   struct device_data *device_data = data->device;
++   uint32_t count = data->own_records.size();
++   VkResult result = device_data->vtable.GetPastPresentationTimingGOOGLE(
++      device_data->device, data->swapchain, &count, data->own_records.data());
++   if (result != VK_SUCCESS && result != VK_INCOMPLETE) {
++      stop_display_timing(data);
++      return;
++   }
++   for (uint32_t k = 0; k < count; k++)
++      take_record(data, data->own_records[k]);
++}
++
++/* The layer's own read, or what the application read since its last present. */
++static void drain_records(struct swapchain_data *data)
++{
++   if (data->device->timing == display_timing_mode::own) {
++      read_own_records(data);
++      return;
++   }
++   std::vector<VkPastPresentationTimingGOOGLE> arrived;
++   {
++      std::lock_guard<std::mutex> lk(data->arrived_mutex);
++      arrived.swap(data->arrived);
++   }
++   for (auto &rec : arrived)
++      take_record(data, rec);
++}
++
++/* Before a present on a swapchain counted by display time: take the records
++ * that came, then count the presents that waited too long, then queue this
++ * one under the ID it carries. False when the swapchain falls back to
++ * counting at present instead.
++ */
++static bool display_timing_present(struct swapchain_data *data,
++                                   const VkPresentTimesInfoGOOGLE *app_times,
++                                   uint32_t swapchain_count, uint32_t *id)
++{
++   display_timing_mode timing = data->device->timing;
++   uint64_t now = os_time_get_nano();
++   uint64_t last_read_ns;
++   bool unread = false;
++
++   drain_records(data);
++   if (!data->sw_stats.display_timing)
++      return false;
++
++   {
++      std::lock_guard<std::mutex> lk(data->arrived_mutex);
++      last_read_ns = data->last_read_ns;
++   }
++   /* A present that timed out with no read by the application since it was
++    * made means the application does not read its records (RetroArch
++    * before 0020, on frames timed at the core's rate): none will come.
++    */
++   while (!data->pending.empty() &&
++          (now - data->pending.front().call_ns > record_timeout_ns ||
++           data->pending.size() > data->timing_capacity)) {
++      if (timing == display_timing_mode::observe && last_read_ns < data->pending.front().call_ns)
++         unread = true;
++      count_first_pending(data, nullptr, frame_record::timeout);
++   }
++
++   bool tagged = false;
++   if (swapchain_count == 1 && !unread) {
++      if (timing == display_timing_mode::own) {
++         *id = ++data->next_present_id;
++         tagged = true;
++      } else if (app_times && app_times->pTimes) {
++         *id = app_times->pTimes[0].presentID;
++         tagged = true;
++      }
++   }
++   for (auto &p : data->pending)
++      if (tagged && p.id == *id)
++         tagged = false;
++
++   if (!tagged) {
++      stop_display_timing(data);
++      return false;
++   }
++   uint64_t app_ns = data->last_call_ns ? now - data->last_call_ns : 0;
++   data->pending.push_back({ *id, now, app_ns });
++   data->last_call_ns = now;
++   return true;
++}
++
+ static void snapshot_swapchain_frame(struct swapchain_data *data)
+ {
+    struct device_data *device_data = data->device;
+    struct instance_data *instance_data = device_data->instance;
+-   update_hud_info(data->sw_stats, instance_data->params, device_data->properties.vendorID);
++   if (!data->sw_stats.display_timing)
++      update_hud_info(data->sw_stats, instance_data->params, device_data->properties.vendorID);
++   else if (hud_wants_frames())
++      update_hud_periodic(data->sw_stats, instance_data->params, device_data->properties.vendorID);
+    check_keybinds(instance_data->params);
+ #ifdef __linux__
+    if (instance_data->params.control >= 0) {
+@@ -1623,6 +1824,20 @@ static VkResult overlay_CreateSwapchainKHR(
+    struct swapchain_data *swapchain_data = new_swapchain_data(*pSwapchain, device_data);
+    setup_swapchain_data(swapchain_data, pCreateInfo);
+ 
++   bool on_display;
++   {
++      ::scoped_lock lk(global_lock);
++      on_display = display_surfaces.count(HKEY(pCreateInfo->surface));
++   }
++   if (on_display && device_data->timing != display_timing_mode::none) {
++      swapchain_data->sw_stats.display_timing = true;
++      swapchain_data->collecting = true;
++      /* The driver keeps max(60, images) records and drops the oldest. */
++      swapchain_data->timing_capacity =
++         std::max<uint32_t>(60, swapchain_data->images.size());
++      swapchain_data->own_records.resize(swapchain_data->timing_capacity);
++   }
++
+    const VkPhysicalDeviceProperties& prop = device_data->properties;
+    swapchain_data->sw_stats.version_vk.major = VK_VERSION_MAJOR(prop.apiVersion);
+    swapchain_data->sw_stats.version_vk.minor = VK_VERSION_MINOR(prop.apiVersion);
+@@ -1678,6 +1893,11 @@ static void overlay_DestroySwapchainKHR(
+    struct swapchain_data *swapchain_data =
+       FIND(struct swapchain_data, swapchain);
+ 
++   if (swapchain_data->sw_stats.display_timing) {
++      drain_records(swapchain_data);
++      stop_display_timing(swapchain_data);
++   }
++
+    shutdown_swapchain_data(swapchain_data);
+    swapchain_data->device->vtable.DestroySwapchainKHR(device, swapchain, pAllocator);
+    destroy_swapchain_data(swapchain_data);
+@@ -1734,6 +1954,35 @@ static VkResult overlay_QueuePresentKHR(
+         }
+       }
+ 
++      /* A present split from one of several swapchains gets its own entry
++       * of the application's present times, not the first.
++       */
++      VkBaseInStructure **times_node = vk_find_next_struct(
++          (void**)&present_info.pNext, VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE);
++      const VkPresentTimesInfoGOOGLE *app_times =
++         times_node ? (const VkPresentTimesInfoGOOGLE *)*times_node : nullptr;
++      VkPresentTimesInfoGOOGLE times_patched;
++      VkPresentTimeGOOGLE own_time;
++      VkBaseInStructure *times_saved = nullptr;
++
++      if (app_times && pPresentInfo->swapchainCount > 1) {
++         times_patched = *app_times;
++         times_patched.swapchainCount = 1;
++         times_patched.pTimes = app_times->pTimes ? &app_times->pTimes[i] : nullptr;
++         times_saved = *times_node;
++         *times_node = (VkBaseInStructure *)&times_patched;
++      }
++
++      uint32_t present_id = 0;
++      if (swapchain_data->sw_stats.display_timing &&
++          display_timing_present(swapchain_data, app_times, pPresentInfo->swapchainCount, &present_id) &&
++          swapchain_data->device->timing == display_timing_mode::own) {
++         own_time = { present_id, 0 };
++         times_patched = { VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE,
++                           present_info.pNext, 1, &own_time };
++         present_info.pNext = &times_patched;
++      }
++
+       struct overlay_draw *draw = before_present(swapchain_data,
+                                                    queue_data,
+                                                    pPresentInfo->pWaitSemaphores,
+@@ -1751,6 +2000,11 @@ static VkResult overlay_QueuePresentKHR(
+       }
+ 
+       VkResult chain_result = queue_data->device->vtable.QueuePresentKHR(queue, &present_info);
++      if (times_saved)
++         *times_node = times_saved;
++      if (swapchain_data->sw_stats.display_timing &&
++          swapchain_data->device->timing == display_timing_mode::own)
++         read_own_records(swapchain_data);
+       if (pPresentInfo->pResults)
+          pPresentInfo->pResults[i] = chain_result;
+       if (chain_result != VK_SUCCESS && result == VK_SUCCESS)
+@@ -1904,6 +2158,8 @@ static VkResult overlay_CreateDevice(
+ 
+ 
+    bool can_get_driver_info = instance_data->api_version >= VK_API_VERSION_1_1;
++   bool app_display_timing = has_extension(enabled_extensions, VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME);
++   bool can_display_timing = false;
+ 
+    for (auto& extension : available_extensions) {
+       if (extension.extensionName == std::string_view(VK_KHR_DRIVER_PROPERTIES_EXTENSION_NAME)) {
+@@ -1913,6 +2169,8 @@ static VkResult overlay_CreateDevice(
+             }
+          }
+       }
++      if (extension.extensionName == std::string_view(VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME))
++         can_display_timing = !is_blacklisted();
+       if (extension.extensionName == std::string_view(VK_KHR_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME)) {
+          if (!has_extension(enabled_extensions, VK_KHR_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME)) {
+             enabled_extensions.push_back(VK_KHR_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME);
+@@ -1920,6 +2178,9 @@ static VkResult overlay_CreateDevice(
+       }
+    }
+ 
++   if (can_display_timing && !app_display_timing)
++      enabled_extensions.push_back(VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME);
++
+    VkDeviceCreateInfo pCreateInfoPatched = *pCreateInfo;
+    pCreateInfoPatched.ppEnabledExtensionNames = enabled_extensions.data();
+    pCreateInfoPatched.enabledExtensionCount = (uint32_t) enabled_extensions.size();
+@@ -1932,6 +2193,9 @@ static VkResult overlay_CreateDevice(
+                               fpGetDeviceProcAddr, *pDevice);
+    device_data->vtable.GetDeviceProcAddr = fpGetDeviceProcAddr;
+    device_data->physical_device = physicalDevice;
++   if (can_display_timing)
++      device_data->timing = app_display_timing ? display_timing_mode::observe
++                                               : display_timing_mode::own;
+ 
+    instance_data->pd_vtable.GetPhysicalDeviceProperties(device_data->physical_device,
+                                                      &device_data->properties);
+@@ -2149,6 +2413,24 @@ static VkResult overlay_CreateWaylandSurfaceKHR(
+    return ret;
+ }
+ 
++#endif
++
++static VkResult overlay_CreateDisplayPlaneSurfaceKHR(
++   VkInstance                                  instance,
++   const VkDisplaySurfaceCreateInfoKHR*        pCreateInfo,
++   const VkAllocationCallbacks*                pAllocator,
++   VkSurfaceKHR*                               pSurface
++)
++{
++   struct instance_data *instance_data = FIND(struct instance_data, instance);
++   VkResult ret = instance_data->vtable.CreateDisplayPlaneSurfaceKHR(instance, pCreateInfo, pAllocator, pSurface);
++   if (ret == VK_SUCCESS) {
++      ::scoped_lock lk(global_lock);
++      display_surfaces.insert(HKEY(*pSurface));
++   }
++   return ret;
++}
++
+ static void overlay_DestroySurfaceKHR(
+    VkInstance                                  instance,
+    VkSurfaceKHR                                surface,
+@@ -2157,10 +2439,41 @@ static void overlay_DestroySurfaceKHR(
+ {
+    struct instance_data *instance_data = FIND(struct instance_data, instance);
+ 
++#ifdef VK_USE_PLATFORM_WAYLAND_KHR
+    wayland_data_unref(NULL, (void *) surface);
++#endif
++   {
++      ::scoped_lock lk(global_lock);
++      display_surfaces.erase(HKEY(surface));
++   }
+    instance_data->vtable.DestroySurfaceKHR(instance, surface, pAllocator);
+ }
+-#endif
++
++/* The application's own read. What it got is kept for its next present and
++ * handed back untouched; the layer never reads in its place.
++ */
++static VkResult overlay_GetPastPresentationTimingGOOGLE(
++    VkDevice                                    device,
++    VkSwapchainKHR                              swapchain,
++    uint32_t*                                   pPresentationTimingCount,
++    VkPastPresentationTimingGOOGLE*             pPresentationTimings)
++{
++   struct device_data *device_data = FIND(struct device_data, device);
++   VkResult result = device_data->vtable.GetPastPresentationTimingGOOGLE(
++      device, swapchain, pPresentationTimingCount, pPresentationTimings);
++
++   if (pPresentationTimings && (result == VK_SUCCESS || result == VK_INCOMPLETE)) {
++      struct swapchain_data *swapchain_data = FIND(struct swapchain_data, swapchain);
++      if (swapchain_data) {
++         std::lock_guard<std::mutex> lk(swapchain_data->arrived_mutex);
++         swapchain_data->last_read_ns = os_time_get_nano();
++         if (swapchain_data->collecting)
++            swapchain_data->arrived.insert(swapchain_data->arrived.end(), pPresentationTimings,
++                                           pPresentationTimings + *pPresentationTimingCount);
++      }
++   }
++   return result;
++}
+ 
+ extern "C" PUBLIC VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL overlay_GetDeviceProcAddr(VkDevice dev,
+                                                                              const char *funcName);
+@@ -2201,8 +2514,10 @@ static const struct {
+ 
+ #ifdef VK_USE_PLATFORM_WAYLAND_KHR
+    ADD_HOOK(CreateWaylandSurfaceKHR),
+-   ADD_HOOK(DestroySurfaceKHR),
+ #endif
++   ADD_HOOK(CreateDisplayPlaneSurfaceKHR),
++   ADD_HOOK(DestroySurfaceKHR),
++   ADD_HOOK(GetPastPresentationTimingGOOGLE),
+    ADD_HOOK(CreateSwapchainKHR),
+    ADD_HOOK(QueuePresentKHR),
+    ADD_HOOK(DestroySwapchainKHR),
+@@ -2239,6 +2554,19 @@ extern "C" PUBLIC VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL overlay_GetDeviceProc
+                                                                              const char *funcName)
+ {
+    init_spdlog();
++
++   /* VK_GOOGLE_display_timing reaches the application only when it enabled
++    * it: not when the layer did, nor through the layer's hook when neither did.
++    */
++   if (dev && (!strcmp(funcName, "vkGetPastPresentationTimingGOOGLE") ||
++               !strcmp(funcName, "vkGetRefreshCycleDurationGOOGLE"))) {
++      struct device_data *device_data = FIND(struct device_data, dev);
++      if (device_data->timing == display_timing_mode::own)
++         return NULL;
++      if (device_data->timing == display_timing_mode::none)
++         return device_data->vtable.GetDeviceProcAddr(dev, funcName);
++   }
++
+    void *ptr = find_ptr(funcName);
+    if (ptr) return reinterpret_cast<PFN_vkVoidFunction>(ptr);
+ 

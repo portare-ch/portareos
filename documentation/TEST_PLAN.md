@@ -384,7 +384,10 @@ Three things make it a pass, and each fails differently:
 
 Spread below 25.07 ms is the core finishing early or late against a
 present deadline the swapchain absorbs; it does not reach the panel and
-is not a failure.
+is not a failure. The figures above are MangoHud's frametime, now
+`application_interval_ms`. `display_interval_ms` (#595) is when each frame
+reached the panel: there a missed vblank is a frame of 25.07 ms or more,
+and the spread is gone.
 
 With PRMPT on (`psx.preempt=1`), mashing through a fight: the launched
 config has `preemptive_frames_enable = "true"` and
