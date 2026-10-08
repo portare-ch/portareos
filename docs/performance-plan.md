@@ -11,7 +11,9 @@ harness is that nobody has to remember what was set at the time.
   the PipeWire quantum and rate, and the emulator's own config. Recorded once,
   because a number nobody wrote down is a run nobody can repeat.
 * `samples.csv` CPU and GPU clocks, temperature, charge and xrun count at 1 Hz.
-* `frametimes.csv` copied from MangoHud when the run had logging on.
+* `frametimes.csv` copied from MangoHud when the run had logging on: per
+  frame, `application_interval_ms` between presents and `display_interval_ms`
+  between frames reaching the panel.
 * `summary.txt` medians, p95, p99, max temperature, drain, xruns.
 
 Frametimes are the number that matters and they come from MangoHud, so launch
@@ -24,7 +26,9 @@ Then, with the game running:
     perf-probe baseline 60
 
 Take a baseline before changing anything. **p99 frametime is the metric**, not
-mean fps: the complaint is variance, and a mean hides exactly that.
+mean fps: the complaint is variance, and a mean hides exactly that. The
+present interval shows how close the emulator came to its budget; the display
+interval shows what reached the panel.
 
 ## Part 1: general performance
 

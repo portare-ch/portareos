@@ -74,8 +74,9 @@ while [ "$(date +%s)" -lt "${END}" ]; do
   sleep 1
 done
 
-# MangoHud writes its own csv when the run was launched with logging on.
-MH="$(ls -t /storage/mangologs/*.csv 2>/dev/null | head -1)"
+# MangoHud writes its own csv when the run was launched with logging on,
+# and a _summary.csv beside it when the log ends; the per-frame one is wanted.
+MH="$(ls -t /storage/mangologs/*.csv 2>/dev/null | grep -v '_summary\.csv$' | head -1)"
 [ -n "${MH}" ] && cp "${MH}" "${OUT}/frametimes.csv"
 
 {
@@ -97,13 +98,29 @@ MH="$(ls -t /storage/mangologs/*.csv 2>/dev/null | head -1)"
 
   if [ -f "${OUT}/frametimes.csv" ]; then
     echo
-    awk -F, '$1+0>0 {n++; f[n]=$1+0; s+=$1}
+    # Columns by name, in ms: application_interval_ms between presents and
+    # display_interval_ms between frames reaching the panel (#595); a log
+    # from before that has only frametime, the application interval.
+    awk -F, '
+      function at(v, n, q,   i) { i = int(n * q) + 1; if (i > n) i = n; return v[i] }
+      function show(name, v, n,   s, i) {
+        if (!n) return
+        asort(v)
+        for (i = 1; i <= n; i++) s += v[i]
+        printf "%-8s mean %.2f ms  p50 %.2f  p95 %.2f  p99 %.2f  max %.2f  (%d)\n", \
+               name, s / n, at(v, n, 0.5), at(v, n, 0.95), at(v, n, 0.99), v[n], n
+      }
+      !hdr && /^fps,/ { for (i = 1; i <= NF; i++) col[$i] = i; hdr = 1; next }
+      hdr {
+        a = $(col["application_interval_ms"] ? col["application_interval_ms"] : col["frametime"])
+        d = col["display_interval_ms"] ? $(col["display_interval_ms"]) : ""
+        if (a != "") app[++na] = a + 0
+        if (d != "") disp[++nd] = d + 0
+      }
       END {
-        if (!n) exit
-        asort(f)
-        printf "frametime  mean %.1f ms  p50 %.1f  p95 %.1f  p99 %.1f  max %.1f\n", \
-               s/n/1000, f[int(n/2)]/1000, f[int(n*0.95)]/1000, f[int(n*0.99)]/1000, f[n]/1000
-        printf "fps        mean %.1f\n", 1000000*n/s
+        show("present", app, na)
+        show("display", disp, nd)
+        if (na && !nd) print "display  none: logged without display timing"
       }' "${OUT}/frametimes.csv" 2>/dev/null
   else
     echo
