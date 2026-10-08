@@ -1,0 +1,39 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] vulkan: read the driver's display timings at every present
+
+The records VK_GOOGLE_display_timing keeps were read only when a frame
+was timed by counting refreshes (0014). A frame timed at the core's
+rate (0018) never asked, so on a variable refresh display, the case
+that matters, nothing read them: the driver's queue dropped the oldest,
+a frame falling back to the refresh count (menu, fast-forward) started
+from the oldest eight it then got, and a layer that sees the records
+through these reads, MangoHud, saw none.
+
+Read them at every present with display timing, whichever way it is
+timed. A read costs a lock and a copy of the records since the last.
+
+Measured on SM8550 (Retroid Pocket Nova), Super Mario World, variable
+refresh, three runs each: phase of the panel against the targets 6.3,
+7.5, 8.6 ms before and 6.2, 4.0, 8.0 ms after, late frames 12 to 16 and
+refreshes without a commit 2 to 4 in both, so the timing is unchanged;
+MangoHud's display intervals went from none to every frame.
+
+Signed-off-by: PortareOS <hello@portare.org>
+---
+diff --git a/gfx/common/vulkan_common.c b/gfx/common/vulkan_common.c
+--- a/gfx/common/vulkan_common.c
++++ b/gfx/common/vulkan_common.c
+@@ -3792,6 +3792,13 @@
+    /* An ID per present, so the timing query below can name it. */
+    if (vk->display_timing_supported && vk->display_timing_query)
+    {
++      /* Read what the driver has timed at every present, however this
++       * one is timed. Frames timed at the core's rate never asked, so
++       * the records went unread: a frame that falls back to counting
++       * refreshes (menu, fast-forward) started from a stale present, and
++       * a layer that sees the records only through these reads
++       * (MangoHud) saw none. */
++      vulkan_poll_present_timing(vk);
+       times.sType                = VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE;
+       times.pNext                = NULL;
+       times.swapchainCount       = 1;
