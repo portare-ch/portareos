@@ -4,7 +4,7 @@
 
 **For Retroid Pocket Nova owners who care about every frame and millisecond.**
 
-**[Home and installation guide](https://os.portare.org)** · [Known issues](BUGS.md) · [Roadmap](ROADMAP.md)
+[Home](https://os.portare.org) · **[Installation guide](documentation/INSTALLATION.md)** · [Known issues](BUGS.md) · [Roadmap](ROADMAP.md)
 
 > Black coffee without sugar and milk. With the right amount of beans and water.
 
@@ -24,7 +24,7 @@ PAL is not planned, though fixes that preserve NTSC behaviour are welcome.
 
 ## Installation and everyday use
 
-Follow the **[installation guide](https://os.portare.org)**. The first image
+Follow the **[installation guide](documentation/INSTALLATION.md)**. The first image
 requires a fresh card installation: PortareOS's own boot partition label
 prevents in-place updates from ROCKNIX. Later updates download from GitHub
 over Wi-Fi through the launcher, using the nightly or release channel, and
