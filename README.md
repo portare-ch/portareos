@@ -39,6 +39,9 @@ under About.
   anywhere.
 * **M2** in RetroArch opens a game guide: place a text file beside the ROM
   with its name and `.txt`. The game pauses; M2 or B returns to it.
+* **L1 + Y** shows or hides the MangoHud performance overlay in a game. The
+  overlay is off by default; `portareos.mangohud.enabled=1` in `system.cfg`
+  loads it, or `psx.portareos.mangohud.enabled=1` for one system.
 * **Settings > Consoles > PRMPT** enables an experimental pre-emptive frame
   per 2D console. PlayStation keeps its measured configuration without this
   switch because the performance cost was too high.
