@@ -1,0 +1,391 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
+"""Check one display run frame by frame against the kernel's trace (#595).
+
+  tools/display-check RUN [--cadence 2,2,4] [--rate HZ] [--refresh-ms MS]
+
+RUN is the path prefix of a run made with tools/display-trace. RUN.trace is
+required: ftrace text with trace_clock mono, drm_vblank_event,
+dpu_crtc_complete_flip, dpu_plane_set_scanout, and Mesa's commit markers
+(MESA_VK_WSI_DISPLAY_TRACE=1, mesa-007). Optional: RUN.mh.csv (MangoHud's
+per-frame log of the run, copied there), RUN.presents.csv and
+RUN.records.csv (present-probe), RUN.crc (the DPU's per-refresh CRC).
+
+The trace is the reference. A commit marker is paired with the flip it
+caused, the flip with the vblank it landed on, and the vblank's own
+timestamp - the time= payload, CLOCK_MONOTONIC, which the flip event hands
+Mesa truncated to microseconds - is when that commit reached the screen.
+Each refresh is then a new frame, a repeat of one (mesa-005), or a refresh
+with no commit since the last: a held frame on a fixed refresh, the panel
+refreshing on its own on a variable one.
+"""
+
+import argparse
+import bisect
+import collections
+import csv
+import os
+import re
+import statistics
+import sys
+
+EVENT = re.compile(r'\s(\d+)\.(\d+): (\w+): (.*)$')
+VBLANK = re.compile(r'crtc=(\d+), seq=(\d+), time=(\d+)')
+SCANOUT = re.compile(r'index:(\d+) layout:\{\d+x\d+ @ \[(\d+)/')
+MARKER = re.compile(r'wsi_display: (frame|repeat) image=(\d+) serial=(\d+) id=(-?\d+) target=(\d+)'
+                    r'(?: queued=(\d+))? commit=(\d+)')
+
+
+def ns(sec, frac):
+    return int(sec) * 1000000000 + int(frac.ljust(9, '0')[:9])
+
+
+class Run:
+    def __init__(self, prefix):
+        self.vblanks = []      # (header ns, seq, payload ns)
+        self.flips = []        # header ns
+        self.scanouts = []     # (header ns, address)
+        self.commits = []      # dicts from Mesa's markers
+        with open(prefix + '.trace', errors='replace') as f:
+            for line in f:
+                m = EVENT.search(line)
+                if not m:
+                    continue
+                t = ns(m.group(1), m.group(2))
+                ev, rest = m.group(3), m.group(4)
+                if ev == 'drm_vblank_event':
+                    v = VBLANK.match(rest)
+                    if v and v.group(1) == '0':
+                        self.vblanks.append((t, int(v.group(2)), int(v.group(3))))
+                elif ev == 'dpu_crtc_complete_flip':
+                    self.flips.append(t)
+                elif ev == 'dpu_plane_set_scanout':
+                    s = SCANOUT.match(rest)
+                    if s:
+                        self.scanouts.append((t, int(s.group(2))))
+                elif ev == 'tracing_mark_write':
+                    c = MARKER.search(rest)
+                    if c:
+                        self.commits.append(dict(
+                            t=t, repeat=c.group(1) == 'repeat', image=int(c.group(2)),
+                            serial=int(c.group(3)), id=int(c.group(4)),
+                            target=int(c.group(5)), queued=int(c.group(6) or 0),
+                            commit=int(c.group(7))))
+        self.vblanks.sort()
+        self.flips.sort()
+        self.scanouts.sort()
+        self.commits.sort(key=lambda c: c['commit'])
+        self.vb_hdr = [v[0] for v in self.vblanks]
+        self.seq_time = {v[1]: v[2] for v in self.vblanks}
+
+    def vblank_near(self, t, limit=3000000):
+        i = bisect.bisect_left(self.vb_hdr, t)
+        best = None
+        for j in (i - 1, i):
+            if 0 <= j < len(self.vblanks) and (best is None or abs(self.vb_hdr[j] - t) < abs(self.vb_hdr[best] - t)):
+                best = j
+        if best is None or abs(self.vb_hdr[best] - t) > limit:
+            return None
+        return self.vblanks[best]
+
+    def pair(self):
+        """Each commit with the flip it caused: the first flip after it not
+        taken by an earlier commit. A nonblocking commit can flip before its
+        marker is written, so a flip up to 2 ms before the marker counts."""
+        fi = 0
+        lost = 0
+        for c in self.commits:
+            while fi < len(self.flips) and self.flips[fi] < c['commit'] - 2000000:
+                fi += 1
+                lost += 1
+            if fi == len(self.flips):
+                c['vblank'] = None
+                continue
+            v = self.vblank_near(self.flips[fi])
+            c['vblank'] = v
+            fi += 1
+        si = 0
+        for c in self.commits:
+            while si < len(self.scanouts) and self.scanouts[si][0] < c['commit'] - 20000000:
+                si += 1
+            c['address'] = self.scanouts[si][1] if si < len(self.scanouts) else None
+            si += 1
+        return lost
+
+
+def pct(values, p):
+    if not values:
+        return float('nan')
+    v = sorted(values)
+    return v[min(len(v) - 1, int(p * len(v)))]
+
+
+def stats(values):
+    if not values:
+        return 'none'
+    return 'median %.3f  p95 %.3f  p99 %.3f  max %.3f  (n %d)' % (
+        statistics.median(values), pct(values, 0.95), pct(values, 0.99), max(values), len(values))
+
+
+def read_csv(path, header_start):
+    """MangoHud writes two system-info lines before its header."""
+    if not os.path.exists(path):
+        return None
+    with open(path) as f:
+        lines = f.read().splitlines()
+    for i, line in enumerate(lines):
+        if line.startswith(header_start):
+            return list(csv.DictReader(lines[i:]))
+    return None
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('run')
+    ap.add_argument('--cadence', help='refreshes per frame, as present-probe was given')
+    ap.add_argument('--rate', type=float, help='frame rate the content was timed at (VRR)')
+    ap.add_argument('--refresh-ms', type=float, default=1000 / 120.198,
+                    help='the shortest refresh, default the 120.198 Hz mode')
+    ap.add_argument('--bound-ms', type=float, default=0.46,
+                    help="vrr-probe's p95 frame-length error for the rate (VARIABLE_REFRESH.md)")
+    a = ap.parse_args()
+
+    run = Run(a.run)
+    lost = run.pair()
+    fails = []
+
+    def check(ok, text):
+        print(('PASS ' if ok else 'FAIL ') + text)
+        if not ok:
+            fails.append(text)
+
+    frames = [c for c in run.commits if not c['repeat'] and c['vblank']]
+    repeats = [c for c in run.commits if c['repeat'] and c['vblank']]
+    print('%s: %d vblanks, %d flips, %d commits (%d frames, %d repeats), %d flips without a commit marker'
+          % (os.path.basename(a.run), len(run.vblanks), len(run.flips), len(run.commits),
+             len(frames), len(repeats), lost))
+    if not frames:
+        return 1
+
+    # Refreshes: every vblank from the first frame on, as a new frame, a
+    # repeat, or none (held, or the panel on its own).
+    landed = {}
+    for c in frames + repeats:
+        landed[c['vblank'][1]] = c
+    first, last = frames[0]['vblank'][1], frames[-1]['vblank'][1]
+    seqs = [s for _, s, _ in run.vblanks if first <= s <= last]
+    kinds = collections.Counter()
+    intervals = collections.defaultdict(list)
+    for s in seqs:
+        c = landed.get(s)
+        kind = 'none' if c is None else 'repeat' if c['repeat'] else 'frame'
+        kinds[kind] += 1
+        if s - 1 in run.seq_time:
+            intervals[kind].append((run.seq_time[s] - run.seq_time[s - 1]) / 1e6)
+    missing = (last - first + 1) - len(seqs)
+    print('refreshes: %d new frame, %d repeat, %d with no commit; %d vblanks not traced'
+          % (kinds['frame'], kinds['repeat'], kinds['none'], missing))
+    if missing:
+        print('  (the vblank interrupt was off for those: their count is rebuilt from the mode, not measured)')
+    for k in ('frame', 'repeat', 'none'):
+        if intervals[k]:
+            print('  interval ending in %-6s %s' % (k + ':', stats(intervals[k])))
+
+    # Per frame: refreshes shown, from its first scanout to the next frame's.
+    shown = []
+    for c, n in zip(frames, frames[1:]):
+        shown.append(n['vblank'][1] - c['vblank'][1])
+    print('refreshes per frame:', '  '.join('%d: %d' % (k, v) for k, v in sorted(collections.Counter(shown).items())))
+
+    # Phase: first scanout - target, for timed frames past the first two
+    # seconds (mode set, the first budget). A frame is late when its present
+    # reached Mesa after its target; one committed late because the panel
+    # was still busy is not.
+    t0 = frames[0]['vblank'][2]
+    timed = [c for c in frames if c['target'] and c['vblank'][2] - t0 > 2e9]
+    phase = [(c['vblank'][2] - c['target']) / 1e6 for c in timed]
+    late = [c for c in frames if c['target'] and c['queued'] and c['queued'] > c['target']]
+    if phase:
+        print('phase, first scanout - target, ms:', stats(phase))
+        print('frames presented after their target: %d; committed after it: %d'
+              % (len(late), sum(1 for c in frames if c['target'] and c['commit'] > c['target'])))
+
+    # Repeats show their frame's buffer.
+    if frames[0]['address'] is not None:
+        last_frame = {}
+        bad = 0
+        for c in sorted(frames + repeats, key=lambda c: c['vblank'][1]):
+            if c['repeat']:
+                bad += last_frame.get(c['image']) != c['address']
+            else:
+                last_frame = {c['image']: c['address']}
+        check(bad == 0, 'every repeat scans out the buffer its frame was presented in (%d not)' % bad)
+
+    # Fixed cadence from present-probe.
+    presents = read_csv(a.run + '.presents.csv', 'id,')
+    if a.cadence:
+        cad = [int(x) for x in a.cadence.split(',')]
+        late_ids = {int(p['id']) for p in presents or [] if p['late'] == '1'}
+        # Frames are counted by Mesa's serial, the present's place on its
+        # swapchain, which present-probe's IDs follow; an untagged present
+        # has no ID. Frames before the first timed one (observe) or the
+        # first three (own: the mode set) are startup, not the schedule.
+        timed = [int(p['id']) for p in presents or [] if p['target_ns'] != '0']
+        start = timed[0] if timed else 4
+        wrong = []
+        for c, n in zip(frames, frames[1:]):
+            if c['serial'] < start:
+                continue
+            want = cad[(c['serial'] - 1) % len(cad)] + (c['serial'] in late_ids)
+            if n['vblank'][1] - c['vblank'][1] != want:
+                wrong.append(c)
+        for c in wrong[:5]:
+            print('  off: serial %d at %.3f s, the next commit %.2f ms after its vblank'
+                  % (c['serial'], (c['vblank'][2] - frames[0]['vblank'][2]) / 1e9,
+                     (frames[frames.index(c) + 1]['commit'] - c['vblank'][2]) / 1e6))
+        wrong = len(wrong)
+        check(wrong == 0, 'every frame shown for its scripted refreshes (%d of %d not)' % (wrong, len(frames) - 1))
+
+    # Integer multiple on a variable refresh panel.
+    if a.rate:
+        period = 1000 / a.rate
+        r = a.refresh_ms
+        k = int((period + r / 50) / r)
+        step = period / k
+        print('rate %.3f Hz: period %.3f ms, k = %d, P/k = %.3f ms%s' % (
+            a.rate, period, k, step, '' if step >= r - 0.001 and step <= 1000 / 90 else '  (outside the panel range)'))
+        errs = [abs(x - step) for kind in ('frame', 'repeat') for x in intervals[kind]]
+        print('  refresh interval error vs P/k:', stats(errs))
+        off = sum(1 for e in errs if e > a.bound_ms)
+        print('  refreshes off by more than %.2f ms: %d' % (a.bound_ms, off))
+        late_set = {c['id'] for c in late}
+        unexplained, runs, run_len = [], collections.Counter(), 0
+        for i, (c, n) in enumerate(zip(frames, frames[1:])):
+            if n['vblank'][1] - c['vblank'][1] != k:
+                run_len += 1
+                if c['id'] not in late_set and n['id'] not in late_set and \
+                        (i == 0 or frames[i - 1]['id'] not in late_set) and c['vblank'][2] - t0 > 2e9:
+                    unexplained.append(c)
+            elif run_len:
+                runs[run_len] += 1
+                run_len = 0
+        if runs:
+            print('  runs of consecutive frames not shown k times:', '  '.join('%d: %d' % kv for kv in sorted(runs.items())))
+        for c in unexplained[:5]:
+            print('  unexplained: id %d at %.3f s, shown %d' % (c['id'], (c['vblank'][2] - t0) / 1e9,
+                  frames[frames.index(c) + 1]['vblank'][1] - c['vblank'][1]))
+        check(not unexplained, 'every frame not shown k times is late or next to a late one (%d unexplained)' % len(unexplained))
+        if len(frames) > 2:
+            span = (frames[-1]['vblank'][2] - frames[0]['vblank'][2]) / 1e6
+            mean = span / (len(frames) - 1)
+            check(abs(mean - period) / period < 0.001, 'mean display interval %.4f ms vs 1/f %.4f ms' % (mean, period))
+        if len(phase) > 20:
+            # Drift: the median phase of the last tenth against the first,
+            # robust to single late frames; jumps: a frame's phase off the
+            # one before by more than the bound, with what followed.
+            tenth = max(1, len(phase) // 10)
+            drift = statistics.median(phase[-tenth:]) - statistics.median(phase[:tenth])
+            span = (timed[-1]['vblank'][2] - timed[0]['vblank'][2]) / 1e9
+            check(abs(drift) < a.bound_ms, 'phase drift over the run %.3f ms in %.0f s (%.4f ms/s)'
+                  % (drift, span, drift / span if span else 0))
+            jumps = [i for i in range(1, len(phase)) if abs(phase[i] - phase[i - 1]) > a.bound_ms]
+            explained = sum(1 for i in jumps if timed[i]['id'] in late_set or timed[i - 1]['id'] in late_set)
+            print('  phase jumps over %.2f ms: %d, %d at a late frame' % (a.bound_ms, len(jumps), explained))
+            base = statistics.median(phase)
+            recover = []
+            for i in range(len(timed)):
+                if timed[i]['id'] in late_set:
+                    j = i + 1
+                    while j < len(phase) and abs(phase[j] - base) > a.bound_ms:
+                        j += 1
+                    recover.append(j - i - 1)
+            if recover:
+                print('  frames until the phase is back within %.2f ms after a late frame:' % a.bound_ms, stats(recover))
+
+    # present-probe's records against the trace: actualPresentTime is the
+    # vblank payload truncated to microseconds.
+    records = read_csv(a.run + '.records.csv', 'read,')
+    if records:
+        by_id = {c['id']: c for c in frames}
+        diffs = []
+        for r in records:
+            if r['present_id'] and int(r['present_id']) in by_id:
+                v = by_id[int(r['present_id'])]['vblank'][2]
+                diffs.append(abs(int(r['actual_ns']) - v // 1000 * 1000))
+        if diffs:
+            check(max(diffs) == 0, 'every actualPresentTime is its vblank time in us (%d records, max off %d ns)'
+                  % (len(diffs), max(diffs)))
+
+    # MangoHud's rows against the trace.
+    mh = read_csv(a.run + '.mh.csv', 'fps,')
+    if mh and 'present_id' not in mh[0]:
+        ft = [float(r['frametime']) for r in mh if r.get('frametime')]
+        print('MangoHud (without display timing): %d rows, frametime %s' % (len(mh), stats(ft)))
+    elif mh:
+        by_id = {c['id']: c for c in frames}
+        ids = [int(r['present_id']) for r in mh if r['present_id']]
+        rec = collections.Counter(r['record'] for r in mh)
+        print('MangoHud: %d rows, record %s' % (len(mh), ', '.join('%s %d' % (k or 'none', v) for k, v in sorted(rec.items()))))
+        check(len(ids) == len(set(ids)), 'no present in the log twice')
+        if ids:
+            check(ids == list(range(ids[0], ids[0] + len(ids))), 'the log is a contiguous run of presents')
+            check(all(i in by_id for i in ids), 'every logged present is a new frame in the trace, none a repeat')
+        diffs, worst = [], None
+        for r in mh:
+            if not (r['present_id'] and r['display_interval_ms']):
+                continue
+            i = int(r['present_id'])
+            if i in by_id and i - 1 in by_id:
+                truth = (by_id[i]['vblank'][2] // 1000 - by_id[i - 1]['vblank'][2] // 1000) / 1000
+                d = abs(float(r['display_interval_ms']) - truth)
+                diffs.append(d)
+                if worst is None or d > worst[0]:
+                    worst = (d, i, r['display_interval_ms'], truth)
+        if diffs:
+            check(max(diffs) < 0.0015, 'every display interval equals the trace within 1 us (%d, worst %.4f ms at id %d: %s vs %.3f)'
+                  % (len(diffs), worst[0], worst[1], worst[2], worst[3]))
+            app = [float(r['application_interval_ms']) for r in mh if r['application_interval_ms']]
+            disp = [float(r['display_interval_ms']) for r in mh if r['display_interval_ms']]
+            print('  application interval, ms:', stats(app))
+            print('  display interval, ms:    ', stats(disp))
+
+    # The DPU's CRC of each refresh: a repeat or a held refresh shows the same
+    # pixels as the refresh before, a new frame different ones. The CRC's
+    # frame number may be off by one from the vblank's; the offset that
+    # explains the most is used.
+    crc_path = a.run + '.crc'
+    if os.path.exists(crc_path):
+        crc = {}
+        with open(crc_path) as f:
+            for line in f:
+                p = line.replace('\0', ' ').split()   # debugfs pads each entry with a NUL
+                if len(p) >= 2:
+                    try:
+                        crc[int(p[0], 16)] = ' '.join(p[1:])
+                    except ValueError:
+                        pass
+        best = None
+        for off in (-1, 0, 1):
+            good = bad = 0
+            for s in seqs[1:]:
+                a0, a1 = crc.get(s - 1 + off), crc.get(s + off)
+                if a0 is None or a1 is None:
+                    continue
+                c = landed.get(s)
+                same = a0 == a1
+                ok = same if (c is None or c['repeat']) else not same
+                good += ok
+                bad += not ok
+            if best is None or good > best[1]:
+                best = (off, good, bad)
+        off, good, bad = best
+        check(bad == 0 and good > 0, 'DPU CRC: repeats and held refreshes keep their pixels, new frames change them '
+              '(%d agree, %d do not, offset %d)' % (good, bad, off))
+
+    print('%d check(s) failed' % len(fails) if fails else 'all checks passed')
+    return 1 if fails else 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
