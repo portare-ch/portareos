@@ -103,18 +103,6 @@ has been proxies. Start there.
 (ath12k), and `mmcx` at 64 (display controller). Whether any of them releases
 during suspend is unknown.
 
-### 096-cpuidle
-
-```sh
-# Disable cpu0 idle state 1, seems to cause GMU issues
-echo 1 > /sys/devices/system/cpu/cpu0/cpuidle/state1/disable
-```
-
-Inherited from ROCKNIX with no more explanation than that comment. We now know
-the GMU does misbehave on this platform, so the workaround may be covering
-something real. Nobody has established what, or whether the quirk still earns
-its cost: `irqaffinity=0-2` sends every interrupt to the cluster it cripples.
-
 ### pcie_ports=compat
 
 On the kernel cmdline, which disables the PCIe port services including PME.

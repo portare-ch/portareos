@@ -112,8 +112,8 @@ cores running emulation can also hurt.
 ### 6. Idle exit latency
 
 `cpuidle.governor=teo` with deep states costs wakeup latency on a workload that
-sleeps and wakes every frame. BUGS.md already carries an open `096-cpuidle`
-entry.
+sleeps and wakes every frame. cpu0 has its deep idle state too since kernel
+patches 1099-1101 replaced the `096-cpuidle` quirk.
 
     for s in /sys/devices/system/cpu/cpu*/cpuidle/state3; do echo 1 > $s/disable; done
 

@@ -316,10 +316,40 @@ systemd, read the trace after resume and map the `cx.lvl`, `mmcx.lvl`,
 the genpd devices whose domain is still on at that point; `pm_genpd_summary`
 awake gives the candidates, `gcc` with no runtime PM first.
 
-Suspend experiments from a script must go through `systemctl suspend`, or
-run `sleep.d/pre/004-cpuidle-state1` by hand; `/sys/power/suspend_stats/
-success` is the signal that the sleep completed, and the cluster count in
-`pm_genpd` debugfs is the check that it was a real one.
+Suspend experiments from a script should go through `systemctl suspend`,
+whose hooks blank the display first; written to `/sys/power/state`, the DPU
+logs a frame-done timeout on the way down. Since kernel patches 1099-1101
+cpu0 keeps its deep idle state, so that path reaches cluster sleep too
+(below). `/sys/power/suspend_stats/success` is the signal that the sleep
+completed, and the cluster count in `pm_genpd` debugfs is the check that it
+was a real one.
+
+## cpu0 sleeps again
+
+`096-cpuidle`, from ROCKNIX, disabled cpu0's deep idle state at boot
+because it "seems to cause GMU issues", and two sleep hooks gave it back
+for the length of a suspend. The issue was real, and kernel patches
+1099-1101 (from Armada, who traced it on the AYN Odin 2 Portal) fix it
+instead. The GMU's HFI interrupt fires once on most GPU resumes. It goes
+to cpu0, and arrives late when cpu0 is slow to leave deep idle; the
+handler then cleared every bit of `GMU2HOST_INTR_INFO`, including the HFI
+reply and OOB ack bits that the GMU's callers poll for. 1099 clears only
+the firmware fault bit, 1101 masks the interrupt before the GMU boots, and
+1100 bounds a wait that let a failed recovery deadlock.
+
+Measured 2026-10-08: present-probe at 30 Hz with the GPU's autosuspend cut
+to 5 ms, about 41 GPU power-ups a second, cpu0's state1 enabled.
+
+| Kernel | HFI interrupts handled | Result |
+|---|---|---|
+| 7.2.9 as shipped | 8 in the first 20 s | after about 5.5 minutes `HFI_H2F_MSG_GX_BW_PERF_VOTE` timed out, its reply then turned up in the queue, `Timeout waiting for GMU OOB set GPU_SET`, a CP fault at iova 0 and a recovery that froze the display; only a reboot brought it back |
+| with 1099-1101 | 0 | 20 minutes, about 49,000 power-ups and 486,632 deep idle entries on cpu0, nothing logged |
+
+With cpu0's state1 disabled, as shipped, the interrupt had been handled 0
+times in an hour of use: the race needs cpu0 in deep idle. On the patched
+kernel `096-cpuidle` and both hooks are gone. Three `systemctl suspend`
+cycles resumed with the cluster asleep each time, and a write to
+`/sys/power/state` now reaches cluster sleep as well (`apss` 3 to 4).
 
 ## Measuring
 
