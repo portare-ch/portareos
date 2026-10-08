@@ -1,6 +1,21 @@
 # Refresh and audio rates on the Retroid Pocket Nova (SM8550)
 
-The panel has no variable refresh rate. It runs at **119.880120 Hz**, twice NTSC's 59.94 Hz. For systems whose native rate is noticeably different, `setsettings.sh` (`set_ra_refresh_rate`) asks for a panel mode at exactly twice that rate, and RetroArch switches to it when the game starts.
+RetroArch defaults to **variable refresh from 90 to 120.197628 Hz** on the
+built-in panel when it is the only connected display and no display mode
+is pinned. It uses the fastest mode for every system and times frames at
+the core's reported rate; Mesa repeats them to keep the panel within its
+range. See [variable refresh](../../VARIABLE_REFRESH.md) for the launch
+conditions, rate limits and measurements.
+
+## Fixed-refresh modes
+
+The mode selection and display-paced rendering described below apply to
+RetroArch with variable refresh disabled (`global.vrr=0` in
+`/storage/.config/system/configs/system.cfg`). The preferred mode is
+**119.880120 Hz**, twice NTSC's 59.94 Hz. For systems whose native rate is
+noticeably different, `setsettings.sh` (`set_ra_refresh_rate`) asks for a
+panel mode at exactly twice that rate, and RetroArch switches to it when
+the game starts.
 
 Where each system's native rate comes from, crystal by crystal, and where an emulator's number differs from the console's, is derived in [CONSOLE_CLOCKS.md](../../CONSOLE_CLOCKS.md). Which systems have their mode, and which are still open, is in [PortareOS_Modelines.md](../../PortareOS_Modelines.md).
 
@@ -161,7 +176,7 @@ What command mode buys is panel self-refresh while nothing moves, a power
 saving on a static screen and the opposite of this workload. Considered and
 declined.
 
-## Pacing: how a frame lands on a frame
+## Fixed-refresh pacing: how a frame lands on a frame
 
 A mode at twice the console's rate is only half of it. The other half is RetroArch holding the core to that mode, one frame for every two refreshes, with nothing else setting the pace.
 
@@ -184,7 +199,7 @@ With the core paced by the panel, audio rate control only absorbs the residual b
 
 To see it working: the log has `Timed presents: swap interval 2, one present a frame, 16.683 ms apart.` when the path is in effect. A hardware-rendered core that creates its own Vulkan device has to enable `VK_GOOGLE_display_timing` for this, because RetroArch cannot add it afterwards. Flycast ignored the list it was given until its patch 002, and ran on the repeated presents. A core that still does gets `VK_GOOGLE_display_timing: not enabled on the device, presents are not timed.` in the log and falls back. RetroArch's statistics overlay (`statistics_show`) reports the core's frame rate, the loop deviation and the audio buffer's underruns. `vblank-rate` measures the panel's real rate without DRM master, from a queued DRM vblank event; `/sys/kernel/debug/dri/0/crtc-0/status` also counts vblanks but its counter only advances while the vblank IRQ is enabled, so it cannot be sampled against wall clock - an idle panel reads about 27 Hz on a 120 Hz mode. A capture of the PipeWire sink (`pw-record --target <sink> -P '{ stream.capture.sink = true }'`) shows audio gaps as runs of zero samples.
 
-## Systems
+## Systems and fixed-refresh modes
 
 The rates are the original NTSC hardware's frame rate, or for handhelds the hardware's own rate.
 
