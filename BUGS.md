@@ -100,8 +100,9 @@ has been proxies. Start there.
 
 `pm_genpd_summary` shows `cx on 64` with three holders: `898000.serial`
 (uart14, the gamepad MCU by the `serial1` alias), `pcie_0_gdsc` at 64
-(ath12k), and `mmcx` at 64 (display controller). Whether any of them releases
-during suspend is unknown.
+(ath12k), and `mmcx` at 64 (display controller). The serial releases its
+interconnect vote in suspend since kernel patch 1103 (POWER.md); whether the
+others do is unknown.
 
 ### pcie_ports=compat
 

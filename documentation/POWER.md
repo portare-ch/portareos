@@ -120,6 +120,24 @@ stays and CX and DDR collapse in s2idle is out of reach with this firmware
 Awake, the CPU subsystem itself never reaches its system-level idle (`apss`
 stays 0), so the platform cannot collapse whatever the votes.
 
+**Two clocks that never let go, fixed 2026-10-08.** Kernel patches 1102
+and 1103 backport two upstream fixes, as Armada carries them on 7.2. Before
+them, on the Nova:
+
+- ufs-qcom's lane clock helpers enabled every UFS clock again and never
+  balanced it. `clk_enable_count` of `gcc_ufs_phy_axi_clk`, `_ahb_clk`,
+  `_unipro_core_clk` and the three symbol clocks read 4 to 7 a minute
+  after boot and 12 after one suspend, and never 0. With 1102 they idle
+  at 0.
+- The gamepad MCU's UART (`898000.serial`) is always open, so its runtime
+  PM never suspended it and it kept its interconnect vote through system
+  sleep: an `interconnect:icc_set_bw` trace across a suspend showed its
+  first event on the way back up. With 1103 it releases the vote during
+  `dpm_suspend`, and the gamepad streams at 200 interrupts a second after
+  resume as before.
+
+Neither moved the counters: three suspends, `cxsd`, `aosd` and `ddr` 0.
+
 ## What Android does on the same board
 
 2026-10-06, the Nova booted into its stock Android 13 (kernel 5.15.123,
