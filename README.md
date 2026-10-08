@@ -4,7 +4,7 @@
 
 **For Retroid Pocket Nova owners who care about every frame and millisecond.**
 
-[Home](https://os.portare.org) · **[Installation guide](documentation/INSTALLATION.md)** · [Known issues](BUGS.md) · [Roadmap](ROADMAP.md)
+[Home](https://os.portare.org) · **[Features](documentation/FEATURE_OVERVIEW.md)** · **[Installation guide](documentation/INSTALLATION.md)** · [Known issues](BUGS.md) · [Roadmap](ROADMAP.md)
 
 > Black coffee without sugar and milk. With the right amount of beans and water.
 
@@ -331,15 +331,15 @@ Images are written to `target/`. The build wants a container runtime, roughly
 workflow supports incremental builds. Kernel, Mesa, PipeWire and RetroArch
 are kept current; a daily workflow opens pull requests for emulator updates.
 
-Unofficial debug builds include gdb, strace and tools for measuring changes:
+### Debugging and measurement
 
-* **vblank-rate:** measures actual panel timing.
-* **vrr-probe:** drives the panel through KMS with stretched modes, frame
-  schedules and `VRR_ENABLED`, to probe variable refresh.
-* **tear-test:** counts torn and dropped frames using DPU CRCs, with
-  deliberate tearing to validate detection.
-* **pcm-flags:** reads driver flags and period constraints.
-* **pcm-floor:** streams at accepted periods and counts underruns.
+Unofficial builds include **gdb**, **strace**, **vblank-rate**, **vrr-probe**,
+**present-probe**, **tear-test**, **pcm-flags** and **pcm-floor**. Performance,
+power and CPU-placement probes complement the display and audio tests, with
+host scripts for recording and checking runs over SSH.
+
+The **[debug tools guide](documentation/DEBUG_TOOLS.md)** explains what each
+tool measures, where to run it, example commands and how to read the results.
 
 Development is 100% AI-assisted, and I plan to keep it that way.
 
