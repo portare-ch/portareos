@@ -704,9 +704,11 @@ int main(int argc, char **argv)
 	} else {
 		// Targets: at a fixed rate from the start, or for a cadence half a
 		// refresh before the vblank it means, counted from the first
-		// record read and then from the newest record of a timed frame.
-		// An untimed frame's record would start a second schedule beside
-		// the first. Each present goes in a few ms before its target.
+		// record read. A later record moves the anchor only when it shows
+		// its frame on the vblank the schedule meant, within a quarter
+		// refresh, which follows the panel's clock against CLOCK_MONOTONIC;
+		// a late frame, or an untimed one, would start a second schedule
+		// beside the first. Each present goes in a few ms before its target.
 		uint64_t period = rate > 0 ? (uint64_t)(1e9 / rate) : 0;
 		uint64_t t0 = 0;
 		uint64_t anchor_time = 0, cum = 0;
@@ -755,10 +757,14 @@ int main(int argc, char **argv)
 			present(img, id, tagged, tagged ? target : 0, late);
 
 			uint64_t newest = read_timings(read_mode, &newest_id);
-			if (newest && newest_id && newest_id <= nstarts &&
-			    (!anchor_time || presents[newest_id - 1].target)) {
-				anchor_time = newest;
-				anchor_id = newest_id;
+			if (newest && newest_id && newest_id <= nstarts) {
+				int64_t off = anchor_time ? (int64_t)(newest - anchor_time) -
+					(int64_t)((starts[newest_id - 1] - starts[anchor_id - 1]) * refresh) : 0;
+				if (!anchor_time || (presents[newest_id - 1].target &&
+						     llabs(off) < (int64_t)refresh / 4)) {
+					anchor_time = newest;
+					anchor_id = newest_id;
+				}
 			}
 		}
 		free(starts);
