@@ -1,0 +1,488 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] drm/msm/dpu: repeat frames below the VRR range from a timer (LFC)
+
+AVR holds the front porch until the next commit, up to the range's
+longest frame. A frame slower than twice the fastest refresh has to be
+shown again, or the panel refreshes on its own at the floor, at a time
+unrelated to the next frame, which then waits out a whole refresh.
+Mesa's wsi_display does it today for applications that time their
+presents, by committing the same buffer again (mesa-005).
+
+Do it in the encoder, for every client and without a commit. The period
+is the distance between kickoffs, smoothed as mesa-005 smooths its
+targets, and a frame is shown period / refresh times. After the vsync
+that takes a frame, and after each of its repeats, an hrtimer kicks the
+INTF at the next place on the period, never before the refresh on
+screen can end. A kickoff cancels what is left of the frame before.
+
+What starts a refresh in continuous mode is not documented, so the kick
+is a parameter while it is tried: msm.dpu_lfc_kick 0 writes
+AVR_TRIGGER, 1 flushes the INTF first. msm.dpu_lfc_porch_us is how soon
+after the shortest frame a kick may go, negative for before it.
+msm.dpu_lfc turns it on, off by default while it is compared with
+mesa-005. dpu_enc_lfc_frame traces the period at every kickoff,
+dpu_enc_lfc_repeat every kick.
+---
+--- a/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_ctl.h
++++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_ctl.h
+@@ -218,6 +218,15 @@
+ 	void (*trigger_flush)(struct dpu_hw_ctl *ctx);
+ 
+ 	/**
++	 * @flush_intf: Flush one INTF in hardware, outside a commit, leaving
++	 * the pending masks alone. A video mode INTF holding its front porch
++	 * for AVR starts a refresh of what is latched.
++	 * @ctx       : ctl path ctx pointer
++	 * @intf      : the INTF
++	 */
++	void (*flush_intf)(struct dpu_hw_ctl *ctx, enum dpu_intf intf);
++
++	/**
+ 	 * @get_flush_register: Read the value of the flush register
+ 	 * @ctx       : ctl path ctx pointer
+ 	 * @Return: value of the ctl flush register.
+--- a/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_ctl.c
++++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_ctl.c
+@@ -180,6 +180,13 @@
+ 	DPU_REG_WRITE(&ctx->hw, CTL_FLUSH, ctx->pending_flush_mask);
+ }
+ 
++static void dpu_hw_ctl_flush_intf_v1(struct dpu_hw_ctl *ctx,
++		enum dpu_intf intf)
++{
++	DPU_REG_WRITE(&ctx->hw, CTL_INTF_FLUSH, BIT(intf - INTF_0));
++	DPU_REG_WRITE(&ctx->hw, CTL_FLUSH, BIT(INTF_IDX));
++}
++
+ static inline void dpu_hw_ctl_trigger_flush(struct dpu_hw_ctl *ctx)
+ {
+ 	trace_dpu_hw_ctl_trigger_pending_flush(ctx->pending_flush_mask,
+@@ -820,6 +827,7 @@
+ 
+ 	if (mdss_ver->core_major_ver >= 5) {
+ 		c->ops.trigger_flush = dpu_hw_ctl_trigger_flush_v1;
++		c->ops.flush_intf = dpu_hw_ctl_flush_intf_v1;
+ 		c->ops.setup_intf_cfg = dpu_hw_ctl_intf_cfg_v1;
+ 		c->ops.reset_intf_cfg = dpu_hw_ctl_reset_intf_cfg_v1;
+ 		c->ops.update_pending_flush_intf =
+--- a/drivers/gpu/drm/msm/disp/dpu1/dpu_trace.h
++++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_trace.h
+@@ -606,6 +606,56 @@
+ 	TP_printk("id=%u, intf_idx=%d", __entry->drm_id, __entry->intf_idx)
+ );
+ 
++TRACE_EVENT(dpu_enc_lfc_frame,
++	TP_PROTO(uint32_t drm_id, enum dpu_intf intf_idx, u64 interval,
++		 u64 period, s64 phase_err, unsigned int count),
++	TP_ARGS(drm_id, intf_idx, interval, period, phase_err, count),
++	TP_STRUCT__entry(
++		__field(	uint32_t,	drm_id		)
++		__field(	enum dpu_intf,	intf_idx	)
++		__field(	u64,		interval	)
++		__field(	u64,		period		)
++		__field(	s64,		phase_err	)
++		__field(	unsigned int,	count		)
++	),
++	TP_fast_assign(
++		__entry->drm_id = drm_id;
++		__entry->intf_idx = intf_idx;
++		__entry->interval = interval;
++		__entry->period = period;
++		__entry->phase_err = phase_err;
++		__entry->count = count;
++	),
++	TP_printk("id=%u, intf_idx=%d, interval=%llu, period=%llu, phase_err=%lld, count=%u",
++		  __entry->drm_id, __entry->intf_idx, __entry->interval,
++		  __entry->period, __entry->phase_err, __entry->count)
++);
++
++TRACE_EVENT(dpu_enc_lfc_repeat,
++	TP_PROTO(uint32_t drm_id, enum dpu_intf intf_idx, unsigned int n,
++		 unsigned int count, s64 due, bool kicked),
++	TP_ARGS(drm_id, intf_idx, n, count, due, kicked),
++	TP_STRUCT__entry(
++		__field(	uint32_t,	drm_id		)
++		__field(	enum dpu_intf,	intf_idx	)
++		__field(	unsigned int,	n		)
++		__field(	unsigned int,	count		)
++		__field(	s64,		due		)
++		__field(	bool,		kicked		)
++	),
++	TP_fast_assign(
++		__entry->drm_id = drm_id;
++		__entry->intf_idx = intf_idx;
++		__entry->n = n;
++		__entry->count = count;
++		__entry->due = due;
++		__entry->kicked = kicked;
++	),
++	TP_printk("id=%u, intf_idx=%d, repeat=%u/%u, due=%lld, kicked=%d",
++		  __entry->drm_id, __entry->intf_idx, __entry->n,
++		  __entry->count, __entry->due, __entry->kicked)
++);
++
+ TRACE_EVENT(dpu_enc_phys_vid_irq_enable,
+ 	TP_PROTO(uint32_t drm_id, enum dpu_intf intf_idx,
+ 		 int refcnt),
+--- a/drivers/gpu/drm/msm/disp/dpu1/dpu_encoder_phys.h
++++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_encoder_phys.h
+@@ -8,6 +8,7 @@
+ #define __DPU_ENCODER_PHYS_H__
+ 
+ #include <drm/drm_writeback.h>
++#include <linux/hrtimer.h>
+ #include <linux/jiffies.h>
+ 
+ #include "dpu_kms.h"
+@@ -139,6 +140,35 @@
+ };
+ 
+ /**
++ * struct dpu_encoder_lfc - low framerate compensation on a video mode INTF
++ *	with AVR: a frame slower than twice the fastest refresh is refreshed
++ *	again from a timer, @count times evenly over its period. All fields
++ *	but @timer are under the encoder's spinlock.
++ * @timer:		Starts the next repeat
++ * @refresh_ns:		The mode's frame, the shortest refresh
++ * @last_commit:	When the last frame was kicked off
++ * @last_interval:	The distance of that kickoff from the one before
++ * @period:		Kickoff distances, smoothed
++ * @phase:		Where the last frame's kickoff belongs on that period
++ * @last_vsync:		Start of the refresh on screen
++ * @due:		Where the armed repeat belongs on the period
++ * @count:		Refreshes per frame, 0 for no repeats
++ * @next:		The next repeat of the frame on screen, 1 to @count - 1
++ */
++struct dpu_encoder_lfc {
++	struct hrtimer timer;
++	u64 refresh_ns;
++	ktime_t last_commit;
++	u64 last_interval;
++	u64 period;
++	ktime_t phase;
++	ktime_t last_vsync;
++	ktime_t due;
++	unsigned int count;
++	unsigned int next;
++};
++
++/**
+  * struct dpu_encoder_phys - physical encoder that drives a single INTF block
+  *	tied to a specific panel / sub-panel. Abstract type, sub-classed by
+  *	phys_vid or phys_cmd for video mode or command mode encs respectively.
+@@ -172,6 +202,7 @@
+  * @pending_kickoff_wq:		Wait queue for blocking until kickoff completes
+  * @irq:			IRQ indices
+  * @has_intf_te:		Interface TE configuration support
++ * @lfc:			Low framerate compensation, video mode with AVR
+  */
+ struct dpu_encoder_phys {
+ 	struct drm_encoder *parent;
+@@ -200,6 +231,7 @@
+ 	bool has_intf_te;
+ 	bool avr_capable;
+ 	bool avr_enabled;
++	struct dpu_encoder_lfc lfc;
+ };
+ 
+ static inline int dpu_encoder_phys_inc_pending(struct dpu_encoder_phys *phys)
+--- a/drivers/gpu/drm/msm/disp/dpu1/dpu_encoder_phys_vid.c
++++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_encoder_phys_vid.c
+@@ -272,6 +272,7 @@
+ 
+ 	phys_enc->avr_capable = false;
+ 	phys_enc->avr_enabled = false;
++	phys_enc->lfc.refresh_ns = 0;
+ 	if (!intf->ops.setup_avr || !intf->ops.enable_avr ||
+ 	    !intf->ops.avr_trigger)
+ 		return;
+@@ -281,9 +282,11 @@
+ 
+ 	spin_lock_irqsave(phys_enc->enc_spinlock, lock_flags);
+ 	intf->ops.enable_avr(intf, false);
+-	if (lines > vtotal) {
++	if (lines > vtotal && clock_khz) {
+ 		intf->ops.setup_avr(intf, (u32)(lines * htotal));
+ 		phys_enc->avr_capable = true;
++		phys_enc->lfc.refresh_ns = div_u64((u64)vtotal * htotal * 1000000,
++						   clock_khz);
+ 	}
+ 	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
+ 
+@@ -320,6 +323,219 @@
+ 
+ 	DRM_INFO("intf%d: variable refresh %s\n",
+ 		 phys_enc->hw_intf->idx - INTF_0, want ? "on" : "off");
++	if (!want)
++		hrtimer_cancel(&phys_enc->lfc.timer);
++}
++
++/*
++ * Low framerate compensation. AVR holds the front porch until a frame is
++ * committed, up to the range's longest frame; a frame slower than twice the
++ * fastest refresh would then be refreshed by the panel on its own, at a time
++ * unrelated to the next frame, which waits out a whole refresh. Instead it
++ * is shown count = period / refresh times, evenly: a timer kicks the INTF
++ * at the frame's kickoff plus period / count, and again after each repeat.
++ * The period comes from the kickoffs, as Mesa's wsi_display takes it from
++ * its targets for the repeats it commits itself (mesa-005), so this covers
++ * every client and costs no commit. Off unless msm.dpu_lfc is set, while
++ * the two are compared.
++ */
++static bool dpu_lfc;
++module_param(dpu_lfc, bool, 0644);
++MODULE_PARM_DESC(dpu_lfc, "Repeat frames below the variable refresh range from a timer (LFC)");
++
++/*
++ * What starts a repeat's refresh: 0 writes AVR_TRIGGER, 1 flushes the INTF
++ * first. Which of them AVR's continuous mode follows is not documented.
++ */
++static int dpu_lfc_kick;
++module_param(dpu_lfc_kick, int, 0644);
++MODULE_PARM_DESC(dpu_lfc_kick, "LFC repeat: 0 AVR trigger, 1 INTF flush and AVR trigger");
++
++/*
++ * How long after the shortest frame from the last vsync a kick may go, in
++ * microseconds; negative is before it. AVR holds the porch only past the
++ * mode's own: if a kick during the active region is lost, a repeat always
++ * comes this much late, and at 60.099 Hz on the 120.198 Hz mode, where half
++ * a frame is the shortest refresh, the panel falls behind; if the INTF
++ * keeps it for the porch, as it keeps a commit's flush, a repeat can be
++ * kicked early and start exactly at the shortest frame.
++ */
++static int dpu_lfc_porch_us = 20;
++module_param(dpu_lfc_porch_us, int, 0644);
++MODULE_PARM_DESC(dpu_lfc_porch_us, "LFC repeat: earliest kick after the shortest frame, us");
++
++/* Frames slower than 10 Hz are a pause, not a frame rate. */
++#define DPU_LFC_MAX_PERIOD_NS	(100 * NSEC_PER_MSEC)
++
++/* Under the encoder's spinlock. */
++static bool dpu_encoder_phys_vid_lfc_on(struct dpu_encoder_phys *phys_enc)
++{
++	return READ_ONCE(dpu_lfc) && phys_enc->avr_enabled &&
++	       phys_enc->lfc.refresh_ns;
++}
++
++/* The earliest a repeat may be kicked. Under the encoder's spinlock. */
++static ktime_t dpu_encoder_phys_vid_lfc_earliest(struct dpu_encoder_lfc *lfc)
++{
++	return ktime_add(lfc->last_vsync,
++			 ns_to_ktime((s64)lfc->refresh_ns +
++				     (s64)READ_ONCE(dpu_lfc_porch_us) * NSEC_PER_USEC));
++}
++
++/*
++ * Arm the next repeat of the frame on screen at its place on the period,
++ * or at the porch if the panel is behind. Nothing while a kickoff waits
++ * for its vsync: that vsync arms its frame's first repeat. Under the
++ * encoder's spinlock.
++ */
++static void dpu_encoder_phys_vid_lfc_arm(struct dpu_encoder_phys *phys_enc)
++{
++	struct dpu_encoder_lfc *lfc = &phys_enc->lfc;
++	ktime_t earliest;
++
++	if (!dpu_encoder_phys_vid_lfc_on(phys_enc) || !lfc->next ||
++	    lfc->next >= lfc->count ||
++	    atomic_read(&phys_enc->pending_kickoff_cnt))
++		return;
++
++	lfc->due = ktime_add_ns(lfc->phase,
++				div_u64(lfc->period * lfc->next, lfc->count));
++	earliest = dpu_encoder_phys_vid_lfc_earliest(lfc);
++	hrtimer_start(&lfc->timer, ktime_after(lfc->due, earliest) ?
++		      lfc->due : earliest, HRTIMER_MODE_ABS_HARD);
++}
++
++static enum hrtimer_restart dpu_encoder_phys_vid_lfc_timer(struct hrtimer *timer)
++{
++	struct dpu_encoder_lfc *lfc = container_of(timer, struct dpu_encoder_lfc, timer);
++	struct dpu_encoder_phys *phys_enc =
++		container_of(lfc, struct dpu_encoder_phys, lfc);
++	struct dpu_hw_ctl *ctl = phys_enc->hw_ctl;
++	unsigned long lock_flags;
++
++	spin_lock_irqsave(phys_enc->enc_spinlock, lock_flags);
++	if (!dpu_encoder_phys_vid_lfc_on(phys_enc) || lfc->next >= lfc->count)
++		goto out;
++
++	/* A frame was kicked off since: it goes first. */
++	if (atomic_read(&phys_enc->pending_kickoff_cnt)) {
++		trace_dpu_enc_lfc_repeat(DRMID(phys_enc->parent),
++					 phys_enc->hw_intf->idx - INTF_0,
++					 lfc->next, lfc->count,
++					 ktime_to_ns(lfc->due), false);
++		goto out;
++	}
++
++	/* A refresh started since this was armed: wait for it. */
++	if (ktime_before(ktime_get(), dpu_encoder_phys_vid_lfc_earliest(lfc))) {
++		dpu_encoder_phys_vid_lfc_arm(phys_enc);
++		goto out;
++	}
++
++	if (READ_ONCE(dpu_lfc_kick) == 1 && ctl->ops.flush_intf)
++		ctl->ops.flush_intf(ctl, phys_enc->hw_intf->idx);
++	phys_enc->hw_intf->ops.avr_trigger(phys_enc->hw_intf);
++	trace_dpu_enc_lfc_repeat(DRMID(phys_enc->parent),
++				 phys_enc->hw_intf->idx - INTF_0,
++				 lfc->next, lfc->count, ktime_to_ns(lfc->due), true);
++	lfc->next++;
++out:
++	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
++	return HRTIMER_NORESTART;
++}
++
++/*
++ * A vsync: a refresh started. The one that takes a kickoff shows its frame
++ * for the first time. Under the encoder's spinlock, from the vsync irq.
++ */
++static void dpu_encoder_phys_vid_lfc_vsync(struct dpu_encoder_phys *phys_enc,
++					   bool frame)
++{
++	struct dpu_encoder_lfc *lfc = &phys_enc->lfc;
++
++	lfc->last_vsync = ktime_get();
++	if (frame)
++		lfc->next = 1;
++	dpu_encoder_phys_vid_lfc_arm(phys_enc);
++}
++
++/*
++ * A frame was kicked off. The period is the distance between kickoffs,
++ * smoothed: one distance off it, from a late or dropped frame, is noise,
++ * and a new period is taken once it is seen twice. A fiftieth of a refresh
++ * of slack keeps a frame of exactly two refreshes, the SNES on the
++ * 120.198 Hz mode, from rounding down to one. The phase follows the
++ * kickoffs slowly, so the repeats of a late frame stay where they belong
++ * and the panel catches up on each of them.
++ */
++static void dpu_encoder_phys_vid_lfc_kickoff(struct dpu_encoder_phys *phys_enc)
++{
++	struct dpu_encoder_lfc *lfc = &phys_enc->lfc;
++	ktime_t now = ktime_get();
++	unsigned long lock_flags;
++	u64 seen = 0, period, prev;
++	s64 err = 0;
++
++	spin_lock_irqsave(phys_enc->enc_spinlock, lock_flags);
++	if (!dpu_encoder_phys_vid_lfc_on(phys_enc)) {
++		lfc->last_commit = 0;
++		lfc->period = 0;
++		lfc->count = 0;
++		goto out;
++	}
++
++	if (lfc->last_commit && ktime_after(now, lfc->last_commit))
++		seen = ktime_to_ns(ktime_sub(now, lfc->last_commit));
++	period = lfc->period;
++	prev = lfc->last_interval;
++	if (!seen)
++		period = 0;
++	else if (!period)
++		period = seen;
++	else if (seen > period - period / 4 && seen < period + period / 4)
++		period = period - period / 8 + seen / 8;
++	else if (prev && seen > prev - prev / 16 && seen < prev + prev / 16)
++		period = seen;
++	lfc->last_commit = now;
++	lfc->last_interval = seen;
++	lfc->period = period;
++
++	if (period && lfc->phase && ktime_after(now, lfc->phase)) {
++		u64 n = div64_u64(ktime_to_ns(ktime_sub(now, lfc->phase)) +
++				  period / 2, period);
++		ktime_t pred = ktime_add_ns(lfc->phase, max_t(u64, n, 1) * period);
++
++		err = ktime_to_ns(ktime_sub(now, pred));
++		if (abs(err) < period / 4)
++			lfc->phase = ktime_add(pred, ns_to_ktime(err / 8));
++		else
++			lfc->phase = now;
++	} else {
++		lfc->phase = now;
++	}
++
++	lfc->count = 0;
++	if (period && period <= DPU_LFC_MAX_PERIOD_NS)
++		lfc->count = div64_u64(period + lfc->refresh_ns / 50,
++				       lfc->refresh_ns);
++	if (lfc->count < 2)
++		lfc->count = 0;
++	trace_dpu_enc_lfc_frame(DRMID(phys_enc->parent),
++				phys_enc->hw_intf->idx - INTF_0,
++				seen, period, err, lfc->count);
++
++	/* The last frame's repeats are over; the vsync of this one arms its own. */
++	hrtimer_try_to_cancel(&lfc->timer);
++	dpu_encoder_phys_vid_lfc_arm(phys_enc);
++out:
++	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
++}
++
++static void dpu_encoder_phys_vid_lfc_fini(struct drm_device *dev, void *arg)
++{
++	struct dpu_encoder_phys *phys_enc = arg;
++
++	hrtimer_cancel(&phys_enc->lfc.timer);
+ }
+ 
+ static void dpu_encoder_phys_vid_setup_timing_engine(
+@@ -407,6 +623,7 @@
+ 	struct dpu_hw_ctl *hw_ctl;
+ 	unsigned long lock_flags;
+ 	u32 flush_register = 0;
++	bool taken = false;
+ 
+ 	hw_ctl = phys_enc->hw_ctl;
+ 
+@@ -426,7 +643,9 @@
+ 		flush_register = hw_ctl->ops.get_flush_register(hw_ctl);
+ 
+ 	if (!(flush_register & hw_ctl->ops.get_pending_flush(hw_ctl)))
+-		atomic_add_unless(&phys_enc->pending_kickoff_cnt, -1, 0);
++		taken = atomic_add_unless(&phys_enc->pending_kickoff_cnt, -1, 0);
++	dpu_encoder_phys_vid_lfc_vsync(phys_enc, taken &&
++			!atomic_read(&phys_enc->pending_kickoff_cnt));
+ 	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
+ 
+ 	/* Signal any waiting atomic commit thread */
+@@ -692,6 +911,7 @@
+ 	if (dpu_encoder_phys_vid_is_master(phys_enc))
+ 		dpu_encoder_phys_inc_pending(phys_enc);
+ 	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
++	hrtimer_cancel(&phys_enc->lfc.timer);
+ 
+ 	/*
+ 	 * Wait for a vsync so we know the ENABLE=0 latched before
+@@ -759,6 +979,8 @@
+ 		phys_enc->hw_intf->ops.avr_trigger(phys_enc->hw_intf);
+ 		spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
+ 	}
++
++	dpu_encoder_phys_vid_lfc_kickoff(phys_enc);
+ }
+ 
+ static void dpu_encoder_phys_vid_irq_enable(struct dpu_encoder_phys *phys_enc)
+@@ -857,6 +1079,7 @@
+ 		struct dpu_enc_phys_init_params *p)
+ {
+ 	struct dpu_encoder_phys *phys_enc = NULL;
++	int ret;
+ 
+ 	if (!p) {
+ 		DPU_ERROR("failed to create encoder due to invalid parameter\n");
+@@ -878,6 +1101,12 @@
+ 	dpu_encoder_phys_vid_init_ops(&phys_enc->ops);
+ 	phys_enc->intf_mode = INTF_MODE_VIDEO;
+ 
++	hrtimer_setup(&phys_enc->lfc.timer, dpu_encoder_phys_vid_lfc_timer,
++		      CLOCK_MONOTONIC, HRTIMER_MODE_ABS_HARD);
++	ret = drmm_add_action_or_reset(dev, dpu_encoder_phys_vid_lfc_fini, phys_enc);
++	if (ret)
++		return ERR_PTR(ret);
++
+ 	DPU_DEBUG_VIDENC(phys_enc, "created intf idx:%d\n", p->hw_intf->idx);
+ 
+ 	return phys_enc;
