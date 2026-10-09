@@ -59,8 +59,8 @@ Its other patches touch Adreno 6xx or 610 only, or Wayland, and it is built
 on Mesa main at `e3a986f0`.
 
 **How the image carries it:**
-- Mesa is pinned to that same commit (26.3.0-devel), and `mesa-009` adds
-  the flush, on only for the engine named `ARMSX2`, which the core passes
+- Mesa is 26.3.0-devel, main of 2026-10-09 (`fdbc48df`), and `mesa-009`
+  adds the flush, on only for the engine named `ARMSX2`, which the core passes
   RetroArch through libretro's Vulkan context negotiation. Every other
   application keeps stock behaviour.
 - ARMSX2 trusts a driver to order a declared loop only when `driverInfo`
@@ -77,8 +77,9 @@ on Mesa main at `e3a986f0`.
   refresh, and 4.9% of frames were shown for 1 or 3 refreshes instead of 2.
 
 **Measured before the switch** (2026-10-09, NFSU's intro, 90 s per run, GPU
-clock every 0.25 s from 30 s on; a test build of 26.3.0-devel with
-`mesa-009`, tagged so the unpatched core trusted it):
+clock every 0.25 s from 30 s on; a test build of 26.3.0-devel at
+`e3a986f0`, ARMSX2's base, with `mesa-009`, tagged so the unpatched core
+trusted it):
 
 | Driver | Display | GPU clock, mean |
 |---|---|---|

@@ -18,7 +18,7 @@ Signed-off-by: PortareOS <hello@portare.org>
 ---
 --- a/src/freedreno/vulkan/tu_device.h
 +++ b/src/freedreno/vulkan/tu_device.h
-@@ -489,6 +489,12 @@
+@@ -491,6 +491,12 @@
     bool use_z24uint_s8uint;
     bool use_lrz;
  
@@ -33,7 +33,7 @@ Signed-off-by: PortareOS <hello@portare.org>
     /* This is an internal queue for mapping/unmapping non-sparse BOs */
 --- a/src/freedreno/vulkan/tu_device.cc
 +++ b/src/freedreno/vulkan/tu_device.cc
-@@ -3232,6 +3232,15 @@
+@@ -3238,6 +3238,15 @@
         !physical_device->instance->drirc.misc.enable_d24s8_border_color_workaround);
     device->use_lrz = !TU_DEBUG_START(NOLRZ);
  
@@ -51,7 +51,7 @@ Signed-off-by: PortareOS <hello@portare.org>
     device->submit_count = 0;
 --- a/src/freedreno/vulkan/tu_cmd_buffer.cc
 +++ b/src/freedreno/vulkan/tu_cmd_buffer.cc
-@@ -8658,6 +8658,24 @@
+@@ -8665,6 +8665,24 @@
     if (cmd->state.dirty & TU_CMD_DIRTY_FS)
        tu_flush_dynamic_input_attachments<CHIP>(cmd);
  

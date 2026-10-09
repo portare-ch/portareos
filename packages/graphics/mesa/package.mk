@@ -3,11 +3,9 @@
 # Copyright (C) 2018-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="mesa"
-# 26.3.0-devel: main at the commit ARMSX2's Turnip (axfl2) is built on, so
-# its a7xx feedback-loop flush (mesa-009) sits on the base it was measured
-# on. Move to 26.3.0-rc1 once it is tagged.
-PKG_VERSION="e3a986f0167aa7d1c5cfd62a63362c65f5339373"
-PKG_SHA256="f7e82f46c257d499b1ecfe36d4126189c2e9a2f73364c99b10ad4f69ba32241b"
+# 26.3.0-devel: main on 2026-10-09, until 26.3.0-rc1 is tagged.
+PKG_VERSION="fdbc48df2436692db02c5721e0539c311f116c12"
+PKG_SHA256="f0f68737f61b7ffd63adb8a4f931e17dca94303dd4a4db6229e0496c47fa1894"
 PKG_LICENSE="OSS"
 PKG_SITE="http://www.mesa3d.org/"
 PKG_URL="https://gitlab.freedesktop.org/mesa/mesa/-/archive/${PKG_VERSION}/mesa-${PKG_VERSION}.tar.gz"
