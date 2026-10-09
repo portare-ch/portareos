@@ -17,7 +17,7 @@ mpv or panel refresh modes; its display work is gamescope and HDR.
 |---|---|---|
 | 8bpc output dither: the DPU disables dithering at 8bpc, so a 10-bit result is truncated onto the panel; a panel opts in per DT property | `patches/0049-drm-msm-dpu-panel-opt-in-8bpc-dither.patch` (armada-authored) | kernel patch 0049 verbatim, `armada,dpu-8bpc-dither` on the Nova panel (#370) |
 | Gamepad MCU on `vdd_mcu_3v3`, rail not always-on, rsinput releases it across suspend | `1007-input-rsinput-drop-the-mcu-supply-across-system-sleep.patch`, `dts/qcs8550-ayn-common.dtsi.patch` | patch 1014, DT change, HTR3212 driver with PM ops from ROCKNIX SM8750 (#370) |
-| Stick calibration through rsinput module parameters | `apply-input-calibration` + `input-calibration.json` | we already shipped GPcal; fixed its pad name and wrapper (#370) |
+| Stick calibration through rsinput module parameters | `apply-input-calibration` + `input-calibration.json` | GPcal shipped with its pad name and wrapper fixed (#370), then dropped with pyxel; rsinput's parameters remain |
 | GMU HFI interrupt clearing the reply and OOB ack bits it does not own, unbounded devcoredump wait, HFI interrupt unmasked before GMU boot | `0620`, `0621` (from Kettle), `0622` | patches 1099-1101; `096-cpuidle` and its hooks removed (#602) |
 | UFS lane clock helpers enabling every clock, geni UART kept active across sleep (upstream backports) | `0533`, `0534` | patches 1102, 1103 (#603) |
 | ath12k scan priority never sent, scan timeout deadlock | `1020`, `1021` | patches 1104, 1105; 1106 and the timezone's country are ours |

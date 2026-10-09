@@ -66,3 +66,10 @@ Libretro cores (78):
 | Removed | Why |
 |---|---|
 | `rocknix-fake-suspend` | The state machine for devices without working suspend. The Nova suspends for real and its power key is owned by the SM8550 power-handler. |
+
+## Tools
+
+| Removed | Why |
+|---|---|
+| `gamepadcalibration` | GPcal, stick and trigger calibration in Python drawn with pyxel, under Tools. The one stick problem found on the Nova was the MCU's deadband, not calibration, and a calibration tool would be a launcher screen writing the same rsinput parameters. One saved before still applies at boot from `/storage/.config/autostart/GPcal.sh`. |
+| `pyxel` | GPcal's UI library, and GPcal its only user. Its upstream (github.com/kitao) disappeared on 2026-10-09 and took the wheel's URL with it. |

@@ -70,7 +70,6 @@ only been built. BUGS.md carries the check for each unverified row.
 | Charging LED | Yellow thumbsticks while charging, dark otherwise, switchable. | launcher, LED daemon | verified | human |
 | Home + Start handled by the launcher for emulators that do not quit | The launcher closes what does not close itself. | launcher `quit.c` | verified | human |
 | Stick resolution | The gamepad MCU reports a stick only after it moved `stick_deadband` ADC counts of ±1024; the vendor's 40 made 23 levels from centre to rail, 5 to 6 steps out of 255 on the pad Steam and RetroArch see. 8 on the kernel command line gives one-step resolution with one event in 5 s at rest. | `devices/SM8550/options`, kernel patches 1019/1079/1080 | verified | auto: `/sys/module/rsinput/parameters/stick_deadband` is 8; human: evtest shows consecutive right-stick values 1 apart |
-| Stick and trigger calibration | Tools > Calibrate Gamepad (GPcal) measures centre, range and deadzone into rsinput's module parameters; Save writes an autostart script so it survives a reboot. | `gamepadcalibration`, `/storage/.config/autostart/GPcal.sh` | unverified; found the pad under the wrong name until nightly 156 | human: calibrate, reboot, sticks still centred; auto: parameters match the saved script |
 
 ## Power and hardware
 

@@ -83,16 +83,4 @@
         <players>1</players>
         <image>./images/xemu.svg</image>
     </game>
-    <game>
-        <path>./GPcal.sh</path>
-        <name>Calibrate Gamepad</name>
-        <desc>Calibrates the sticks and triggers.</desc>
-        <developer>CDELETRE</developer>
-        <publisher>PortareOS</publisher>
-        <rating>5.0</rating>
-        <releasedate>2024</releasedate>
-        <genre>tool</genre>
-        <players>1</players>
-        <image>./images/calibrate-gamepad.svg</image>
-    </game>
 </gameList>
