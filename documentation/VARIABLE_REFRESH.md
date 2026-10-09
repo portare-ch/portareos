@@ -476,6 +476,54 @@ vblank traced after it and counts those refreshes as kernel repeats, so
 the same checks apply to both. It also reports how long a kick took to
 start its refresh and how far it went from its place on the period.
 
+### Against mesa-005, a first look
+
+2026-10-09, kernel-only build of patch 1107 over that day's image, one
+Turnip build with mesa-008 for both sides (`VK_DRIVER_FILES`), only
+`msm.dpu_lfc` toggled. present-probe, 60 s per run, every 600th frame
+4 ms late, `tools/display-check --rate`.
+
+| Rate | Repeats | Frames shown k times | Panel on its own | Refresh vs P/k, median / p95 / p99 ms | Scanout - target, median / p95 ms | Frames to recover from a late one | Checks failed |
+|---|---|---|---|---|---|---|---|
+| 60.099 Hz | Mesa | 3570 of 3574 | 2 | 0.002 / 0.006 / 0.007 | 14.09 / 14.18 | never | 0 |
+| 60.099 Hz | kernel | 3574 of 3578 | 3 | 0.002 / 0.006 / 0.007 | 6.91 / 7.08 | never | 1 |
+| 59.94 Hz | Mesa | 3561 of 3569 | 6 | 0.022 / 0.061 / 0.198 | 0.68 / 11.46 | 269 | 0 |
+| 59.94 Hz | kernel | 3557 of 3570 | 7 | 0.022 / 0.075 / 0.250 | 0.48 / 3.36 | 82 | 0 |
+| 59.826 Hz | Mesa | 3554 of 3562 | 6 | 0.038 / 0.089 / 0.289 | 0.37 / 10.38 | 156 | 1 |
+| 59.826 Hz | kernel | 3544 of 3560 | 11 | 0.037 / 0.114 / 0.335 | 0.49 / 2.00 | 48 | 0 |
+| 50 Hz | Mesa | 2969 of 2975 | 6 | 0.087 / 0.486 / 0.814 | 0.26 / 0.54 | 3 | 0 |
+| 50 Hz | kernel | 2971 of 2977 | 8 | 0.072 / 0.330 / 0.664 | 0.28 / 0.88 | 3 | 0 |
+| 40 Hz | Mesa | 2375 of 2381 | 5 | 0.014 / 0.021 / 0.218 | 0.85 / 11.63 | 287 | 0 |
+| 40 Hz | kernel | 2372 of 2382 | 6 | 0.014 / 0.054 / 0.189 | 0.46 / 2.89 | 88 | 0 |
+| 30 Hz | Mesa | 1781 of 1786 | 5 | 0.014 / 0.039 / 0.233 | 0.89 / 10.92 | 216 | 0 |
+| 30 Hz | kernel | 1772 of 1786 | 6 | 0.014 / 0.052 / 0.228 | 0.54 / 2.17 | 66 | 0 |
+
+- **On time, the two are the same.** Repeats land within microseconds of
+  P/k either way, and a frame on time reaches the screen at the same
+  phase: new frames go through the same commit path.
+- **After a late frame they differ by design.** A 4 ms late frame misses
+  the floor and is shown a refresh long on both. Mesa then commits the
+  repeat of the next frame anyway, the frame after waits, and the panel
+  runs a refresh behind until k x (P/k - R) a frame has made it up:
+  156 to 287 frames, 2.5 to 7 s, which is the p95 phase of 10 to 12 ms.
+  The kernel skips that repeat because the next frame is already kicked
+  off, so one frame is shown a refresh short and the panel is back on
+  the content's grid; what is left takes 48 to 88 frames. Two frames off
+  their count instead of one, and a fraction of the time behind.
+- **60.099 Hz never catches up** on either: half a frame is the fastest
+  refresh, so only a skipped repeat moves it back. Both sat at a fixed
+  offset after the first late frames, Mesa's twice the kernel's in this
+  run. Which offset a run ends on depends on its history; a longer run
+  is needed before reading the difference as a property of either.
+- **Failed checks**: Mesa at 59.826 Hz, two jumps after a repeat
+  committed 2.0 and 2.5 ms late, the userspace wakeup a kernel timer
+  removes; the kernel at 60.099 Hz, one jump with no cause in the trace,
+  of the kind seen before from the display side. Kernel triggers went a
+  median 0.01 ms and a p99 0.11 ms after their place on the grid.
+
+Not measured yet: games through RetroArch, longer runs, a pause and
+resume, CPU wakeups and power.
+
 ## The launch
 
 Every RetroArch game runs with variable refresh, with no setting to get
