@@ -268,9 +268,10 @@ the targets: fixed latency, as on a fixed 120 Hz mode, with every frame
 still shown twice. A PlayStation frame leaves 0.038 ms a refresh to catch
 up, about a second after a loading stall.
 
-The general form is LFC in the DPU driver, which would cover every
-client, not only timed VK_KHR_display presents. It waits until AVR has
-had more testing: #586.
+The general form is LFC in the DPU driver, which covers every client,
+not only timed VK_KHR_display presents. Patch 1107 adds it behind a
+switch, to be compared with this: see
+[repeats in the kernel](#repeats-in-the-kernel-lfc-on-trial).
 
 ## Checked frame by frame
 
@@ -417,6 +418,55 @@ for the runs before), and counts a phase jump back towards the usual
 phase as the panel catching up, k x (P/k - R) a frame: 3.4 ms at 50 Hz,
 over the 2 ms jump. Of the 149 jumps at 50 Hz on the 90 Hz floor, 125
 were that.
+
+## Repeats in the kernel (LFC), on trial
+
+Patch 1107 repeats a slow frame in the DPU's video encoder instead of
+in Mesa (#586). It is off unless `msm.dpu_lfc` is set, so the two can be
+compared on the same image.
+
+- **Period.** The distance between kickoffs, smoothed the way mesa-005
+  smooths its targets: one distance off it is noise, a new period is
+  taken once seen twice. A frame is shown `count = (P + R/50) / R` times,
+  none below two refreshes or above 100 ms. A phase follows the kickoffs
+  slowly, so the repeats of a late frame keep their place on the period.
+- **Repeat.** After each refresh of a frame, the vsync interrupt arms an
+  hrtimer for the next one at kickoff + shown x P/count, and the timer
+  writes `AVR_TRIGGER`. A kickoff cancels what is left of the frame
+  before, and a trigger finding one pending is skipped. A refresh the
+  panel makes on its own, at the floor, counts like a repeat. No commit,
+  no flip event, no atomic state.
+- **Clients.** Any commit while `VRR_ENABLED` is set, timed or not.
+  Mesa's own repeats have to be off, or the kernel takes them for
+  frames: `MESA_VK_WSI_DISPLAY_REPEAT=0` (mesa-008), which runemu and
+  `tools/display-trace` set while `msm.dpu_lfc` is on.
+
+Two things about AVR in continuous mode had to be found on the Nova,
+with a build that had them as parameters (2026-10-09, present-probe,
+30 s per run):
+
+- **`AVR_TRIGGER` alone starts a refresh.** Flushing the INTF as well,
+  the other candidate, was not needed.
+- **A trigger written while the INTF still scans the refresh before is
+  kept for that refresh's end**, as a commit's flush is. So the trigger
+  goes at its place on the period, and where the panel is behind, the
+  hardware starts the repeat at the shortest frame. Timing it from the
+  vsync interrupt instead, never before the shortest frame after it,
+  failed: the interrupt ran about 0.68 ms after the vsync (its trace
+  time against the vblank timestamp), every repeat came that much late,
+  9.0 ms apart at 30 Hz instead of 8.33, and 152 of 882 frames lost a
+  repeat.
+
+| Run | Frames shown k times | Refresh against P/k, median / p99 | Scanout - target, median |
+|---|---|---|---|
+| 30 Hz, k = 4, timed from the vsync interrupt | 728 of 882 | 0.211 / 1.011 ms | 4.12 ms |
+| 30 Hz, k = 4, trigger on the period | 878 of 885 | 0.015 / 0.275 ms | 0.50 ms |
+| 60.099 Hz, k = 2, trigger on the period | 1772 of 1775 | 0.002 / 0.007 ms | 1.27 ms |
+
+`tools/display-check` pairs each `dpu_enc_lfc_repeat` kick with the
+vblank traced after it and counts those refreshes as kernel repeats, so
+the same checks apply to both. It also reports how long a kick took to
+start its refresh and how far it went from its place on the period.
 
 ## The launch
 

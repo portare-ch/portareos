@@ -130,11 +130,14 @@ class Run:
             si += 1
         return lost
 
-    def pair_kicks(self, landed, limit=2000000):
+    def pair_kicks(self, landed, limit=13000000):
         """Each kick of the kernel's LFC with the refresh it started: the
-        first vblank traced after it, from the vsync interrupt, so within
-        the interrupt's latency. A kick followed by no vblank within the
-        limit, or by one a commit landed on, started nothing."""
+        first vblank traced after it. A kick during the refresh before is
+        kept for its end, and the vblank is traced from the vsync interrupt,
+        which ran up to 0.7 ms late on the Nova, so the limit is the floor's
+        frame. A kick followed by none within it, or by one a commit landed
+        on, started nothing; one lost and followed by the panel's own
+        refresh shows as a kernel repeat of the floor's length."""
         for k in self.kicks:
             k['vblank'] = None
             if not k['kicked']:
