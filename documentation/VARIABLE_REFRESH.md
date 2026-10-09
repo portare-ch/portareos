@@ -731,9 +731,11 @@ had a 142-line back porch where every other mode has 27, and the panel does
 not lock to it: it scans its own memory at about 120.14 Hz, and every game
 showed a tear every few seconds, all the time at 50 fps. The DPU's CRC saw
 every refresh whole, which is why nothing here caught it; a person watching
-a moving bar did (`tools/tear-tap`). Patch 1110 gives the mode the panel's
-own porches, and with them the panel follows the link, stretched front porch
-included. The measurements are in
+a moving bar did (`tools/tear-tap`). Patch 1110 gave it the 27 lines of the
+other modes, and the beat went, but those were three lines more than the
+panel's own 24: it then followed a stretch of only about 0.3 ms, and tore at
+50 fps. Patch 1112 puts every mode on the panel's own 998-line timing, which
+follows the stretch at 50 fps too. The measurements are in
 [REFRESH_RATES.md](PER_DEVICE_DOCUMENTATION/SM8550/REFRESH_RATES.md).
 
 So a timing check here ends at the DPU. What the panel shows has to be

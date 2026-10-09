@@ -1,6 +1,6 @@
 # Refresh and audio rates on the Retroid Pocket Nova (SM8550)
 
-RetroArch defaults to **variable refresh from 80 to 120.197775 Hz** on the
+RetroArch defaults to **variable refresh from 80 to 120.197384 Hz** on the
 built-in panel when it is the only connected display and no display mode
 is pinned. It uses the fastest mode for every system and times frames at
 the core's reported rate; the display driver repeats them to keep the
@@ -19,28 +19,34 @@ the game starts.
 
 Where each system's native rate comes from, crystal by crystal, and where an emulator's number differs from the console's, is derived in [CONSOLE_CLOCKS.md](../../CONSOLE_CLOCKS.md). Which systems have their mode, and which are still open, is in [PortareOS_Modelines.md](../../PortareOS_Modelines.md).
 
-The console modes use the same 1302 × 1001 total timings and change only the pixel clock. Steam's 120.000 Hz mode keeps the default's pixel clock and has one line fewer, 1302 × 1000, which was set from userspace and measured before it was added: 120.003 Hz over a minute of vblanks, against 119.884 for the default on the same count. Nothing else picks it: RetroArch asks for each system's exact rate, and mpv, ARMSX2, xemu and the launcher take the preferred mode. All of them keep the panel in its 120 Hz class. The modes are defined in the panel driver, `projects/PortareOS/devices/SM8550/patches/linux/0105-drm-panel-Add-Retroid-Pocket-Nova-panel.patch`.
+Every mode uses the panel's own timing, 1302 × 998, and changes only the pixel clock (see below). Steam's 120.0004 Hz mode is Android's own 120 Hz mode exactly. Nothing else picks it: RetroArch asks for each system's exact rate, and mpv, ARMSX2, xemu and the launcher take the preferred mode. All of them keep the panel in its 120 Hz class. The modes are defined in the panel driver, `projects/PortareOS/devices/SM8550/patches/linux/0105-drm-panel-Add-Retroid-Pocket-Nova-panel.patch`.
 
-| Panel mode | Pixel clock | Used by |
-|---|---|---|
-| 119.880120 Hz | 156240 kHz | default (launcher, everything else) |
-| 119.455046 Hz | 155686 kHz | `gambatte`, `mgba` |
-| 120.197775 Hz | 156654 kHz | `snes9x`, `mesen2`, +1.2 ppm; variable refresh runs on it; see below |
-| 119.652237 Hz | 155943 kHz | `parallel_n64`, `swanstation`, `ymir` |
-| 119.845592 Hz | 156195 kHz | `genesis_plus_gx` |
-| 118.360134 Hz | 154259 kHz | `fbneo`, for `neogeo` only |
-| 119.199541 Hz | 155353 kHz | `neocd` |
-| 120.000000 Hz | 156240 kHz, vtotal 1000 | gamescope, for Steam |
+| Panel mode | Pixel clock | Off the console's rate | Used by |
+|---|---|---|---|
+| 119.88031 Hz | 155772 kHz | +1.6 ppm | default (launcher, everything else) |
+| 119.45473 Hz | 155219 kHz | -2.2 ppm | `gambatte`, `mgba` |
+| 120.197384 Hz | 156184 kHz | -2.0 ppm | `snes9x`, `mesen2`; variable refresh runs on it |
+| 119.65252 Hz | 155476 kHz | +2.6 ppm | `parallel_n64`, `swanstation`, `ymir` |
+| 119.84568 Hz | 155727 kHz | +1.7 ppm | `genesis_plus_gx` |
+| 118.36038 Hz | 153797 kHz | +3.2 ppm | `fbneo`, for `neogeo` only |
+| 119.20000 Hz | 154888 kHz | +1.7 ppm | `neocd` |
+| 120.00037 Hz | 155928 kHz | +3.1 ppm | gamescope, for Steam |
 
-### The SNES mode, and why it has the panel's own porches
+### Why every mode has the panel's own timing
 
-The SNES mode is 1302 x 1001 at 156654 kHz like every other mode: 120.197775
-Hz, +1.2 ppm against 2 x 60.0988, a frame of drift about every four hours.
-Variable refresh uses it as its base, being the fastest.
+The panel's own timing, Android's for both of its rates, is 12 lines of
+vertical front porch, 2 of sync and 24 of back porch: 998 lines. Every mode
+here uses it and moves only the pixel clock, so none is exact to the console;
+all are within 3.2 ppm, a frame of drift every few hours, which RetroArch's
+audio rate control absorbs. Variable refresh runs on the fastest, the SNES
+mode.
 
-It was 1302 x 1116 at 174651 kHz until #623: a 142-line back porch where
-every other mode has 27, cut to widen black frame insertion's flip window,
-and exact to 0.00 ppm. The panel does not lock to that frame. It scans out
+Two departures from it were tried, and the panel took neither under variable
+refresh.
+
+The SNES mode was 1302 x 1116 at 174651 kHz: a 142-line back porch, cut to
+widen black frame insertion's flip window, and exact to 0.00 ppm. The panel
+does not lock to that frame at all. It scans out
 of its own memory at about 120.14 Hz, and the frames arriving on the link
 land in that memory at a point of its scan that drifts with the difference
 between the two rates. The DPU's CRC cannot see it, since every refresh
@@ -52,13 +58,27 @@ on a beat:
 | 120.198 Hz, vtotal 1116, variable refresh | 59.94 fps, 119.88 Hz | every 3.5 to 4.7 s |
 | the same | 60 fps, 120 Hz | every 6.5 to 7.8 s |
 | the same | 50 fps, 100 Hz | all the time |
-| 120.000 Hz, vtotal 1000, variable refresh | 59.94 fps, 119.88 Hz | none |
-| the same | 50 fps, 100 Hz | none |
 | 119.880 Hz, vtotal 1001, fixed refresh | 59.94 fps | none |
 
 Each interval is one over the gap between the panel's ~120.14 Hz and the
-refresh: 0.26 Hz, 0.14 Hz, 20 Hz. On its own porches the panel follows the
-input, the stretched front porch of variable refresh included.
+refresh: 0.26 Hz, 0.14 Hz, 20 Hz.
+
+Every other mode had 27 lines of back porch, three more than the panel's, so
+that 1302 x 1001 would make 119.88 Hz exactly 120000/1001. The panel locks to
+that, but holds the lock only while variable refresh stretches a frame by
+about 0.3 ms; past that it refreshes on its own and the frame arriving later
+tears. Measured with the bar on the 1001-line SNES mode, and through
+`vrr-probe custom` for Android's timing against ours at the same pacing:
+
+| Timing, variable refresh | Content, refresh | Stretch | Tears seen |
+|---|---|---|---|
+| 1302 x 1001, 156654 kHz | 59.0 fps | +0.16 ms | 1 in 20 s |
+| the same | 58.0 fps | +0.30 ms | none in 20 s |
+| the same | 56.0 fps | +0.61 ms | 4 in 20 s |
+| the same | 54.0 fps | +0.94 ms | 6 in 20 s |
+| the same | 50 fps | +1.68 ms | many |
+| 1302 x 1001 against 1302 x 998, blind | 50 fps | +1.67 ms | 2 against none |
+| 1302 x 998, 155928 kHz, again | 50 fps | +1.67 ms | none in 30 s |
 
 The rolling line seen with BFI on the wide mode, below, has the same shape.
 
@@ -110,8 +130,8 @@ without DSC`. None of this was known here:
   insertion is the remedy, and it does not work here - so the softness on a
   scrolling game is the display being sample-and-hold, and nothing in software
   reaches it.
-- **Its own timings are 1302 x 998**, at 60 and 120 Hz - the same htotal this
-  driver uses, three lines *less* vertical back porch than our 1001.
+- **Its own timings are 1302 x 998**, at 60 and 120 Hz. This driver used 1001
+  lines, three more of back porch, until #623 showed what they cost (above).
 - **The init sequence already matches the vendor's**, command for command and
   byte for byte, for the first fourteen: the same register pages, the same
   `0x0d 0x75 0x00 0x00` brightness, the same 120 ms and 20 ms waits, and the
@@ -251,7 +271,7 @@ In short:
 ## Adding a mode
 
 1. Find the system's exact native rate `f`, preferably from the rate the emulator logs at startup.
-2. Compute the pixel clock `round(2 × f × 1302 × 1001 / 1000)` in kHz, add the mode to the driver patch next to the others, and update the hunk's line count.
+2. Compute the pixel clock `round(2 × f × 1302 × 998 / 1000)` in kHz, add the mode to the driver patch next to the others, and update the hunk's line count.
 3. Add the emulator and the rate `2 × f` to `set_ra_refresh_rate` in `setsettings.sh`. RetroArch accepts a mode within 1 Hz of the requested rate, and `setsettings.sh` only asks for a mode that the panel lists within 0.002 Hz.
 4. Test the mode on the device: `modetest -c` lists it, and the picture stays stable while a game runs.
 
