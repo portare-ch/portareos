@@ -591,6 +591,44 @@ battery, 60 s each, in the order Mesa, kernel, Mesa, kernel:
 
 About 0.1 W less with the kernel's repeats, at 90 repeats a second.
 
+### Five minutes per rate
+
+The comparison that decided it, run while the switch was being made:
+the kernel at 5661f21 with mesa-005 still in the test Turnip, only
+`msm.dpu_lfc` toggled. present-probe, 300 s per run, every 600th frame
+4 ms late, `tools/display-check --rate`.
+
+| Rate | Repeats | Frames shown k times | Panel on its own | Refresh vs P/k, median / p95 / p99 ms | Scanout - target, median / p95 ms | Checks failed |
+|---|---|---|---|---|---|---|
+| 60.099 Hz | Mesa | 17999 of 18003 | 2 | 0.002 / 0.006 / 0.007 | 12.33 / 14.59 | 0 |
+| 60.099 Hz | kernel | 17997 of 18003 | 6 | 0.002 / 0.006 / 0.007 | 6.88 / 7.38 | 0 |
+| 59.94 Hz | Mesa | 17923 of 17955 | 30 | 0.022 / 0.052 / 0.200 | 0.84 / 11.73 | 0 |
+| 59.94 Hz | kernel | 17894 of 17955 | 31 | 0.022 / 0.071 / 0.226 | 0.49 / 3.36 | 1 |
+| 59.826 Hz | Mesa | 17888 of 17920 | 30 | 0.038 / 0.102 / 0.305 | 0.48 / 10.64 | 1 |
+| 59.826 Hz | kernel | 17859 of 17921 | 31 | 0.037 / 0.092 / 0.275 | 0.42 / 2.30 | 0 |
+| 50 Hz | Mesa | 14949 of 14977 | 28 | 0.114 / 0.353 / 0.745 | 0.24 / 0.52 | 2 |
+| 50 Hz | kernel | 14951 of 14977 | 27 | 0.071 / 0.311 / 0.624 | 0.27 / 0.79 | 0 |
+| 40 Hz | Mesa | 11960 of 11982 | 21 | 0.014 / 0.021 / 0.190 | 0.99 / 11.76 | 0 |
+| 40 Hz | kernel | 11939 of 11982 | 23 | 0.014 / 0.044 / 0.178 | 0.46 / 3.37 | 0 |
+| 30 Hz | Mesa | 8970 of 8987 | 17 | 0.014 / 0.027 / 0.227 | 0.93 / 11.39 | 1 |
+| 30 Hz | kernel | 8954 of 8986 | 17 | 0.013 / 0.036 / 0.199 | 0.44 / 2.99 | 0 |
+
+- **The first look holds over five minutes.** Refreshes land as close to
+  P/k on both. The kernel shows 16 to 29 more frames off their count,
+  about one per late frame: the frame after a late one, shown a refresh
+  short so the panel is back on the content's clock. In exchange the p95
+  phase is 2.3 to 3.4 ms against Mesa's 10.6 to 11.8, which spends the
+  minutes after each late frame a refresh behind.
+- **60.099 Hz levels off on both.** Half a frame is the fastest refresh,
+  so only a skipped repeat brings the panel back. The kernel held 6.6 to
+  7.3 ms behind the targets, 30 s medians, for the whole run; Mesa
+  started at 14.6 and drifted to 10.4.
+- **Failed checks.** Kernel, 59.94 Hz: two phase jumps of 2.2 ms with no
+  cause in the trace. Mesa: at 30 Hz a repeat committed 15.9 ms after it
+  was due; at 50 Hz two frames shown three times with the plane
+  programmed 2.3 and 3.4 ms after the commit; at 59.826 Hz one jump with
+  no cause in the trace.
+
 ## The launch
 
 Every RetroArch game runs with variable refresh, with no setting to get
