@@ -629,6 +629,63 @@ the kernel at 5661f21 with mesa-005 still in the test Turnip, only
   programmed 2.3 and 3.4 ms after the commit; at 59.826 Hz one jump with
   no cause in the trace.
 
+## The GPU clock: no fence deadline
+
+At a commit, the atomic helper gives each plane's fence a deadline: the
+start of the next vblank, from the mode's frame length. msm boosts the
+GPU when such a fence is still running 3 ms before its deadline, raising
+the clock's floor to twice the current clock for 50 ms
+(`msm_fence_set_deadline`, `msm_devfreq_boost`). With AVR the panel waits
+in its front porch for the commit, so a frame starts about 0.4 ms after
+it and that vblank is always near or past. RetroArch presents right after
+its final blit, about 80 us of GPU work, so a commit often went out with
+the blit still running, and each such commit boosted. At fixed refresh
+Mesa commits at a vblank event, the deadline is about 7 ms away, and the
+blit has long finished.
+
+Patch 1108 sets no deadline on a CRTC with `VRR_ENABLED`, so devfreq's
+load decides the clock, as it does at fixed refresh. A late frame under
+VRR is shown late, not dropped at a vblank.
+
+NFSU on ARMSX2 with the test Turnip (main and mesa-009), on battery,
+110 s from 35 s in. The race loads a savestate 25 s in; 3x is ARMSX2's
+internal resolution, 2x otherwise. Before is kernel 5661f21 with LFC on,
+after is the same kernel with 1108. Frames off their count are those not
+shown twice, the savestate load's pause left out.
+
+| Run | Kernel | GPU MHz, mean | At 680 MHz | Mcycles per frame | Boosts | Battery W | Frames off their count | Phase p95, ms |
+|---|---|---|---|---|---|---|---|---|
+| Intro, VRR | before | 647 | 88% | 0.29 | 1755 | 2.67 | 1 | 0.91 |
+| Intro, VRR | after | 401 | 0% | 0.27 | 0 | 2.70 | 3 | 0.83 |
+| Intro, fixed | before | 404 | 1% | 0.27 | 255 | 2.76 | 73 | - |
+| Intro, fixed | after | 449 | 17% | 0.27 | 761 | 2.74 | 107 | - |
+| Race, VRR | before | 522 | 40% | 2.86 | 867 | 4.94 | 29 | 1.74 |
+| Race, VRR | after | 455 | 19% | 2.77 | 0 | 4.89 | 43 | 1.44 |
+| Race, fixed | before | 455 | 19% | 2.74 | 364 | 4.89 | 75 | - |
+| Race, fixed | after | 441 | 14% | 2.74 | 335 | 4.89 | 56 | - |
+| Race 3x, VRR | before | 610 | 43% | 4.38 | 375 | 5.70 | 41 | 4.07 |
+| Race 3x, VRR | after | 606 | 40% | 4.36 | 1 | 5.77 | 75 | 2.65 |
+| Race 3x, fixed | before | 608 | 42% | 4.38 | 163 | 5.60 | 226 | - |
+| Race 3x, fixed | after | 616 | 44% | 4.41 | 129 | 5.61 | 155 | - |
+
+- **The boosts are gone, and VRR clocks as fixed refresh does.** The
+  work per frame is the same throughout, within 3%.
+- **No underclocking under load.** Every run held 59.9 fps or more in
+  every 10 s window, and display-check passed every run. The 3x race ran
+  at 606 MHz against 610: above 50% load devfreq raises the clock without
+  the boost.
+- **Frames.** Frames off their count and late presents (1, 104 and 275
+  after, against 1, 112 and 280) are within the spread of the unchanged
+  fixed-refresh runs between the two batches.
+- **Power hardly moves.** The VRR runs are within 0.07 W of before; the
+  same fixed-refresh runs repeat within 0.02 W. At light load the clock
+  costs little: the intro keeps the GPU busy 3 to 4% of the time, so at
+  680 MHz it only idles longer.
+- **Fixed refresh still boosts**, 129 to 761 times per run, when a commit
+  lands within 3 ms of a vblank. 1108 leaves it as it was.
+- **Open:** at 3x, VRR draws 0.10 to 0.16 W more than fixed refresh at
+  the same clock, before and after. The deadline does not explain it.
+
 ## The launch
 
 Every RetroArch game runs with variable refresh, with no setting to get
