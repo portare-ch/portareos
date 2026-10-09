@@ -321,6 +321,12 @@ case ${EMULATOR} in
     fi
     export MESA_VK_WSI_DISPLAY_VRR
     ${VERBOSE} && log $0 "Variable refresh: ${MESA_VK_WSI_DISPLAY_VRR}"
+    ### With msm.dpu_lfc the kernel shows a slow frame again itself (patch
+    ### 1107), and Mesa's own repeats (mesa-005) would count there as frames.
+    if [ "$(cat /sys/module/msm/parameters/dpu_lfc 2>/dev/null)" = "Y" ]; then
+      export MESA_VK_WSI_DISPLAY_REPEAT=0
+      ${VERBOSE} && log $0 "Repeats: kernel"
+    fi
 
 
     RUNTHIS='${EMUPERF} /usr/bin/${RABIN} -L /tmp/cores/${CORE}_libretro.so --config ${RETROARCH_TEMP_CONFIG} --appendconfig ${RETROARCH_APPEND_CONFIG} "${ROMNAME}"'
