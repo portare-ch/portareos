@@ -36,7 +36,9 @@ already past, so its trigger added a refresh; and the encoder drops the
 vsync interrupt 58 ms after a frame when nothing else holds it, which
 stopped a 12 Hz frame's repeats after 6 to 8 of 9. The kickoff now arms
 the first repeat when its vsync came first, and the encoder holds the
-interrupt while AVR is on with LFC.
+interrupt while AVR is on with LFC. A trigger never goes before the due
+time armed last, which a frame's vsync clears, so a callback that fired
+while a kickoff or a vsync held the lock does nothing.
 
 Off unless msm.dpu_lfc is set, while it is compared with mesa-005.
 dpu_enc_lfc_frame traces the grid at every kickoff, dpu_enc_lfc_repeat
@@ -245,7 +247,7 @@ every trigger.
  /*
   * Follows VRR_ENABLED in a commit while the timing engine runs, with the
   * INTF in that commit's flush, as Qualcomm's driver switches Qsync. The DSI
-@@ -309,19 +357,225 @@
+@@ -309,19 +357,232 @@
  
  	if (want)
  		dpu_encoder_set_dsi_avr(phys_enc->parent, true);
@@ -329,7 +331,13 @@ every trigger.
 +	spin_lock_irqsave(phys_enc->enc_spinlock, lock_flags);
 +	if (dpu_encoder_phys_vid_lfc_on(phys_enc) && lfc->shown &&
 +	    lfc->shown < lfc->count) {
-+		if (lfc->kicked == lfc->shown)
++		/*
++		 * A callback that had fired as a kickoff or a frame's vsync
++		 * re-armed or invalidated the repeat finds itself before the
++		 * due time it was waiting for the lock to see.
++		 */
++		if (lfc->kicked == lfc->shown ||
++		    ktime_before(ktime_get(), lfc->due))
 +			goto out;
 +		/* A frame kicked off since goes first. */
 +		kick = !atomic_read(&phys_enc->pending_kickoff_cnt);
@@ -361,6 +369,7 @@ every trigger.
 +	if (frame) {
 +		lfc->shown = 1;
 +		lfc->kicked = 0;
++		lfc->due = KTIME_MAX;
 +		/*
 +		 * The vsync can come before the kickoff has put the frame on
 +		 * the grid, when the panel took it at once: arming then would
@@ -472,7 +481,7 @@ every trigger.
  static void dpu_encoder_phys_vid_setup_timing_engine(
  		struct dpu_encoder_phys *phys_enc)
  {
-@@ -407,6 +661,7 @@
+@@ -407,6 +668,7 @@
  	struct dpu_hw_ctl *hw_ctl;
  	unsigned long lock_flags;
  	u32 flush_register = 0;
@@ -480,7 +489,7 @@ every trigger.
  
  	hw_ctl = phys_enc->hw_ctl;
  
-@@ -426,7 +681,9 @@
+@@ -426,7 +688,9 @@
  		flush_register = hw_ctl->ops.get_flush_register(hw_ctl);
  
  	if (!(flush_register & hw_ctl->ops.get_pending_flush(hw_ctl)))
@@ -491,7 +500,7 @@ every trigger.
  	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
  
  	/* Signal any waiting atomic commit thread */
-@@ -688,10 +945,13 @@
+@@ -688,10 +952,13 @@
  		phys_enc->hw_intf->ops.enable_avr(phys_enc->hw_intf, false);
  	phys_enc->avr_capable = false;
  	phys_enc->avr_enabled = false;
@@ -505,7 +514,7 @@ every trigger.
  
  	/*
  	 * Wait for a vsync so we know the ENABLE=0 latched before
-@@ -759,6 +1019,8 @@
+@@ -759,6 +1026,8 @@
  		phys_enc->hw_intf->ops.avr_trigger(phys_enc->hw_intf);
  		spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
  	}
@@ -514,7 +523,7 @@ every trigger.
  }
  
  static void dpu_encoder_phys_vid_irq_enable(struct dpu_encoder_phys *phys_enc)
-@@ -857,6 +1119,7 @@
+@@ -857,6 +1126,7 @@
  		struct dpu_enc_phys_init_params *p)
  {
  	struct dpu_encoder_phys *phys_enc = NULL;
@@ -522,7 +531,7 @@ every trigger.
  
  	if (!p) {
  		DPU_ERROR("failed to create encoder due to invalid parameter\n");
-@@ -878,6 +1141,12 @@
+@@ -878,6 +1148,12 @@
  	dpu_encoder_phys_vid_init_ops(&phys_enc->ops);
  	phys_enc->intf_mode = INTF_MODE_VIDEO;
  
