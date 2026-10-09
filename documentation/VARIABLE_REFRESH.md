@@ -447,6 +447,16 @@ compared on the same image.
   before, and a trigger finding one pending is skipped. A refresh the
   panel makes on its own, at the floor, counts like a repeat. No commit,
   no flip event, no atomic state.
+- **Two races found on the device.** The vsync that takes a frame can
+  come before the kickoff has put the frame on the grid; arming then
+  timed the first repeat from the frame before, already past, and its
+  trigger added a refresh (Tekken 3, 35 times in 10 minutes, each
+  starting a run a refresh behind). The kickoff arms it in that case.
+  And the encoder drops the vsync interrupt 58 ms after a frame when
+  nothing holds it (`ENTER_IDLE`), so at 12 Hz the repeats stopped after
+  6 to 8 of 9. `tools/display-trace` hides that, since `vblank-rate`
+  holds the interrupt; `--no-hold` leaves it to the client. The encoder
+  now holds it while AVR is on with LFC.
 - **Clients.** Any commit while `VRR_ENABLED` is set, timed or not.
   Mesa's own repeats have to be off, or the kernel takes them for
   frames: `MESA_VK_WSI_DISPLAY_REPEAT=0` (mesa-008), which runemu and
