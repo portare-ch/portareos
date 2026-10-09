@@ -10,7 +10,6 @@ The rule this applies is the README's: if it is not needed for a smooth game, it
 |---|---|
 | linux 7.2.9, linux-firmware, busybox, systemd, util-linux, coreutils, bash, kmod, udev | The base. |
 | mesa (turnip, freedreno; `libgallium` 21 MB), vulkan-loader, libdrm, libglvnd | The display. |
-| armsx2-turnip (17 MB) | ARMSX2's own Turnip build, for the PS2 core only, through `VK_DRIVER_FILES` (#497). Not on the loader's search path. |
 | pipewire, wireplumber, alsa-lib, alsa-ucm-conf, alsa-topology-conf | Audio; the 32 / 44.1 / 48 kHz link runs through it. |
 | iwd, portnet, wireless-regdb, openssh, rsync, bluez | Wi-Fi, SSH, controllers. iwd does the 802.11 and the addressing; portnet is the command that drives it. |
 | retroarch, core-info, slang-shaders (trimmed, see below), the 15 cores (193 MB) | The systems. |

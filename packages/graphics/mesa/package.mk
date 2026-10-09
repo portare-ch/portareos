@@ -3,11 +3,12 @@
 # Copyright (C) 2018-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="mesa"
-PKG_VERSION="26.2.3"
-PKG_SHA256="84d617362942ae1c6b63893923acd94c12a6288dc2cc8ec8a6117519b4e5629c"
+# 26.3.0-devel: main on 2026-10-09, until 26.3.0-rc1 is tagged.
+PKG_VERSION="fdbc48df2436692db02c5721e0539c311f116c12"
+PKG_SHA256="f0f68737f61b7ffd63adb8a4f931e17dca94303dd4a4db6229e0496c47fa1894"
 PKG_LICENSE="OSS"
 PKG_SITE="http://www.mesa3d.org/"
-PKG_URL="https://gitlab.freedesktop.org/mesa/mesa/-/archive/mesa-${PKG_VERSION}/mesa-mesa-${PKG_VERSION}.tar.gz"
+PKG_URL="https://gitlab.freedesktop.org/mesa/mesa/-/archive/${PKG_VERSION}/mesa-${PKG_VERSION}.tar.gz"
 PKG_DEPENDS_HOST="toolchain:host expat:host libclc:host libdrm:host llvm:host Mako:host pyyaml:host spirv-tools:host"
 PKG_DEPENDS_TARGET="toolchain expat libdrm Mako:host pyyaml:host"
 PKG_LONGDESC="Mesa is a 3-D graphics library with an API."
@@ -70,7 +71,6 @@ elif [ "${DISPLAYSERVER}" = "wl" ]; then
   export X11_INCLUDES=
 else
   PKG_MESON_OPTS_TARGET+="	-Dplatforms="" \
-				-Dgallium-nine=false \
 				-Dglx=disabled \
 				-Dglvnd=disabled"
 fi

@@ -12,7 +12,7 @@ Signed-off-by: PortareOS <hello@portare.org>
 ---
 --- a/src/vulkan/wsi/wsi_common_display.c
 +++ b/src/vulkan/wsi/wsi_common_display.c
-@@ -2930,15 +2930,12 @@
+@@ -2948,15 +2948,12 @@
        drmModeAtomicAddProperty(req, crtc_id, connector->crtc_property[MODE_ID], blob_id);
        drmModeAtomicAddProperty(req, crtc_id, connector->crtc_property[ACTIVE], 1);
  
