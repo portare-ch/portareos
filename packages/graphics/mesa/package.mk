@@ -3,11 +3,14 @@
 # Copyright (C) 2018-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="mesa"
-PKG_VERSION="26.2.3"
-PKG_SHA256="84d617362942ae1c6b63893923acd94c12a6288dc2cc8ec8a6117519b4e5629c"
+# 26.3.0-devel: main at the commit ARMSX2's Turnip (axfl2) is built on, so
+# its a7xx feedback-loop flush (mesa-009) sits on the base it was measured
+# on. Move to 26.3.0-rc1 once it is tagged.
+PKG_VERSION="e3a986f0167aa7d1c5cfd62a63362c65f5339373"
+PKG_SHA256="f7e82f46c257d499b1ecfe36d4126189c2e9a2f73364c99b10ad4f69ba32241b"
 PKG_LICENSE="OSS"
 PKG_SITE="http://www.mesa3d.org/"
-PKG_URL="https://gitlab.freedesktop.org/mesa/mesa/-/archive/mesa-${PKG_VERSION}/mesa-mesa-${PKG_VERSION}.tar.gz"
+PKG_URL="https://gitlab.freedesktop.org/mesa/mesa/-/archive/${PKG_VERSION}/mesa-${PKG_VERSION}.tar.gz"
 PKG_DEPENDS_HOST="toolchain:host expat:host libclc:host libdrm:host llvm:host Mako:host pyyaml:host spirv-tools:host"
 PKG_DEPENDS_TARGET="toolchain expat libdrm Mako:host pyyaml:host"
 PKG_LONGDESC="Mesa is a 3-D graphics library with an API."
@@ -70,7 +73,6 @@ elif [ "${DISPLAYSERVER}" = "wl" ]; then
   export X11_INCLUDES=
 else
   PKG_MESON_OPTS_TARGET+="	-Dplatforms="" \
-				-Dgallium-nine=false \
 				-Dglx=disabled \
 				-Dglvnd=disabled"
 fi

@@ -19,19 +19,19 @@ Signed-off-by: PortareOS <hello@portare.org>
 ---
 --- a/src/vulkan/wsi/wsi_common_display.c
 +++ b/src/vulkan/wsi/wsi_common_display.c
-@@ -241,6 +241,12 @@
-     * last DRM master left it.
+@@ -242,6 +242,12 @@
      */
     int                          vrr_request;
-+
+ 
 +   /* MESA_VK_WSI_DISPLAY_TRACE=1: every commit is written to the kernel's
 +    * trace_marker, so it lands in the same trace as the DRM and DPU events
 +    * of its flip. -1 otherwise.
 +    */
 +   int                          trace_fd;
- 
++
     struct u_cnd_monotonic       hotplug_cond;
     pthread_t                    hotplug_thread;
+ 
 @@ -521,6 +527,7 @@
     struct wsi_image_timing_request timing_request;
     struct wsi_display_fence        *fence;
@@ -40,7 +40,7 @@ Signed-off-by: PortareOS <hello@portare.org>
  };
  
  struct wsi_display_swapchain {
-@@ -2979,6 +2986,40 @@
+@@ -2997,6 +3004,40 @@
     }
  }
  
@@ -81,17 +81,17 @@ Signed-off-by: PortareOS <hello@portare.org>
  static int
  drm_atomic_commit(wsi_display_connector *connector, struct wsi_display_image *image, bool test_only)
  {
-@@ -3083,6 +3124,9 @@
-    ret = drmModeAtomicCommit(fd, req, flags, image);
+@@ -3102,6 +3143,9 @@
     if (ret)
        goto out;
-+
+ 
 +   if (!test_only && connector->wsi->trace_fd >= 0)
 +      wsi_display_trace_commit(connector->wsi, image);
- 
++
     if (set_vrr >= 0 && !test_only) {
        connector->vrr_enabled = set_vrr ? VRR_TRISTATE_ENABLED : VRR_TRISTATE_DISABLED;
-@@ -3415,6 +3459,7 @@
+       connector->vrr_set = set_vrr;
+@@ -3433,6 +3477,7 @@
  
     image->present_id = present_id;
     image->timing_request = chain->timing_request;
@@ -99,18 +99,18 @@ Signed-off-by: PortareOS <hello@portare.org>
  
     assert(image->state == WSI_IMAGE_DRAWING);
     wsi_display_debug("present %d\n", image_index);
-@@ -3836,6 +3881,10 @@
-    list_inithead(&wsi->connectors);
+@@ -3855,6 +3900,10 @@
  
     wsi->timer_fd = -1;
-+
+ 
 +   const char *trace = getenv("MESA_VK_WSI_DISPLAY_TRACE");
 +   wsi->trace_fd = trace && atoi(trace) ?
 +      open("/sys/kernel/tracing/trace_marker", O_WRONLY | O_CLOEXEC) : -1;
- 
++
     const char *vrr = getenv("MESA_VK_WSI_DISPLAY_VRR");
     wsi->vrr_request = vrr && *vrr ? atoi(vrr) != 0 : -1;
-@@ -3902,6 +3951,8 @@
+ 
+@@ -3920,6 +3969,8 @@
        wsi_display_stop_wait_thread(wsi);
        if (wsi->timer_fd >= 0)
           close(wsi->timer_fd);

@@ -18,7 +18,7 @@ Signed-off-by: PortareOS <hello@portare.org>
 ---
 --- a/src/vulkan/wsi/wsi_common_display.c
 +++ b/src/vulkan/wsi/wsi_common_display.c
-@@ -3201,7 +3201,13 @@
+@@ -3219,7 +3219,13 @@
        bool is_vrr = connector->vrr_enabled == VRR_TRISTATE_ENABLED &&
                      connector->vrr_capable == VRR_TRISTATE_ENABLED;
  

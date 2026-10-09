@@ -45,7 +45,7 @@ Signed-off-by: PortareOS <hello@portare.org>
     struct u_cnd_monotonic       hotplug_cond;
     pthread_t                    hotplug_thread;
  
-@@ -1893,6 +1901,14 @@
+@@ -1911,6 +1919,14 @@
        (struct wsi_display_swapchain *) drv_chain;
     struct wsi_display *wsi = chain->wsi;
  
@@ -60,7 +60,7 @@ Signed-off-by: PortareOS <hello@portare.org>
     _wsi_display_cleanup_state(chain);
  
     for (uint32_t i = 0; i < chain->base.image_count; i++)
-@@ -2100,21 +2116,45 @@
+@@ -2118,21 +2134,45 @@
     .sequence_handler = wsi_display_sequence_handler,
  };
  
@@ -111,7 +111,7 @@ Signed-off-by: PortareOS <hello@portare.org>
           u_cnd_monotonic_broadcast(&wsi->wait_cond);
           mtx_unlock(&wsi->wait_mutex);
        }
-@@ -2126,6 +2166,8 @@
+@@ -2144,6 +2184,8 @@
  wsi_display_start_wait_thread(struct wsi_display *wsi)
  {
     if (!wsi->wait_thread) {
@@ -120,7 +120,7 @@ Signed-off-by: PortareOS <hello@portare.org>
        int ret = pthread_create(&wsi->wait_thread, NULL,
                                 wsi_display_wait_thread, wsi);
        if (ret)
-@@ -3194,6 +3236,26 @@
+@@ -3212,6 +3254,26 @@
               * times in the past. */
              target_ns -= 1 * 1000 * 1000;
  
@@ -147,7 +147,7 @@ Signed-off-by: PortareOS <hello@portare.org>
              os_time_nanosleep_until(target_ns);
           }
        }
-@@ -3716,6 +3778,8 @@
+@@ -3734,6 +3796,8 @@
  
     list_inithead(&wsi->connectors);
  
@@ -156,7 +156,7 @@ Signed-off-by: PortareOS <hello@portare.org>
     int ret = mtx_init(&wsi->wait_mutex, mtx_plain);
     if (ret != thrd_success) {
        result = VK_ERROR_OUT_OF_HOST_MEMORY;
-@@ -3776,6 +3840,8 @@
+@@ -3794,6 +3858,8 @@
           wsi_display_free_connector(wsi, connector);
  
        wsi_display_stop_wait_thread(wsi);
