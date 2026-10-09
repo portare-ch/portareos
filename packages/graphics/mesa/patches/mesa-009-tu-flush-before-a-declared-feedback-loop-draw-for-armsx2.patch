@@ -1,0 +1,78 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] tu: flush before a declared feedback-loop draw on a7xx, for ARMSX2
+
+From ARMSX2's Turnip (bmdhacks/armsx2-turnip, axfl2, "tu: flush before
+a declared feedback-loop draw on a7xx"). A draw whose state declares an
+attachment feedback loop gets the flush a colour-write to fragment-read
+barrier would have produced: CCU colour clean, cache invalidate, wait
+for idle. ARMSX2's GS drops its own barrier before such a draw on a
+Turnip that does this.
+
+Here it is on only for the engine named ARMSX2, which ARMSX2 gives
+RetroArch through libretro's Vulkan context negotiation, so every other
+application keeps stock behaviour and its own barriers. ARMSX2's driver
+check, which looks for its packs' "git-axfl2-" tag, is patched to trust
+this build instead (armsx2-lr 005).
+
+Signed-off-by: PortareOS <hello@portare.org>
+---
+--- a/src/freedreno/vulkan/tu_device.h
++++ b/src/freedreno/vulkan/tu_device.h
+@@ -489,6 +489,12 @@
+    bool use_z24uint_s8uint;
+    bool use_lrz;
+ 
++   /* A draw that declares an attachment feedback loop is flushed against the
++    * draws before it, so the application can leave out its own barrier. For
++    * ARMSX2 only, which drops its barriers for it.
++    */
++   bool feedback_loop_flush;
++
+    struct fd_rd_output rd_output;
+ 
+    /* This is an internal queue for mapping/unmapping non-sparse BOs */
+--- a/src/freedreno/vulkan/tu_device.cc
++++ b/src/freedreno/vulkan/tu_device.cc
+@@ -3232,6 +3232,15 @@
+        !physical_device->instance->drirc.misc.enable_d24s8_border_color_workaround);
+    device->use_lrz = !TU_DEBUG_START(NOLRZ);
+ 
++   /* ARMSX2 names itself as the engine through libretro's Vulkan context
++    * negotiation, and RetroArch creates the instance with it.
++    */
++   device->feedback_loop_flush =
++      physical_device->instance->vk.app_info.engine_name &&
++      !strcmp(physical_device->instance->vk.app_info.engine_name, "ARMSX2");
++   if (device->feedback_loop_flush)
++      mesa_logi("tu: flushing before declared feedback-loop draws, for ARMSX2");
++
+    tu_gpu_tracepoint_config_variable();
+ 
+    device->submit_count = 0;
+--- a/src/freedreno/vulkan/tu_cmd_buffer.cc
++++ b/src/freedreno/vulkan/tu_cmd_buffer.cc
+@@ -8658,6 +8658,24 @@
+    if (cmd->state.dirty & TU_CMD_DIRTY_FS)
+       tu_flush_dynamic_input_attachments<CHIP>(cmd);
+ 
++   /* From ARMSX2's Turnip (axfl2, "tu: flush before a declared feedback-loop
++    * draw on a7xx"), for ARMSX2 only. A draw whose state declares an
++    * attachment feedback loop, by the pipeline create flag or
++    * vkCmdSetAttachmentFeedbackLoopEnableEXT, gets the flush a colour-write to
++    * fragment-read barrier would have produced, so the application can drop
++    * that barrier. On an Adreno 740 the CCU clean and the wait for idle are
++    * both needed; without either, pictures differ from run to run. This
++    * orders the draw against earlier draws only: overlapping primitives
++    * within it are ordered by the sysmem prim mode a feedback loop already
++    * selects. A declared loop disables gmem, so these draws run in sysmem.
++    */
++   if (CHIP == A7XX && cmd->device->feedback_loop_flush &&
++       (cmd->vk.dynamic_graphics_state.feedback_loops |
++        cmd->state.pipeline_feedback_loops) != 0)
++      cmd->state.renderpass_cache.flush_bits |=
++         TU_CMD_FLAG_CCU_CLEAN_COLOR | TU_CMD_FLAG_CACHE_INVALIDATE |
++         TU_CMD_FLAG_WAIT_FOR_IDLE;
++
+    tu_emit_cache_flush_renderpass<CHIP>(cmd);
+ 
+   if (BITSET_TEST(cmd->vk.dynamic_graphics_state.dirty,
