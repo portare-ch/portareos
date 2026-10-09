@@ -67,8 +67,9 @@ Details: [audio latency](../docs/audio-latency.md),
 * Home + Start quits games consistently.
 * M1 + volume adjusts brightness throughout the system.
 * M2 opens a text game guide beside the ROM and pauses RetroArch; returning to Vulkan cores needs further testing.
-* Optional MangoHud performance overlay, toggled with L1 + Y.
-* MangoHud measures frames reaching the display when presentation timing is available.
+* Optional performance overlay, toggled with L1 + Y: PortareOS's own MangoHud build.
+* The overlay reads the Nova's GPU load, clock and temperature and its battery draw.
+* In Vulkan games presented straight to the panel, the overlay times frames by when they reach the screen, not when the game presents them.
 * Steam PC games through FEX and gamescope.
 * Readable Steam Big Picture: a virtual 18-inch 4:3 display and default 1.6× interface scale fix tiny text on the Nova.
 * Save states, fast-forward and configurable rewind in supporting RetroArch cores.
@@ -122,7 +123,8 @@ Details: [screenshots](../README.md#what-it-looks-like),
 * idle-probe measures idle battery power, interrupts, context switches and thread activity.
 * coremap-check verifies PS2 thread placement and CPU isolation while a game runs.
 * PortScope inspects controls and report rate, including the raw input path before InputPlumber.
-* MangoHud exposes performance statistics and logs application and display frame intervals.
+* MangoHud, patched for the Nova, counts each frame from its display-timing record; its display intervals match the kernel's flip trace to the microsecond.
+* MangoHud's per-frame log keeps the application's present interval beside the display interval, with present IDs, target error and frames that had no timing record.
 * Host-side display-trace captures display events over SSH; display-check checks the recording frame by frame.
 * Host-side device-tests runs the automatic configuration checks from the device test plan.
 
