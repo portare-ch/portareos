@@ -2,8 +2,8 @@
 # Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="slang-shaders"
-PKG_VERSION="1e0238f9fdd4668ce8212c31d80877af605d3b53"
-PKG_SHA256="0f6c3d4fd128c1ac654c31a29e62dfc3df6f4d702ebd5e6870117457adfed995"
+PKG_VERSION="e1d75632a205c70f14a4cc947c46d5abb7b3f7f1"
+PKG_SHA256="b8bc2fbb31a754ed41ee4ab309ece63c08123ada8e5e7c5142621461f165bbd9"
 PKG_LICENSE=""
 PKG_SITE="https://github.com/libretro/slang-shaders"
 PKG_URL="${PKG_SITE}/archive/${PKG_VERSION}.tar.gz"
