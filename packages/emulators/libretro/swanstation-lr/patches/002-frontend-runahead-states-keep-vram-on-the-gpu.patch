@@ -8,10 +8,10 @@ rendering included; at 4x on Vulkan that stall missed vblanks in Tekken 3
 VRAM to a texture per frontend buffer instead, the way the core's own
 memory states do. Normal savestates are unchanged.
 diff --git a/src/core/system.cpp b/src/core/system.cpp
-index 01d32e4..3d5d44a 100644
+index 10d0df5..47ed9ab 100644
 --- a/src/core/system.cpp
 +++ b/src/core/system.cpp
-@@ -109,6 +109,18 @@ static float s_vertical_frequency = 60.0f;
+@@ -108,6 +108,18 @@ static float s_vertical_frequency = 60.0f;
  static std::unique_ptr<CheatList> s_cheat_list;
  
  static std::deque<MemorySaveState> s_runahead_states;
@@ -30,7 +30,7 @@ index 01d32e4..3d5d44a 100644
  static bool s_runahead_replay_pending = false;
  static uint32_t s_runahead_frames = 0;
  
-@@ -1746,6 +1758,83 @@ void SetCheatList(std::unique_ptr<CheatList> cheats)
+@@ -1768,6 +1780,83 @@ void SetCheatList(std::unique_ptr<CheatList> cheats)
  void ClearMemorySaveStates()
  {
    s_runahead_states.clear();
@@ -115,10 +115,10 @@ index 01d32e4..3d5d44a 100644
  
  void UpdateMemorySaveStateSettings()
 diff --git a/src/core/system.h b/src/core/system.h
-index 7d7987b..2b0a983 100644
+index ca7bf95..1a22687 100644
 --- a/src/core/system.h
 +++ b/src/core/system.h
-@@ -149,4 +149,11 @@ void ClearMemorySaveStates();
+@@ -150,4 +150,11 @@ void ClearMemorySaveStates();
  void UpdateMemorySaveStateSettings();
  void SetRunaheadReplayFlag();
  
@@ -131,7 +131,7 @@ index 7d7987b..2b0a983 100644
 +
  } // namespace System
 diff --git a/src/libretro/libretro_host_interface.cpp b/src/libretro/libretro_host_interface.cpp
-index a0613fb..c9e3bda 100644
+index fc39fe0..c4770c4 100644
 --- a/src/libretro/libretro_host_interface.cpp
 +++ b/src/libretro/libretro_host_interface.cpp
 @@ -927,9 +927,29 @@ size_t HostInterface::retro_serialize_size()
@@ -164,13 +164,13 @@ index a0613fb..c9e3bda 100644
    return System::SaveState(stream.get());
  }
  
-@@ -952,6 +972,9 @@ bool HostInterface::retro_unserialize(const void* data, size_t size)
-   }
+@@ -956,6 +976,9 @@ bool HostInterface::retro_unserialize(const void* data, size_t size)
+   const bool restore_on_failure = !is_memory_state && ctx != RETRO_SAVESTATE_CONTEXT_ROLLBACK_NETPLAY;
  
    std::unique_ptr<ByteStream> stream = ByteStream_CreateReadOnlyMemoryStream(data, static_cast<uint32_t>(size));
 +  if (ctx == RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE && System::IsFrontendRunaheadState(data, size))
 +    return System::LoadFrontendRunaheadState(stream.get());
 +
-   return System::LoadState(stream.get(), is_memory_state);
+   return System::LoadState(stream.get(), is_memory_state, restore_on_failure);
  }
  
