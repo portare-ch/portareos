@@ -90,8 +90,25 @@ trusted it):
 | image's Mesa 26.2.3, barriers | variable refresh | 535, 556 MHz |
 
 On the same display the two drivers are the same. Variable refresh itself
-costs PS2 GPU clock on this scene; why is open. The NFSU race of #503, where
-the read-back is what the frame costs, was not repeated.
+costs PS2 GPU clock on this scene; why is open.
+
+**The NFSU race of #503, from a savestate** (2026-10-09, blending High, the
+state loaded 25 s in through RetroArch's network command, 110 s measured
+from 35 s; the player's car stands at the start while the others race,
+so every run shows the same frames; the 26.3.0-devel build is `fdbc48df`
+with `mesa-009`):
+
+| Driver | Display | fps per 10 s window | GPU clock, mean |
+|---|---|---|---|
+| ARMSX2's Turnip | as launched (VRR asked, never on) | 59.9-60.0 | 488, 475 MHz |
+| 26.3.0-devel + `mesa-009` | fixed, `ps2.vrr=0` | 59.9-60.0 | 456, 450 MHz |
+| 26.3.0-devel + `mesa-009` | variable refresh | 59.9-60.0 | 522, 520 MHz |
+| image's Mesa 26.2.3, barriers | fixed, `ps2.vrr=0` | 59.9-60.0 | 592, 586 MHz |
+
+No run dropped a frame. With `mesa-009` the image's Mesa needs a little
+less GPU clock than ARMSX2's Turnip and a quarter less than 26.2.3 with
+ARMSX2's barriers, the setup that fell to 49.9 fps in #503's race with a
+car being driven. Variable refresh costs about 70 MHz on the same driver.
 
 ## Pacing: one clock
 
@@ -265,14 +282,13 @@ It has caught two failures so far:
   barriers the same level cost more (49.9-59.9). Other games raised by the
   GameDB are unmeasured.
 
-- The image's Mesa with `mesa-009` in the NFSU race of #503, where ARMSX2's
-  Turnip did roughly half the GPU work per frame of 26.2.3 with barriers.
-  On the intro the two drivers matched at fixed refresh (see Vulkan
-  driver). A recorded scene through #492 makes it exact; read-back-heavy
-  games (the author's: Indiana Jones, Stuntman, Splashdown, WRC 3) should
-  show more.
-- Why variable refresh raises PS2's GPU clock: on NFSU's intro, 575-587 MHz
-  mean against 401 at fixed refresh, on the same driver.
+- The race with a car being driven, on the image's Mesa with `mesa-009`.
+  From the savestate (see Vulkan driver) it held 59.9-60.0 fps at less GPU
+  clock than ARMSX2's Turnip. Read-back-heavy games (the author's: Indiana
+  Jones, Stuntman, Splashdown, WRC 3) are unmeasured.
+- Why variable refresh raises PS2's GPU clock on the same driver: NFSU's
+  intro 575-587 MHz mean against 401 at fixed refresh, the race 520-522
+  against 450-456.
 
 - Queue depth 0 against 1 with pinning and `performance`: fps, repeated
   frames, audio gaps in a 15 s capture.
