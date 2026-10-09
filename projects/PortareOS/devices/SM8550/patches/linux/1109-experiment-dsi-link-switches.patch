@@ -1,0 +1,58 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] EXPERIMENT drm/msm/dsi: switches for the link under AVR
+
+Not for merging. msm.dsi_avr_support (the AVR support bit, default on),
+msm.dsi_clk_continuous and msm.dsi_bllp_hs (off), to find what makes the
+il97680a tear while AVR stretches the front porch.
+---
+--- a/drivers/gpu/drm/msm/dsi/dsi_host.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_host.c
+@@ -823,6 +823,18 @@
+  */
+ #define DSI_VID_CFG0_AVR_SUPPORT	BIT(29)
+ 
++/* Experiment, not for merging: what the link gives the panel while AVR
++ * stretches the front porch. */
++static bool dsi_avr_support = true;
++module_param(dsi_avr_support, bool, 0644);
++MODULE_PARM_DESC(dsi_avr_support, "Experiment: set the DSI AVR support bit with variable refresh");
++static bool dsi_clk_continuous;
++module_param(dsi_clk_continuous, bool, 0644);
++MODULE_PARM_DESC(dsi_clk_continuous, "Experiment: keep the clock lane in HS (next display enable)");
++static bool dsi_bllp_hs;
++module_param(dsi_bllp_hs, bool, 0644);
++MODULE_PARM_DESC(dsi_bllp_hs, "Experiment: blanking lines in HS, not LP (next display enable)");
++
+ void msm_dsi_host_set_avr(struct mipi_dsi_host *host, bool enable)
+ {
+ 	struct msm_dsi_host *msm_host = to_msm_dsi_host(host);
+@@ -832,7 +844,7 @@
+ 		return;
+ 
+ 	data = dsi_read(msm_host, REG_DSI_VID_CFG0);
+-	if (enable)
++	if (enable && dsi_avr_support)
+ 		data |= DSI_VID_CFG0_AVR_SUPPORT;
+ 	else
+ 		data &= ~DSI_VID_CFG0_AVR_SUPPORT;
+@@ -859,8 +871,9 @@
+ 		/* Always set low power stop mode for BLLP
+ 		 * to let command engine send packets
+ 		 */
+-		data |= DSI_VID_CFG0_EOF_BLLP_POWER_STOP |
+-			DSI_VID_CFG0_BLLP_POWER_STOP;
++		if (!dsi_bllp_hs)
++			data |= DSI_VID_CFG0_EOF_BLLP_POWER_STOP |
++				DSI_VID_CFG0_BLLP_POWER_STOP;
+ 		data |= DSI_VID_CFG0_TRAFFIC_MODE(dsi_get_traffic_mode(flags));
+ 		data |= DSI_VID_CFG0_DST_FORMAT(dsi_get_vid_fmt(mipi_fmt));
+ 		data |= DSI_VID_CFG0_VIRT_CHANNEL(msm_host->channel);
+@@ -942,7 +955,7 @@
+ 	dsi_write(msm_host, REG_DSI_LANE_SWAP_CTRL,
+ 		  DSI_LANE_SWAP_CTRL_DLN_SWAP_SEL(msm_host->dlane_swap));
+ 
+-	if (!(flags & MIPI_DSI_CLOCK_NON_CONTINUOUS)) {
++	if (!(flags & MIPI_DSI_CLOCK_NON_CONTINUOUS) || dsi_clk_continuous) {
+ 		lane_ctrl = dsi_read(msm_host, REG_DSI_LANE_CTRL);
+ 
+ 		if (msm_dsi_phy_set_continuous_clock(phy, true))
