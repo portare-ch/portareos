@@ -233,7 +233,9 @@ The SoC delivered every frame exactly one period apart, within 10 us, at
 all three rates. By eye the moving block jumped at 121 and 122 Hz and was
 clean at 120.198: the panel does not show frames faster than its 120 Hz
 class evenly. Those boards are locked to the display instead, at half its
-rate (see the launch below).
+rate (see the launch below). That test ran on the wide back porch the panel
+does not lock to (see the porches below); on its own porches it has not been
+repeated, so the range above 120.198 Hz is open again.
 
 ## Showing a frame more than once
 
@@ -368,7 +370,8 @@ margin pushes the usable lower edge for k = 2 up towards 50 Hz.
 ### On an 80 Hz floor
 
 Patch 1097 declares 80 Hz since, just under two thirds of 120.198 Hz: the
-longest frame AVR holds is 1676 lines, 12.49 ms, and the idle check above
+longest frame AVR holds is 12.5 ms (1676 lines on the 1116-line mode of the
+time), and the idle check above
 reads 80 frames/s. Every rate from 20 to 60.1 Hz has a multiple now, and a
 repeat at 50 Hz has 2.5 ms to the floor instead of 1.1. Measured
 2026-10-08 on a kernel-only build over that day's image, with the same
@@ -720,6 +723,22 @@ Measured 2026-10-08 through runemu, flip traces:
 | Super Mario World, 30 s | 3606, every frame twice | 8.42 ms | `VRR_ENABLED` 0 before, 1 while running, 0 after exit |
 | Super Mario World forced onto 119.88 Hz, 20 s | 2398 | 8.46 ms | "does not fit twice", swap interval 2, the core at 59.94 |
 | Tekken 3 with `global.vrr=0` | - | - | a `VRR_ENABLED` left on was turned off; 119.652 Hz mode |
+
+## The panel's porches
+
+Variable refresh runs on the fastest mode, 120.198 Hz. Until #623 that mode
+had a 142-line back porch where every other mode has 27, and the panel does
+not lock to it: it scans its own memory at about 120.14 Hz, and every game
+showed a tear every few seconds, all the time at 50 fps. The DPU's CRC saw
+every refresh whole, which is why nothing here caught it; a person watching
+a moving bar did (`tools/tear-tap`). Patch 1110 gives the mode the panel's
+own porches, and with them the panel follows the link, stretched front porch
+included. The measurements are in
+[REFRESH_RATES.md](PER_DEVICE_DOCUMENTATION/SM8550/REFRESH_RATES.md).
+
+So a timing check here ends at the DPU. What the panel shows has to be
+watched, and the measurements above describe the link: on the wide mode the
+panel's own scan sat between them and the eye.
 
 ## Do not
 

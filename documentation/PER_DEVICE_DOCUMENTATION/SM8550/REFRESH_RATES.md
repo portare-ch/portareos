@@ -1,6 +1,6 @@
 # Refresh and audio rates on the Retroid Pocket Nova (SM8550)
 
-RetroArch defaults to **variable refresh from 80 to 120.197628 Hz** on the
+RetroArch defaults to **variable refresh from 80 to 120.197775 Hz** on the
 built-in panel when it is the only connected display and no display mode
 is pinned. It uses the fastest mode for every system and times frames at
 the core's reported rate; the display driver repeats them to keep the
@@ -25,75 +25,50 @@ The console modes use the same 1302 × 1001 total timings and change only the pi
 |---|---|---|
 | 119.880120 Hz | 156240 kHz | default (launcher, everything else) |
 | 119.455046 Hz | 155686 kHz | `gambatte`, `mgba` |
-| 120.197628 Hz | 174651 kHz, vtotal 1116 | `snes9x`, `mesen2` - exact, and the wide-blanking mode; see below |
+| 120.197775 Hz | 156654 kHz | `snes9x`, `mesen2`, +1.2 ppm; variable refresh runs on it; see below |
 | 119.652237 Hz | 155943 kHz | `parallel_n64`, `swanstation`, `ymir` |
 | 119.845592 Hz | 156195 kHz | `genesis_plus_gx` |
 | 118.360134 Hz | 154259 kHz | `fbneo`, for `neogeo` only |
 | 119.199541 Hz | 155353 kHz | `neocd` |
 | 120.000000 Hz | 156240 kHz, vtotal 1000 | gamescope, for Steam |
 
-### Why one mode has a taller vertical total
+### The SNES mode, and why it has the panel's own porches
 
-Every mode here carries 27 lines of vertical back porch except the SNES
-one, which carries 142. Black frame insertion flips on every refresh
-rather than every second one, so it meets the vertical blanking deadline
-twice as often, and the DPU starts fetching the next frame inside that
-window. At 27 lines the window is 340.8us and, measured on snes9x with
-BFI, about three flips in 10,800 missed it over 90 seconds. A missed
-flip inverts the light/dark alternation, which shows as a black band
-rolling down the panel.
+The SNES mode is 1302 x 1001 at 156654 kHz like every other mode: 120.197775
+Hz, +1.2 ppm against 2 x 60.0988, a frame of drift about every four hours.
+Variable refresh uses it as its base, being the fastest.
 
-156 lines gives 1163.0us, 3.41x the margin. It is also the one mode in
-the table that is exact: 174651000 / (1302 x 1116) is 120.197628, which
-is 2 x 60.0988 to the six figures a whole-kHz pixel clock can express,
-so the frontend has no correction to make and the cadence does not drift
-- a frame every 823 hours against every two.
+It was 1302 x 1116 at 174651 kHz until #623: a 142-line back porch where
+every other mode has 27, cut to widen black frame insertion's flip window,
+and exact to 0.00 ppm. The panel does not lock to that frame. It scans out
+of its own memory at about 120.14 Hz, and the frames arriving on the link
+land in that memory at a point of its scan that drifts with the difference
+between the two rates. The DPU's CRC cannot see it, since every refresh
+leaves the controller whole; `tools/tear-tap` shows it as a bar that tears
+on a beat:
 
-That holds only while both cores report the clock exactly, and neither
-does upstream: MesenCE and Snes9x both round the master clock to
-21477272 and come out 0.034 ppm low, which would leave this mode +0.037
-ppm against them. PortareOS patches both (`003-exact-ntsc-rate.patch`
-in mesence-lr, `001-exact-ntsc-rate.patch` in snes9x-lr).
+| Panel mode | Content, refresh | Tears seen |
+|---|---|---|
+| 120.198 Hz, vtotal 1116, variable refresh | 59.94 fps, 119.88 Hz | every 3.5 to 4.7 s |
+| the same | 60 fps, 120 Hz | every 6.5 to 7.8 s |
+| the same | 50 fps, 100 Hz | all the time |
+| 120.000 Hz, vtotal 1000, variable refresh | 59.94 fps, 119.88 Hz | none |
+| the same | 50 fps, 100 Hz | none |
+| 119.880 Hz, vtotal 1001, fixed refresh | 59.94 fps | none |
 
-The cost is DSI bit clock, 1047.9MHz a lane against 939.9, up 11.5%.
-That was a test when the mode was added and it has passed: the panel
-takes it, and measurement since has found nothing it costs. `tear-test`
-counts no torn frame from the DPU's per-frame CRC on this mode - none
-over 1200 frames of synthetic flips, none over 1200 of Super Mario
-World with RetroArch driving, no dropped frames in either - with the
-detector shown to work by repainting the visible buffer mid-scanout,
-which produced 205 torn frames out of 580. msm's `dsi_err_worker` stays
-silent throughout, so the link is not complaining either.
+Each interval is one over the gap between the panel's ~120.14 Hz and the
+refresh: 0.26 Hz, 0.14 Hz, 20 Hz. On its own porches the panel follows the
+input, the stretched front porch of variable refresh included.
 
-Dropping to 1306 x 1005 at 157763kHz would return the bit clock to
-949.1MHz, 1.0% over the proven rate, for +0.048ppm and a frame of drift
-every 48 hours instead of 823. It is not done, because nothing measures
-the high clock costing anything and the accuracy is measured: the trade
-is a real regression against a hypothetical saving. What would settle it
-is a power measurement of the two modes under the same load.
+The rolling line seen with BFI on the wide mode, below, has the same shape.
 
-vtotal has to be even either way. The ideal clock is about 156497.31Hz
-per line, so an even vtotal lands near a whole kHz and an odd one near
-the half, which is the worst place to round from: 1041 would be +1.8ppm
-where 1042 is -1.2. The 119.88 mode cannot be widened the
-same way: its exactness needs `htotal * vtotal` divisible by 1001 and
-`vtotal` supplies the 11 and the 13, so it only grows in steps of 143
-lines, which would be 14% more bit clock.
-
-The mode runs. The panel takes 174651 kHz at vtotal 1116, 1047.9MHz a
-lane, and `modetest -c` lists it; RetroArch selects it by rate and logs
-`one present a frame, 16.639 ms apart`, with no DSI or PHY errors in
-dmesg. That answers the bit-clock question this mode was a test of.
-
-The panel also keeps the rate it is given. Measured with `vblank-rate`
+The DPU keeps the rate it is given. Measured with `vblank-rate`
 on the default mode, whose pixel clock the DSI PLL synthesises as
 156239991 Hz against the 156240000 asked for: **119.88005 Hz over 20 s
 and 119.88009 over 60, -0.50 and -0.17 ppm** from the 119.880113 those
-timings work out to. This is a video-mode panel, so the DPU drives the
-timing and the rate is the pixel clock over `htotal x vtotal`; the
-measurement says the chain delivers that. The SNES mode itself measures
-**+0.05 ppm over 20 s and -0.15 over 60**, with a game running to select
-it, so both modes are inside measurement error.
+timings work out to: the pixel clock over `htotal x vtotal`. That is the
+link's rate; on its own porches the panel follows it, on the wide SNES mode
+it did not (above).
 
 **Measure against `CLOCK_MONOTONIC_RAW`, not `CLOCK_MONOTONIC`.** DRM
 timestamps vblanks with `ktime_get()`, which NTP slews; the pixel clock
@@ -110,15 +85,17 @@ gated on an interval above 1, so BFI fell back to the repeated presents that
 patch exists to replace - visibly slowed, frames arriving a refresh late. #427
 opened the gate. With it open, and on the wide-blanking mode cut for it, BFI
 still flickers and a line still rolls down the panel; more swapchain images
-help but do not remove it, at two or at three.
+help but do not remove it, at two or at three. That mode is the one the panel
+does not lock to (above), so the rolling line may be its own scan; BFI has not
+been measured on the panel's own porches.
 
 Measured on the same session, in flips per second against the 120.198 the mode
 produces: **101.764** with the CRT shader on, **120.075** with it off,
 **120.195** with three swapchain images. So the band is GPU throughput and
 swapchain depth, not blanking - a frame that is not ready inverts the
 light/dark alternation however wide the window is. The 156 lines are not
-earning their bit clock, and are kept only because nothing measures them
-costing anything either.
+earning their bit clock, and were kept only because nothing measured them
+costing anything either; #623 measured it.
 
 ### What the stock Android install says about this panel
 
