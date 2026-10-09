@@ -269,6 +269,15 @@ the start/end of a mode set. Do not substitute callback arrival times for
 scanout times. See [variable refresh](VARIABLE_REFRESH.md) for the measured
 patterns and the idle-floor test. This tool has no `--help` parser.
 
+`custom CLOCK,HFP,HSYNC,HBP,VFP,VSYNC,VBP RATE [vrr] [bar=PX]` sets any
+1280x960 timing, pixel clock in kHz, and commits a frame every 1/RATE s, with
+variable refresh on `vrr`; `bar=PX` draws the full-height bar of `tear-tap`.
+It is how a timing is tried before it goes into the driver (#623):
+
+```sh
+vrr-probe /tmp/vp.csv 30 custom 155928,12,2,8,12,2,24 50 vrr bar=16
+```
+
 ### present-probe: known Vulkan schedules
 
 On the Nova, exercise a fixed cadence of two, two and four refreshes:
@@ -382,7 +391,10 @@ order, as `tear-1` and `tear-2`, and only says which was which at the end.
 `vrr` or `fixed` runs one of them; `rate=HZ` sets the content rate (default
 59.94, fixed refresh then uses the mode nearest twice it), `bar=PX` the
 bar's step a frame and `mode=HZ` the mode variable refresh runs on (default
-the fastest). Each run leaves display-trace's files and `NAME.taps`,
+the fastest). `kms=CLOCK,HFP,HSYNC,HBP,VFP,VSYNC,VBP` sets that timing itself,
+any pixel clock and porches rather than only the modes the kernel lists,
+through `vrr-probe custom`, which paces the frames: Android's 120 Hz timing
+is `kms=155928,12,2,8,12,2,24`. Each run leaves display-trace's files and `NAME.taps`,
 the tap times in `CLOCK_MONOTONIC` seconds, the trace's clock, and prints
 the gaps between taps. A reaction lags a tear by a few hundred
 milliseconds, so set taps against the trace with that margin; a steady gap
