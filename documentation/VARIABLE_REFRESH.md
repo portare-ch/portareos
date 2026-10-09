@@ -430,9 +430,12 @@ compared on the same image.
   within an eighth of a period of its place pulls the grid and its
   period a little towards itself; a late or dropped one moves neither, so
   a late frame's repeats keep their places and the panel catches up on
-  them. Two kickoffs off the grid in a row, the same distance apart, are
-  a new rate, and the grid starts again from them, as from the first
-  two. A frame is shown `count = (P + R/50) / R` times, none below two
+  them. Two distances alike are a new rate, and the grid starts again
+  from them, as from the first two, when both kickoffs missed the grid
+  or the distance is more than an eighth off the period: a doubled rate
+  puts every second frame back on the old grid, so misses alone never
+  noticed 30 to 60 Hz. A mode set and AVR going on or off start the
+  cadence afresh. A frame is shown `count = (P + R/50) / R` times, none below two
   refreshes or above 100 ms. Smoothing the distances between kickoffs
   instead, as a first build did, failed at 40 Hz: the frame after one
   6 ms late came 18.8 ms after it, close enough to count, and three
@@ -447,7 +450,11 @@ compared on the same image.
 - **Clients.** Any commit while `VRR_ENABLED` is set, timed or not.
   Mesa's own repeats have to be off, or the kernel takes them for
   frames: `MESA_VK_WSI_DISPLAY_REPEAT=0` (mesa-008), which runemu and
-  `tools/display-trace` set while `msm.dpu_lfc` is on.
+  `tools/display-trace` set while `msm.dpu_lfc` is on. Mesa repeats only
+  with `VRR_ENABLED`, which only runemu's launches set, so those are the
+  only clients concerned. Toggle `dpu_lfc` between launches: a client
+  started before keeps the repeats it started with, and with both on the
+  kernel takes Mesa's repeats for frames and adds none of its own.
 
 Two things about AVR in continuous mode had to be found on the Nova,
 with a build that had them as parameters (2026-10-09, present-probe,
