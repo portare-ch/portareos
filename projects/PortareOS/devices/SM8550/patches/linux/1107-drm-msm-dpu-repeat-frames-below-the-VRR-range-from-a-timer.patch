@@ -158,14 +158,15 @@ every trigger.
  static inline int dpu_encoder_phys_inc_pending(struct dpu_encoder_phys *phys)
 --- a/drivers/gpu/drm/msm/disp/dpu1/dpu_encoder_phys_vid.c
 +++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_encoder_phys_vid.c
-@@ -255,6 +255,25 @@
+@@ -255,6 +255,26 @@
  }
  
  /*
 + * Forget the cadence the low framerate compensation below has learnt, at a
 + * mode set and whenever AVR goes on or off, so a new session does not start
-+ * on the last one's period. The caller has cancelled the timer and holds
-+ * the encoder's spinlock.
++ * on the last one's period. Under the encoder's spinlock, with AVR's state
++ * changed in the same section; the caller cancels the timer once it is out
++ * of it, when nothing can arm it any more.
 + */
 +static void dpu_encoder_phys_vid_lfc_reset(struct dpu_encoder_lfc *lfc)
 +{
@@ -184,11 +185,8 @@ every trigger.
   * Variable refresh from the INTF's AVR, for a DSI panel that declares a
   * refresh range: the mode's frame is the shortest, the range's minimum
   * gives the longest. The CRTC's VRR_ENABLED switches it per commit.
-@@ -279,11 +298,16 @@
- 	if (min_hz && htotal)
- 		lines = div_u64((u64)clock_khz * 1000, htotal * min_hz);
+@@ -281,11 +301,16 @@
  
-+	hrtimer_cancel(&phys_enc->lfc.timer);
  	spin_lock_irqsave(phys_enc->enc_spinlock, lock_flags);
  	intf->ops.enable_avr(intf, false);
 -	if (lines > vtotal) {
@@ -201,21 +199,32 @@ every trigger.
 +						   clock_khz);
  	}
  	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
- 
-@@ -307,10 +331,12 @@
- 	if (want == phys_enc->avr_enabled)
- 		return;
- 
 +	hrtimer_cancel(&phys_enc->lfc.timer);
+ 
+ 	if (phys_enc->avr_capable)
+ 		DRM_DEBUG_KMS("intf%d: variable refresh available, %u to %llu lines a frame\n",
+@@ -309,19 +334,210 @@
+ 
  	if (want)
  		dpu_encoder_set_dsi_avr(phys_enc->parent, true);
++	/*
++	 * AVR and the low framerate compensation's view of it change together,
++	 * so no vsync can arm a repeat between; the timer is cancelled after,
++	 * when nothing can arm it again before the next frame.
++	 */
  	spin_lock_irqsave(phys_enc->enc_spinlock, lock_flags);
  	phys_enc->hw_intf->ops.enable_avr(phys_enc->hw_intf, want);
++	phys_enc->avr_enabled = want;
 +	dpu_encoder_phys_vid_lfc_reset(&phys_enc->lfc);
  	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
++	hrtimer_cancel(&phys_enc->lfc.timer);
  	phys_enc->hw_ctl->ops.update_pending_flush_intf(phys_enc->hw_ctl,
  							phys_enc->hw_intf->idx);
-@@ -322,6 +348,190 @@
+ 	if (!want)
+ 		dpu_encoder_set_dsi_avr(phys_enc->parent, false);
+-	phys_enc->avr_enabled = want;
+ 
+ 	DRM_INFO("intf%d: variable refresh %s\n",
  		 phys_enc->hw_intf->idx - INTF_0, want ? "on" : "off");
  }
  
@@ -406,7 +415,7 @@ every trigger.
  static void dpu_encoder_phys_vid_setup_timing_engine(
  		struct dpu_encoder_phys *phys_enc)
  {
-@@ -407,6 +617,7 @@
+@@ -407,6 +623,7 @@
  	struct dpu_hw_ctl *hw_ctl;
  	unsigned long lock_flags;
  	u32 flush_register = 0;
@@ -414,7 +423,7 @@ every trigger.
  
  	hw_ctl = phys_enc->hw_ctl;
  
-@@ -426,7 +637,9 @@
+@@ -426,7 +643,9 @@
  		flush_register = hw_ctl->ops.get_flush_register(hw_ctl);
  
  	if (!(flush_register & hw_ctl->ops.get_pending_flush(hw_ctl)))
@@ -425,14 +434,7 @@ every trigger.
  	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
  
  	/* Signal any waiting atomic commit thread */
-@@ -682,12 +895,14 @@
- 		return;
- 	}
- 
-+	hrtimer_cancel(&phys_enc->lfc.timer);
- 	spin_lock_irqsave(phys_enc->enc_spinlock, lock_flags);
- 	/* A held front porch would delay the vsync waited for below. */
- 	if (phys_enc->avr_enabled)
+@@ -688,10 +907,12 @@
  		phys_enc->hw_intf->ops.enable_avr(phys_enc->hw_intf, false);
  	phys_enc->avr_capable = false;
  	phys_enc->avr_enabled = false;
@@ -440,7 +442,12 @@ every trigger.
  	phys_enc->hw_intf->ops.enable_timing(phys_enc->hw_intf, 0);
  	if (dpu_encoder_phys_vid_is_master(phys_enc))
  		dpu_encoder_phys_inc_pending(phys_enc);
-@@ -759,6 +974,8 @@
+ 	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
++	hrtimer_cancel(&phys_enc->lfc.timer);
+ 
+ 	/*
+ 	 * Wait for a vsync so we know the ENABLE=0 latched before
+@@ -759,6 +980,8 @@
  		phys_enc->hw_intf->ops.avr_trigger(phys_enc->hw_intf);
  		spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
  	}
@@ -449,7 +456,7 @@ every trigger.
  }
  
  static void dpu_encoder_phys_vid_irq_enable(struct dpu_encoder_phys *phys_enc)
-@@ -857,6 +1074,7 @@
+@@ -857,6 +1080,7 @@
  		struct dpu_enc_phys_init_params *p)
  {
  	struct dpu_encoder_phys *phys_enc = NULL;
@@ -457,7 +464,7 @@ every trigger.
  
  	if (!p) {
  		DPU_ERROR("failed to create encoder due to invalid parameter\n");
-@@ -878,6 +1096,12 @@
+@@ -878,6 +1102,12 @@
  	dpu_encoder_phys_vid_init_ops(&phys_enc->ops);
  	phys_enc->intf_mode = INTF_MODE_VIDEO;
  
