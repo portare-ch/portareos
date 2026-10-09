@@ -1,0 +1,49 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] wsi/display: leave the repeats of a VRR frame to the kernel when asked
+
+mesa-005 shows a frame slower than the panel's range again by committing
+its buffer again. A display driver can do the same below the commit
+interface, from a timer after each vblank: msm's DPU does on SM8550 with
+msm.dpu_lfc (kernel patch 1107). Both at once would make the kernel take
+Mesa's repeats for frames.
+
+MESA_VK_WSI_DISPLAY_REPEAT=0 turns Mesa's repeats off; unset or anything
+else leaves them on. Frames are timed as before.
+
+Signed-off-by: PortareOS <hello@portare.org>
+---
+--- a/src/vulkan/wsi/wsi_common_display.c
++++ b/src/vulkan/wsi/wsi_common_display.c
+@@ -259,6 +259,11 @@
+    uint64_t                     repeat_ns;
+    uint64_t                     repeat_step_ns;
+    unsigned                     repeat_left;
++
++   /* MESA_VK_WSI_DISPLAY_REPEAT=0 leaves the repeats to the kernel, whose
++    * driver can refresh a held frame itself (LFC). Repeats on otherwise.
++    */
++   bool                         repeat_frames;
+ 
+    struct u_cnd_monotonic       hotplug_cond;
+    pthread_t                    hotplug_thread;
+@@ -2108,8 +2113,8 @@
+    unsigned count;
+ 
+    wsi->repeat_image = NULL;
+-   if (wsi->repeat_fd < 0 || !image->vrr_target_ns || !interval || !refresh ||
+-       interval > 100 * 1000 * 1000)
++   if (!wsi->repeat_frames || wsi->repeat_fd < 0 || !image->vrr_target_ns ||
++       !interval || !refresh || interval > 100 * 1000 * 1000)
+       return;
+ 
+    /* A fiftieth of a refresh of slack keeps a frame of exactly two
+@@ -4080,6 +4085,9 @@
+    const char *vrr = getenv("MESA_VK_WSI_DISPLAY_VRR");
+    wsi->vrr_request = vrr && *vrr ? atoi(vrr) != 0 : -1;
+ 
++   const char *repeat = getenv("MESA_VK_WSI_DISPLAY_REPEAT");
++   wsi->repeat_frames = !repeat || !*repeat || atoi(repeat) != 0;
++
+    int ret = mtx_init(&wsi->wait_mutex, mtx_plain);
+    if (ret != thrd_success) {
+       result = VK_ERROR_OUT_OF_HOST_MEMORY;
