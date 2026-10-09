@@ -5,8 +5,9 @@ AVR holds the front porch until the next commit, up to the range's
 longest frame. A frame slower than twice the fastest refresh has to be
 shown again, or the panel refreshes on its own at the floor, at a time
 unrelated to the next frame, which then waits out a whole refresh.
-Mesa's wsi_display does it today for applications that time their
-presents, by committing the same buffer again (mesa-005).
+Mesa's wsi_display did it for applications that time their presents,
+by committing the same buffer again (PortareOS mesa-005, dropped with
+this).
 
 Do it in the encoder, for every client and without a commit. Kickoffs
 of a steady source fall on a grid, the content's clock: one near its
@@ -40,7 +41,10 @@ interrupt while AVR is on with LFC. A trigger never goes before the due
 time armed last, which a frame's vsync clears, so a callback that fired
 while a kickoff or a vsync held the lock does nothing.
 
-Off unless msm.dpu_lfc is set, while it is compared with mesa-005.
+Against mesa-005 on the same device, frames on time were shown the same,
+a panel behind after a late frame was back on the content's clock three
+times sooner, and at 30 Hz the device drew about 0.1 W less. On by
+default; msm.dpu_lfc=0 turns it off.
 dpu_enc_lfc_frame traces the grid at every kickoff, dpu_enc_lfc_repeat
 every trigger.
 ---
@@ -224,7 +228,7 @@ every trigger.
  
 +static int dpu_encoder_phys_vid_control_vblank_irq(struct dpu_encoder_phys *phys_enc,
 +						    bool enable);
-+static bool dpu_lfc;
++static bool dpu_lfc = true;
 +
 +/*
 + * The low framerate compensation below arms each repeat from the vsync
@@ -283,10 +287,10 @@ every trigger.
 + * shown * period / count. A trigger written while the INTF still scans the
 + * refresh before is kept for that refresh's end, so a repeat the panel is
 + * behind on starts there and the panel catches up. The period comes from
-+ * the kickoffs, as Mesa's wsi_display takes it from its targets for the
-+ * repeats it commits itself (mesa-005), so this covers every client and
-+ * costs no commit. Off unless msm.dpu_lfc is set, while the two are
-+ * compared.
++ * the kickoffs, so this covers every client and costs no commit.
++ * msm.dpu_lfc=0 turns it off, which leaves such a frame to the panel's own
++ * refresh. Change it between clients: the vsync interrupt is held from
++ * when AVR goes on.
 + */
 +module_param(dpu_lfc, bool, 0644);
 +MODULE_PARM_DESC(dpu_lfc, "Repeat frames below the variable refresh range from a timer (LFC)");
@@ -388,7 +392,7 @@ every trigger.
 +
 +/*
 + * A frame was kicked off. The kickoffs of a steady source fall on a grid,
-+ * the content's own clock, which stands in for mesa-005's targets. A
++ * the content's own clock, which stands in for a timed client's targets. A
 + * kickoff within an eighth of a period of its place on the grid pulls the
 + * grid and its period a little towards itself. One off it, a late or a
 + * dropped frame, moves neither: the late frame's repeats keep their places,
