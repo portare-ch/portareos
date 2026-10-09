@@ -1,0 +1,26 @@
+From: portare-ch <hello@portare.org>
+Subject: [PATCH] gs: trust the image's Turnip to order a declared feedback loop
+
+ARMSX2 drops its own barriers before a declared feedback-loop draw only
+on a Turnip whose driverInfo carries the "git-axfl2-" tag of its own
+driver packs, which flush before such a draw. The image's Mesa now
+carries that flush (mesa-009) and turns it on for the engine named
+ARMSX2, so a Turnip without the tag is taken as fix generation 2 here.
+The log still names the driver: "driver claims feedback-loop fix
+generation 2 ... TRUSTED".
+---
+--- a/pcsx2/GS/Renderers/Common/GSGPUDriverProfile.cpp
++++ b/pcsx2/GS/Renderers/Common/GSGPUDriverProfile.cpp
+@@ -650,6 +650,12 @@
+ 	// declared loop), measured on the Adreno 740; it is trusted on Adreno 730 and up, the range the
+ 	// a7xx road preference below already covers. A Qualcomm driver cannot carry a Mesa git tag.
+ 	profile.declared_loop_fix_generation = ParseFixGeneration(context.driver_info);
++	// PortareOS: the image's Turnip carries the generation-2 change, the per-draw
++	// flush before a declared loop on a7xx (Mesa patch mesa-009), and turns it on
++	// for the engine named ARMSX2, without the build tag ARMSX2's own packs carry.
++	if (context.api == MobileGpuApi::Vulkan && profile.driver == MobileGpuDriver::MesaTurnip &&
++		profile.declared_loop_fix_generation < 2)
++		profile.declared_loop_fix_generation = 2;
+ 	const bool tagged_turnip_vk = (context.api == MobileGpuApi::Vulkan) && (profile.driver == MobileGpuDriver::MesaTurnip);
+ 	const bool a6xx_fix = (profile.declared_loop_fix_generation >= 1) &&
+ 		                  (selection.gpu.architecture == MobileGpuArchitecture::Adreno6xx) &&

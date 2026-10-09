@@ -284,22 +284,6 @@ case ${EMULATOR} in
         ${VERBOSE} && log $0 "Setup easyrpg requirements."
         /usr/bin/easyrpg.sh
       ;;
-      armsx2)
-        ### ARMSX2's own Turnip build (#497), for this core only. Its GS trusts
-        ### that build to order a declared feedback loop on the Adreno 740 and
-        ### drops its own barriers there. VK_DRIVER_FILES replaces the
-        ### loader's driver search for this process alone; the image's Mesa
-        ### stays every other program's driver. <system>.vulkandriver=system
-        ### keeps the image's driver, to compare the two.
-        ARMSX2_TURNIP="/usr/lib/armsx2-turnip/freedreno_icd.aarch64.json"
-        if [ "$(get_setting vulkandriver "${PLATFORM}" "${ROMNAME##*/}")" != "system" ] &&
-           [ -f "${ARMSX2_TURNIP}" ]
-        then
-          ${VERBOSE} && log $0 "Vulkan driver: ARMSX2 Turnip"
-          export VK_DRIVER_FILES="${ARMSX2_TURNIP}"
-          unset VK_ICD_FILENAMES VK_ADD_DRIVER_FILES
-        fi
-      ;;
     esac
 
     ### Variable refresh (documentation/VARIABLE_REFRESH.md): RetroArch times

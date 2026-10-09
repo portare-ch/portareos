@@ -85,9 +85,6 @@ were mashed differs a little between rows.
 
 ## Open questions
 
-- ARMSX2's Turnip was not measured with this core. Its one change is
-  in-pass feedback-loop ordering that an emulator has to ask for, and
-  SwanStation's readback path does not touch it.
 - The last 0.5 missed vblanks a second, against none without PRMPT.
 - The GPU at maximum without `performance` on the CPUs was not measured
   with the patch, so the CPU half may not be needed.

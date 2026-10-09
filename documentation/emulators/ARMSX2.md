@@ -46,80 +46,51 @@ Not measured whether Turnip's display backend blocks inside the present.
 
 ## Vulkan driver
 
-PS2 runs on the ARMSX2 team's own Turnip build, not the image's Mesa (#497).
-Package `armsx2-turnip` (SM8550 device package), currently release
-`axfl2-002` from [bmdhacks/armsx2-turnip](https://github.com/bmdhacks/armsx2-turnip):
-their prebuilt aarch64 driver, unmodified. `axfl2-002` differs from
-`axfl2-001` only on the Adreno 610; on the 740 it is the same driver. The pin
-moved because upstream deleted the 001 release. The log lines below were
-recorded with 001.
+PS2 runs on the image's Mesa, like every other system. From build 208
+(`006c681`) until the Mesa bump to 26.3.0-devel it ran on the ARMSX2 team's
+own Turnip build instead (`armsx2-turnip`, #497), selected for the
+`armsx2` core with `VK_DRIVER_FILES`. That package is gone.
 
-**Why:**
-- ARMSX2's GS is written against this build. It identifies the driver from
-  `driverInfo`: `git-axfl2-` on Adreno 730 and up means the driver orders a
-  declared feedback loop itself (a flush before each such draw on a7xx), so
-  ARMSX2 drops its own barriers.
-- The build's author measured it on the Adreno 740: Indiana Jones 17.5 to
-  9.9 ms a frame at 2x, Stuntman 24.0 to 21.9, nothing slower.
-- Carrying these patches in our Mesa was evaluated and found safe for the
-  other emulators (#497), but too costly to maintain. The ARMSX2 team keeps
-  optimizing the driver; we take their releases.
+**What the ARMSX2 build changed on the Adreno 740:** one patch, "tu: flush
+before a declared feedback-loop draw on a7xx". A draw whose state declares
+an attachment feedback loop gets the flush a colour-write to fragment-read
+barrier would have produced, so ARMSX2's GS can drop its own barrier there.
+Its other patches touch Adreno 6xx or 610 only, or Wayland, and it is built
+on Mesa main at `e3a986f0`.
 
-**How only PS2 gets it:**
-- The package installs to `/usr/lib/armsx2-turnip`, outside the Vulkan
-  loader's search path, with its manifest rewritten to point there.
-- runemu exports `VK_DRIVER_FILES` to that manifest for the `armsx2` core
-  alone, so the whole RetroArch process uses it for PS2 launches and nothing
-  else does.
-- `ps2.vulkandriver=system` (per system or per game) keeps the image's
-  driver, to compare the two.
+**How the image carries it:**
+- Mesa is pinned to that same commit (26.3.0-devel), and `mesa-009` adds
+  the flush, on only for the engine named `ARMSX2`, which the core passes
+  RetroArch through libretro's Vulkan context negotiation. Every other
+  application keeps stock behaviour.
+- ARMSX2 trusts a driver to order a declared loop only when `driverInfo`
+  carries its packs' `git-axfl2-` tag. armsx2-lr patch 005 takes Turnip as
+  fix generation 2 without the tag. The core's GS messages in the RetroArch
+  log (not `exec.log`) read:
 
-**In effect since build 208 (`006c681`).** A PS2 launch maps
-`/usr/lib/armsx2-turnip/libvulkan_freedreno.so` with
-`VK_DRIVER_FILES` set, and the core's GS messages in the RetroArch log (not
-`exec.log`) read:
+      VK: self-read road = in-pass, driver-ordered, declared feedback loop (driver fact) [texbarrier=on intile=off layout=on ordersOverlap=claimed]
+      VK: driver claims feedback-loop fix generation 2 (driverInfo 'Mesa 26.3.0-devel'); declared-loop ordering TRUSTED.
 
-    VK: self-read road = in-pass, driver-ordered, declared feedback loop (driver fact) [texbarrier=on intile=off layout=on ordersOverlap=claimed]
-    VK: driver claims feedback-loop fix generation 2 (driverInfo 'Mesa 26.3.0-devel (git-axfl2-001)'); declared-loop ordering TRUSTED.
-    VK: driver rule: Turnip a7xx -- declared feedback loop with the per-draw barriers KEPT; NOT in effect, overridden here.
+- With the image's Mesa, PS2 also gets our `mesa-002` (the panel profile
+  stays applied) and `mesa-006` (variable refresh); ARMSX2's build had
+  neither, so PS2 ran at fixed refresh with RetroArch set up for variable
+  refresh, and 4.9% of frames were shown for 1 or 3 refreshes instead of 2.
 
-So the read-back ordering inside a render pass is left to the driver, and
-the per-draw barriers that the image's Mesa needs are off. Timed presents
-stay in effect (`Timed presents: swap interval 2`).
+**Measured before the switch** (2026-10-09, NFSU's intro, 90 s per run, GPU
+clock every 0.25 s from 30 s on; a test build of 26.3.0-devel with
+`mesa-009`, tagged so the unpatched core trusted it):
 
-**Measured** (NFSU race, blending High, five minutes each, 2026-10-03):
-on ARMSX2's Turnip the GPU was 34-41 % busy at a mean 356 MHz, with race
-windows at 59.2-59.9 fps. On the image's Mesa it was 43-55 % busy at a mean
-572 MHz, with windows at 49.9-59.9 fps. Busy share times clock puts the GPU
-work per frame at about half. Different sections of the race, so a trend
-rather than an exact A/B (#492).
+| Driver | Display | GPU clock, mean |
+|---|---|---|
+| ARMSX2's Turnip | fixed, `ps2.vrr=0` | 401 MHz, the floor, in both runs |
+| 26.3.0-devel + `mesa-009` | fixed, `ps2.vrr=0` | 401 MHz, the floor, in both runs |
+| ARMSX2's Turnip | as launched (VRR asked, never on) | 494, 483, 489 MHz |
+| 26.3.0-devel + `mesa-009` | variable refresh | 575, 587 MHz |
+| image's Mesa 26.2.3, barriers | variable refresh | 535, 556 MHz |
 
-**What was checked before, on the Nova (nightly `1a3d441`):**
-- It loads on our kernel and libraries: `Turnip Adreno (TM) 740`,
-  `driverInfo = Mesa 26.3.0-devel (git-axfl2-001)`.
-- It needs glibc 2.38 (the image has 2.41), and expat, zlib, zstd, libdrm,
-  libwayland-client, libudev and libstdc++ (GLIBCXX 3.4.29; the image has
-  3.4.34), all present.
-- Its device extensions are a superset of the image's Mesa 26.2.3: five more,
-  none fewer. `VK_KHR_display` is there, which is how RetroArch presents.
-- Timed presents (RetroArch patch 0014) need `VK_GOOGLE_display_timing`.
-  Upstream Mesa offers it when the instance enables `VK_KHR_display` and no
-  window-system surface (`wsi_instance_supports_google_display_timing`,
-  `wsi_common.c`). RetroArch's KMS context does exactly that, on either
-  driver; no rebuild is involved. `vulkaninfo` enables every surface type, so
-  it lists the extension for neither driver. The first PS2 launch on this
-  driver should log `VK_GOOGLE_display_timing: presents are timed by the
-  driver.`
-
-**Cost: the panel profile.** It is stock Mesa outside Turnip, so it lacks our
-`mesa-002` patch. When RetroArch takes the display it clears the CRTC's colour
-stages. With the default `display.colorprofile=stock` those are empty, and
-nothing changes. With `gamma22` or `srgb`, PS2 games show the panel
-uncorrected.
-
-**Bump:** set `PKG_VERSION` and `PKG_SHA256` to a newer release's aarch64
-tarball. Check that the ARMSX2 core trusts the tag it carries
-(`GSGPUDriverProfile.cpp`, `declared_loop_fix_generation`).
+On the same display the two drivers are the same. Variable refresh itself
+costs PS2 GPU clock on this scene; why is open. The NFSU race of #503, where
+the read-back is what the frame costs, was not repeated.
 
 ## Pacing: one clock
 
@@ -268,7 +239,7 @@ It has caught two failures so far:
 | `ps2` in `NO_RUNAHEAD`, `NO_REWIND` | `setsettings.sh` | both save a state every frame; a PS2 state is 68 MB, and each one switches pacing off and on |
 | `armsx2_upscale = 2x` | `retroarch-core-options.cfg` | as the standalone ran (#15) |
 | `armsx2_blending_accuracy = "Automatic"` | `retroarch-core-options.cfg`, patch 004 | Basic, raised per game to the GameDB's `recommendedBlendingLevel`, within its `maximumBlendingLevel`. Upstream only warns about the recommendation, on an OSD the core does not show, so every game ran at Basic. An explicit level is kept as chosen. `exec.log` shows `GameDB: Raising blending accuracy from 1 to the recommended 3` |
-| `VK_DRIVER_FILES` = ARMSX2's Turnip | runemu, `armsx2` core only; `ps2.vulkandriver=system` opts out | the driver build ARMSX2's GS is tuned for (#497) |
+| Turnip flushes before a declared feedback-loop draw | Mesa `mesa-009`, for the engine `ARMSX2` only; armsx2-lr patch 005 trusts it | ARMSX2's GS drops its own barriers there, as on its team's Turnip (#497) |
 
 ## Measurements
 
@@ -288,17 +259,19 @@ It has caught two failures so far:
 
 ## Open questions
 
-- What Automatic blending costs where it raises the level. NFSU at High holds
-  59.2-59.9 fps in a race on ARMSX2's Turnip; on the image's Mesa the same
-  level costs more (49.9-59.9). Other games raised by the GameDB are
-  unmeasured.
+- What Automatic blending costs where it raises the level. NFSU at High held
+  59.2-59.9 fps in a race on ARMSX2's Turnip; on the image's Mesa 26.2.3 with
+  barriers the same level cost more (49.9-59.9). Other games raised by the
+  GameDB are unmeasured.
 
-- ARMSX2's Turnip against the image's Mesa, frame-exact. On the same race
-  (NFSU, blending High), roughly half the GPU work per frame and fewer slow
-  windows, but from different sections of the race (see measurements).
-  Time Crisis II showed no difference. A recorded scene through #492 makes
-  it exact; read-back-heavy games (the author's: Indiana Jones, Stuntman,
-  Splashdown, WRC 3) should show more.
+- The image's Mesa with `mesa-009` in the NFSU race of #503, where ARMSX2's
+  Turnip did roughly half the GPU work per frame of 26.2.3 with barriers.
+  On the intro the two drivers matched at fixed refresh (see Vulkan
+  driver). A recorded scene through #492 makes it exact; read-back-heavy
+  games (the author's: Indiana Jones, Stuntman, Splashdown, WRC 3) should
+  show more.
+- Why variable refresh raises PS2's GPU clock: on NFSU's intro, 575-587 MHz
+  mean against 401 at fixed refresh, on the same driver.
 
 - Queue depth 0 against 1 with pinning and `performance`: fps, repeated
   frames, audio gaps in a 15 s capture.
