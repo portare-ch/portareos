@@ -1,0 +1,229 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] EXPERIMENT drm/panel: il97680a: staged DCS writes, msm AVR floor switch
+
+Not for merging yet (#623). /sys/kernel/debug/il97680a/before_sleep_out and
+after_display_on take DCS writes, one hex line each, sent by the next
+power-on sequence at the point a compiled-in write would be; power_ons
+counts sequences. msm.dpu_avr_min_hz overrides the VRR floor at the next
+mode set.
+---
+--- a/drivers/gpu/drm/panel/panel-ilitek-il97680a.c
++++ b/drivers/gpu/drm/panel/panel-ilitek-il97680a.c
+@@ -6,6 +6,7 @@
+  */
+ 
+ #include <linux/backlight.h>
++#include <linux/debugfs.h>
+ #include <linux/delay.h>
+ #include <linux/gpio/consumer.h>
+ #include <linux/module.h>
+@@ -31,6 +32,19 @@
+ 	struct gpio_desc *reset_gpio;
+ 	struct regulator_bulk_data *supplies;
+ 	struct drm_panel_bl_levels bl_levels;
++
++	/*
++	 * Experiment (#623): DCS writes staged through debugfs and sent by the
++	 * next power-on sequence, at the point a compiled-in write would be:
++	 * [0] before sleep-out, [1] after display-on. Each entry is a length
++	 * byte and the command. prepare() resets the panel first, so a staged
++	 * write lands exactly as one built into the sequence.
++	 */
++	struct mutex stage_lock;
++	u8 stage[2][512];
++	size_t stage_len[2];
++	struct dentry *debugfs;
++	u32 power_ons;
+ };
+ 
+ struct panel_desc {
+@@ -101,6 +115,23 @@
+ 	return drm_mode_vrefresh(m) >= 90 ? 120 : 60;
+ }
+ 
++static void il97680a_send_staged(struct panel_info *pinfo,
++				 struct mipi_dsi_multi_context *ctx, int at)
++{
++	size_t p = 0;
++
++	mutex_lock(&pinfo->stage_lock);
++	while (p < pinfo->stage_len[at]) {
++		u8 n = pinfo->stage[at][p++];
++
++		mipi_dsi_dcs_write_buffer_multi(ctx, &pinfo->stage[at][p], n);
++		p += n;
++	}
++	if (pinfo->stage_len[at])
++		mipi_dsi_dcs_write_seq_multi(ctx, 0xff, 0x5a, 0xa5, 0x00);
++	mutex_unlock(&pinfo->stage_lock);
++}
++
+ static int il97680a_rpnova_init_sequence(struct panel_info *pinfo)
+ {
+ 	struct mipi_dsi_multi_context dsi_ctx = { .dsi = pinfo->dsi };
+@@ -133,6 +164,8 @@
+ 	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, MIPI_DCS_SET_DISPLAY_BRIGHTNESS,
+ 				     0x0d, 0x75, 0x00, 0x00);
+ 
++	il97680a_send_staged(pinfo, &dsi_ctx, 0);
++
+ 	mipi_dsi_dcs_exit_sleep_mode_multi(&dsi_ctx);
+ 
+ 	mipi_dsi_msleep(&dsi_ctx, 120);
+@@ -141,6 +174,13 @@
+ 
+ 	mipi_dsi_msleep(&dsi_ctx, 20);
+ 
++	il97680a_send_staged(pinfo, &dsi_ctx, 1);
++
++	pinfo->power_ons++;
++	dev_info(&pinfo->dsi->dev, "power-on %u: mode %d, class %d, staged %zu+%zu bytes, err %d\n",
++		 pinfo->power_ons, cur_mode, cur_class, pinfo->stage_len[0],
++		 pinfo->stage_len[1], dsi_ctx.accum_err);
++
+ 	return dsi_ctx.accum_err;
+ }
+ 
+@@ -473,11 +513,103 @@
+ 	return 0;
+ }
+ 
++/* "ff 5a a5 00\n60 01\n": one DCS write a line, hex bytes; empty clears. */
++static ssize_t il97680a_stage_write(struct panel_info *pinfo, int at,
++				    const char __user *ubuf, size_t count)
++{
++	char *text, *line, *cur;
++	u8 buf[512];
++	size_t len = 0;
++
++	if (count > 4096)
++		return -EINVAL;
++	text = memdup_user_nul(ubuf, count);
++	if (IS_ERR(text))
++		return PTR_ERR(text);
++	cur = text;
++	while ((line = strsep(&cur, "\n")) != NULL) {
++		u8 cmd[64];
++		unsigned int n = 0, v;
++		char *tok;
++
++		while ((tok = strsep(&line, " \t")) != NULL) {
++			if (!*tok)
++				continue;
++			if (n == sizeof(cmd) || kstrtouint(tok, 16, &v) || v > 0xff) {
++				kfree(text);
++				return -EINVAL;
++			}
++			cmd[n++] = v;
++		}
++		if (!n)
++			continue;
++		if (len + 1 + n > sizeof(buf)) {
++			kfree(text);
++			return -ENOSPC;
++		}
++		buf[len++] = n;
++		memcpy(&buf[len], cmd, n);
++		len += n;
++	}
++	kfree(text);
++	mutex_lock(&pinfo->stage_lock);
++	memcpy(pinfo->stage[at], buf, len);
++	pinfo->stage_len[at] = len;
++	mutex_unlock(&pinfo->stage_lock);
++	return count;
++}
++
++static int il97680a_stage_show(struct seq_file *s, int at)
++{
++	struct panel_info *pinfo = s->private;
++	size_t p = 0;
++
++	mutex_lock(&pinfo->stage_lock);
++	while (p < pinfo->stage_len[at]) {
++		u8 n = pinfo->stage[at][p++];
++
++		seq_printf(s, "%*phD\n", n, &pinfo->stage[at][p]);
++		p += n;
++	}
++	mutex_unlock(&pinfo->stage_lock);
++	return 0;
++}
++
++#define IL97680A_STAGE_FILE(name, at)					\
++static int name##_show(struct seq_file *s, void *unused)		\
++{									\
++	return il97680a_stage_show(s, at);				\
++}									\
++static int name##_open(struct inode *inode, struct file *file)		\
++{									\
++	return single_open(file, name##_show, inode->i_private);	\
++}									\
++static ssize_t name##_write(struct file *file, const char __user *ubuf,	\
++			    size_t count, loff_t *ppos)			\
++{									\
++	struct seq_file *s = file->private_data;			\
++									\
++	return il97680a_stage_write(s->private, at, ubuf, count);	\
++}									\
++static const struct file_operations name##_fops = {			\
++	.owner = THIS_MODULE,						\
++	.open = name##_open,						\
++	.read = seq_read,						\
++	.write = name##_write,						\
++	.llseek = seq_lseek,						\
++	.release = single_release,					\
++}
++
++IL97680A_STAGE_FILE(il97680a_before_sleep_out, 0);
++IL97680A_STAGE_FILE(il97680a_after_display_on, 1);
++
+ static void il97680a_remove(struct mipi_dsi_device *dsi)
+ {
+ 	struct panel_info *pinfo = mipi_dsi_get_drvdata(dsi);
+ 	int ret;
+ 
++	debugfs_remove_recursive(pinfo->debugfs);
++
+ 	ret = mipi_dsi_detach(pinfo->dsi);
+ 	if (ret < 0)
+ 		dev_err(&dsi->dev, "failed to detach from DSI host: %d\n", ret);
+@@ -685,6 +817,14 @@
+ 	pinfo->dsi = dsi;
+ 	mipi_dsi_set_drvdata(dsi, pinfo);
+ 
++	mutex_init(&pinfo->stage_lock);
++	pinfo->debugfs = debugfs_create_dir("il97680a", NULL);
++	debugfs_create_file("before_sleep_out", 0600, pinfo->debugfs, pinfo,
++			    &il97680a_before_sleep_out_fops);
++	debugfs_create_file("after_display_on", 0600, pinfo->debugfs, pinfo,
++			    &il97680a_after_display_on_fops);
++	debugfs_create_u32("power_ons", 0400, pinfo->debugfs, &pinfo->power_ons);
++
+ 	ret = of_drm_get_panel_orientation(dev->of_node, &pinfo->orientation);
+ 	if (ret < 0) {
+ 		dev_err(dev, "%pOF: failed to get orientation %d\n", dev->of_node, ret);
+--- a/drivers/gpu/drm/msm/disp/dpu1/dpu_encoder_phys_vid.c
++++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_encoder_phys_vid.c
+@@ -280,6 +280,12 @@
+  * refresh range: the mode's frame is the shortest, the range's minimum
+  * gives the longest. The CRTC's VRR_ENABLED switches it per commit.
+  */
++/* Experiment (#623): the floor in Hz instead of the panel's, at the next
++ * mode set; 0 keeps the panel's. */
++static unsigned int dpu_avr_min_hz;
++module_param(dpu_avr_min_hz, uint, 0644);
++MODULE_PARM_DESC(dpu_avr_min_hz, "Experiment: variable refresh floor in Hz, 0 for the panel's (next mode set)");
++
+ static void dpu_encoder_phys_vid_setup_avr(struct dpu_encoder_phys *phys_enc,
+ 		const struct dpu_hw_intf_timing_params *timing, int clock_khz)
+ {
+@@ -297,6 +303,8 @@
+ 	    !intf->ops.avr_trigger)
+ 		return;
+ 
++	if (min_hz && dpu_avr_min_hz)
++		min_hz = dpu_avr_min_hz;
+ 	if (min_hz && htotal)
+ 		lines = div_u64((u64)clock_khz * 1000, htotal * min_hz);
+ 
