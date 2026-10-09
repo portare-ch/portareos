@@ -56,8 +56,10 @@ EXTERNAL_DISPLAY="/usr/bin/external-display"
 # launcher drives the one connector it opened, and that is the panel.
 frontend_power() {
   local pid
-  pid=$(pidof portarelauncher 2>/dev/null) || return 1
-  [ -n "${pid}" ] || return 1
+  # The service's main process rather than pidof: a test build run from a
+  # drop-in has another file name, and pidof matches that, not the comm.
+  pid=$(systemctl show -p MainPID --value portarelauncher 2>/dev/null)
+  case "${pid}" in ''|0|*[!0-9]*) return 1 ;; esac
   case "${1}" in
     off) kill -USR1 ${pid} 2>/dev/null ;;
     on)  kill -USR2 ${pid} 2>/dev/null ;;
