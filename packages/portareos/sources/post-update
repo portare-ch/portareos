@@ -443,6 +443,16 @@ migrate_audiolatency_8() {
   set_setting global.audiolatency 8
 }
 
+# The sleep hooks read an unset led.color as battery and saved it, so the
+# first suspend lit the sticks in charge colours for good, charger or not.
+# Nothing offers battery to a player, so every battery came from them.
+# ledcontrol off also darkens the sticks the battery service had painted.
+migrate_led_battery_off() {
+  [ "$(get_setting led.color)" = "battery" ] || return 0
+  /usr/bin/ledcontrol off
+  set_setting sleep.led.color off
+}
+
 migrate cpugovernor-schedutil migrate_cpugovernor
 migrate audiolatency-24 migrate_audiolatency_24
 migrate audiolatency-8 migrate_audiolatency_8
@@ -455,3 +465,4 @@ migrate ps2-cpu-layout migrate_ps2_cpu_layout
 migrate music-little-cores migrate_music_little_cores
 migrate nes-ratio-core migrate_nes_ratio_core
 migrate snes-ratio-core migrate_snes_ratio_core
+migrate led-battery-off migrate_led_battery_off

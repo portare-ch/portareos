@@ -13,10 +13,13 @@
 
 POWER_LED="/sys/class/leds/power-led"
 
+# Unset is the default, the sticks dark. This used to read it as battery
+# and save that, so the first suspend lit the sticks in charge colours for
+# good, charger or not.
 PRE_SLEEP_LED_STATE=$(get_setting "led.color")
 if [ ! -n "${PRE_SLEEP_LED_STATE}" ]; then
-  PRE_SLEEP_LED_STATE="battery"
-  set_setting "led.color" "battery"
+  PRE_SLEEP_LED_STATE="off"
+  set_setting "led.color" "off"
 fi
 set_setting sleep.led.color "${PRE_SLEEP_LED_STATE}"
 
