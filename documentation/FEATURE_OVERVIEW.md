@@ -33,7 +33,7 @@ Details: [CPU isolation](CPU_ISOLATION.md), [power measurements](POWER.md).
 * Direct KMS presentation for emulators, without a desktop compositor.
 * Automatic integer-multiple VRR for RetroArch on the built-in display.
 * Variable refresh currently spans 80–120.198 Hz.
-* Mesa repeats frames to keep lower frame rates within the panel's refresh range without rendering again.
+* The display driver repeats frames to keep lower frame rates within the panel's refresh range, without a commit or rendering again.
 * Dedicated fixed-refresh modes matched to console families.
 * Corrected frame-rate calculations for NES, SNES, PlayStation, Saturn and N64.
 * Timed Vulkan presentation and reduced frame buffering.

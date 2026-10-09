@@ -7,7 +7,8 @@
 //
 // Schedules: "cadence:2,2,4" holds frames for that many refreshes in turn on
 // a fixed refresh; "rate:59.826" aims frames at a fixed rate, for a variable
-// refresh panel (MESA_VK_WSI_DISPLAY_VRR=1).
+// refresh panel (MESA_VK_WSI_DISPLAY_VRR=1); "rate:30,60" steps through the
+// rates in one session, switch=S seconds each, in turn.
 //
 // Modes:
 //   own      no VK_GOOGLE_display_timing. Cadence only: each frame is
@@ -25,6 +26,7 @@
 //               in cadence mode it is held one refresh more
 //   mode=HZ     the display mode nearest HZ (default: the fastest)
 //   recreate=S  replace the swapchain every S seconds (oldSwapchain)
+//   switch=S    with several rates, how long each lasts (default 5)
 //
 // Every frame draws its number as a barcode, so each frame's pixels, and the
 // DPU's CRC of them, differ from the last.
@@ -35,7 +37,7 @@
 // none (read, asked, got, result, then the record's fields). Times are
 // CLOCK_MONOTONIC in ns.
 //
-// usage: present-probe OUT SECONDS own|observe|partial cadence:N,N,..|rate:HZ [read=..] [late=E:MS] [mode=HZ] [recreate=S]
+// usage: present-probe OUT SECONDS own|observe|partial cadence:N,N,..|rate:HZ[,HZ..] [read=..] [late=E:MS] [mode=HZ] [recreate=S] [switch=S]
 
 #define _GNU_SOURCE
 #include <errno.h>
@@ -596,8 +598,8 @@ static void write_logs(const char *out)
 int main(int argc, char **argv)
 {
 	if (argc < 5) {
-		fprintf(stderr, "usage: present-probe OUT SECONDS own|observe|partial cadence:N,N,..|rate:HZ"
-			" [read=N|count|none] [late=E:MS] [mode=HZ]\n");
+		fprintf(stderr, "usage: present-probe OUT SECONDS own|observe|partial cadence:N,N,..|rate:HZ[,HZ..]"
+			" [read=N|count|none] [late=E:MS] [mode=HZ] [recreate=S] [switch=S]\n");
 		return 2;
 	}
 	const char *out = argv[1];
@@ -606,7 +608,9 @@ int main(int argc, char **argv)
 			 !strcmp(argv[3], "observe") ? MODE_OBSERVE :
 			 !strcmp(argv[3], "partial") ? MODE_PARTIAL : -1;
 	unsigned cadence[MAX_CADENCE], ncadence = 0;
-	double rate = 0;
+	double rates[MAX_CADENCE], rate = 0;
+	unsigned nrates = 0;
+	double switch_s = 5;
 	int read_mode = 64;
 	unsigned late_every = 0;
 	double late_ms = 0;
@@ -624,7 +628,12 @@ int main(int argc, char **argv)
 				break;
 		}
 	} else if (!strncmp(argv[4], "rate:", 5)) {
-		rate = atof(argv[4] + 5);
+		for (char *s = argv[4] + 5; *s && nrates < MAX_CADENCE; s++) {
+			rates[nrates++] = strtod(s, &s);
+			if (*s != ',')
+				break;
+		}
+		rate = nrates ? rates[0] : 0;
 	}
 	if (!ncadence && rate <= 0) {
 		fprintf(stderr, "present-probe: schedule is cadence:N,N,.. or rate:HZ\n");
@@ -647,6 +656,8 @@ int main(int argc, char **argv)
 			mode_mhz = (uint32_t)(atof(argv[i] + 5) * 1000 + 0.5);
 		else if (!strncmp(argv[i], "recreate=", 9))
 			recreate_s = atof(argv[i] + 9);
+		else if (!strncmp(argv[i], "switch=", 7))
+			switch_s = atof(argv[i] + 7);
 	}
 
 	signal(SIGINT, on_signal);
@@ -710,7 +721,7 @@ int main(int argc, char **argv)
 		// a late frame, or an untimed one, would start a second schedule
 		// beside the first. Each present goes in a few ms before its target.
 		uint64_t period = rate > 0 ? (uint64_t)(1e9 / rate) : 0;
-		uint64_t t0 = 0;
+		uint64_t switch_ns = (uint64_t)(switch_s * 1e9), t0 = 0, next = 0;
 		uint64_t anchor_time = 0, cum = 0;
 		uint32_t anchor_id = 0;
 		uint64_t *starts = NULL;
@@ -740,8 +751,17 @@ int main(int argc, char **argv)
 					t0 = first_frame_on_screen(read_mode) + period;
 				if (k == 1 && t0 < now_ns() + 4000000ull)
 					t0 = now_ns() + 4000000ull;
-				if (k)
-					target = t0 + (uint64_t)(k - 1) * period;
+				if (k == 1)
+					next = t0;
+				// Each target a period of the rate its time falls in
+				// after the one before, so a switch keeps the content's
+				// clock going.
+				if (k) {
+					unsigned seg = nrates > 1 && switch_ns ?
+						(unsigned)((next - t0) / switch_ns % nrates) : 0;
+					target = next;
+					next += (uint64_t)(1e9 / rates[seg]);
+				}
 			} else {
 				if (nstarts == maxstarts)
 					starts = grow(starts, &maxstarts, sizeof(*starts));

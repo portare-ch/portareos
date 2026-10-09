@@ -237,7 +237,10 @@ rate (see the launch below).
 
 ## Showing a frame more than once
 
-The repeat lives in Mesa's KMS backend (`mesa-005`). RetroArch presents
+The repeat is the display driver's (patch 1107, see
+[repeats in the kernel](#repeats-in-the-kernel-lfc)). Until 2026-10-09 it
+lived in Mesa's KMS backend (`mesa-005`, dropped then), as described here
+with what was measured on it. RetroArch presents
 each frame once (`0018`), aimed at the frame's start plus a budget: what
 the last 64 frames needed to be ready, measured after the GPU fence, and
 a millisecond. Mesa takes the frame period from the distance between
@@ -268,9 +271,8 @@ the targets: fixed latency, as on a fixed 120 Hz mode, with every frame
 still shown twice. A PlayStation frame leaves 0.038 ms a refresh to catch
 up, about a second after a loading stall.
 
-The general form is LFC in the DPU driver, which would cover every
-client, not only timed VK_KHR_display presents. It waits until AVR has
-had more testing: #586.
+The general form is LFC in the DPU driver, which covers every client,
+not only timed VK_KHR_display presents: patch 1107, which replaced this.
 
 ## Checked frame by frame
 
@@ -417,6 +419,177 @@ for the runs before), and counts a phase jump back towards the usual
 phase as the panel catching up, k x (P/k - R) a frame: 3.4 ms at 50 Hz,
 over the 2 ms jump. Of the 149 jumps at 50 Hz on the 90 Hz floor, 125
 were that.
+
+## Repeats in the kernel (LFC)
+
+Patch 1107 repeats a slow frame in the DPU's video encoder instead of
+in Mesa (#586). It was compared with mesa-005 on the same image, below,
+and replaced it: on by default, `msm.dpu_lfc=0` turns it off and leaves
+a slow frame to the panel's own refresh at the floor.
+
+- **Period.** The kickoffs of a steady source fall on a grid, the
+  content's own clock, which stands in for mesa-005's targets. A kickoff
+  within an eighth of a period of its place pulls the grid and its
+  period a little towards itself; a late or dropped one moves neither, so
+  a late frame's repeats keep their places and the panel catches up on
+  them. Two distances alike are a new rate, and the grid starts again
+  from them, as from the first two, when both kickoffs missed the grid
+  or the distance is more than an eighth off the period: a doubled rate
+  puts every second frame back on the old grid, so misses alone never
+  noticed 30 to 60 Hz. A mode set and AVR going on or off start the
+  cadence afresh. A frame is shown `count = (P + R/50) / R` times, none below two
+  refreshes or above 100 ms. Smoothing the distances between kickoffs
+  instead, as a first build did, failed at 40 Hz: the frame after one
+  6 ms late came 18.8 ms after it, close enough to count, and three
+  refreshes a frame became two for seven frames. `dpu_enc_lfc_frame`
+  traces the grid at every kickoff.
+- **Repeat.** After each refresh of a frame, the vsync interrupt arms an
+  hrtimer for the next one at kickoff + shown x P/count, and the timer
+  writes `AVR_TRIGGER`. A kickoff cancels what is left of the frame
+  before, and a trigger finding one pending is skipped. A refresh the
+  panel makes on its own, at the floor, counts like a repeat. No commit,
+  no flip event, no atomic state.
+- **Two races found on the device.** The vsync that takes a frame can
+  come before the kickoff has put the frame on the grid; arming then
+  timed the first repeat from the frame before, already past, and its
+  trigger added a refresh (Tekken 3, 35 times in 10 minutes, each
+  starting a run a refresh behind). The kickoff arms it in that case.
+  And the encoder drops the vsync interrupt 58 ms after a frame when
+  nothing holds it (`ENTER_IDLE`), so at 12 Hz the repeats stopped after
+  6 to 8 of 9. `tools/display-trace` hides that, since `vblank-rate`
+  holds the interrupt; `--no-hold` leaves it to the client. The encoder
+  now holds it while AVR is on with LFC.
+- **Clients.** Any commit while `VRR_ENABLED` is set, timed or not.
+  For the comparison, Mesa's repeats could be turned off
+  (`MESA_VK_WSI_DISPLAY_REPEAT=0`, mesa-008, dropped with mesa-005);
+  with both on, the kernel took Mesa's repeats for frames and added none
+  of its own. Change `dpu_lfc` between clients: the vsync interrupt is
+  held from when AVR goes on.
+
+Two things about AVR in continuous mode had to be found on the Nova,
+with a build that had them as parameters (2026-10-09, present-probe,
+30 s per run):
+
+- **`AVR_TRIGGER` alone starts a refresh.** Flushing the INTF as well,
+  the other candidate, was not needed.
+- **A trigger written while the INTF still scans the refresh before is
+  kept for that refresh's end**, as a commit's flush is. So the trigger
+  goes at its place on the period, and where the panel is behind, the
+  hardware starts the repeat at the shortest frame. Timing it from the
+  vsync interrupt instead, never before the shortest frame after it,
+  failed: the interrupt ran about 0.68 ms after the vsync (its trace
+  time against the vblank timestamp), every repeat came that much late,
+  9.0 ms apart at 30 Hz instead of 8.33, and 152 of 882 frames lost a
+  repeat.
+
+| Run | Frames shown k times | Refresh against P/k, median / p99 | Scanout - target, median |
+|---|---|---|---|
+| 30 Hz, k = 4, timed from the vsync interrupt | 728 of 882 | 0.211 / 1.011 ms | 4.12 ms |
+| 30 Hz, k = 4, trigger on the period | 878 of 885 | 0.015 / 0.275 ms | 0.50 ms |
+| 60.099 Hz, k = 2, trigger on the period | 1772 of 1775 | 0.002 / 0.007 ms | 1.27 ms |
+
+`tools/display-check` pairs each `dpu_enc_lfc_repeat` kick with the
+vblank traced after it and counts those refreshes as kernel repeats, so
+the same checks apply to both. It also reports how long a kick took to
+start its refresh and how far it went from its place on the period.
+
+### Against mesa-005, a first look
+
+2026-10-09, kernel-only build of patch 1107 over that day's image, one
+Turnip build with mesa-008 for both sides (`VK_DRIVER_FILES`), only
+`msm.dpu_lfc` toggled. present-probe, 60 s per run, every 600th frame
+4 ms late, `tools/display-check --rate`.
+
+| Rate | Repeats | Frames shown k times | Panel on its own | Refresh vs P/k, median / p95 / p99 ms | Scanout - target, median / p95 ms | Frames to recover from a late one | Checks failed |
+|---|---|---|---|---|---|---|---|
+| 60.099 Hz | Mesa | 3570 of 3574 | 2 | 0.002 / 0.006 / 0.007 | 14.09 / 14.18 | never | 0 |
+| 60.099 Hz | kernel | 3574 of 3578 | 3 | 0.002 / 0.006 / 0.007 | 6.91 / 7.08 | never | 1 |
+| 59.94 Hz | Mesa | 3561 of 3569 | 6 | 0.022 / 0.061 / 0.198 | 0.68 / 11.46 | 269 | 0 |
+| 59.94 Hz | kernel | 3557 of 3570 | 7 | 0.022 / 0.075 / 0.250 | 0.48 / 3.36 | 82 | 0 |
+| 59.826 Hz | Mesa | 3554 of 3562 | 6 | 0.038 / 0.089 / 0.289 | 0.37 / 10.38 | 156 | 1 |
+| 59.826 Hz | kernel | 3544 of 3560 | 11 | 0.037 / 0.114 / 0.335 | 0.49 / 2.00 | 48 | 0 |
+| 50 Hz | Mesa | 2969 of 2975 | 6 | 0.087 / 0.486 / 0.814 | 0.26 / 0.54 | 3 | 0 |
+| 50 Hz | kernel | 2971 of 2977 | 8 | 0.072 / 0.330 / 0.664 | 0.28 / 0.88 | 3 | 0 |
+| 40 Hz | Mesa | 2375 of 2381 | 5 | 0.014 / 0.021 / 0.218 | 0.85 / 11.63 | 287 | 0 |
+| 40 Hz | kernel | 2372 of 2382 | 6 | 0.014 / 0.054 / 0.189 | 0.46 / 2.89 | 88 | 0 |
+| 30 Hz | Mesa | 1781 of 1786 | 5 | 0.014 / 0.039 / 0.233 | 0.89 / 10.92 | 216 | 0 |
+| 30 Hz | kernel | 1772 of 1786 | 6 | 0.014 / 0.052 / 0.228 | 0.54 / 2.17 | 66 | 0 |
+
+- **On time, the two are the same.** Repeats land within microseconds of
+  P/k either way, and a frame on time reaches the screen at the same
+  phase: new frames go through the same commit path.
+- **After a late frame they differ by design.** A 4 ms late frame misses
+  the floor and is shown a refresh long on both. Mesa then commits the
+  repeat of the next frame anyway, the frame after waits, and the panel
+  runs a refresh behind until k x (P/k - R) a frame has made it up:
+  156 to 287 frames, 2.5 to 7 s, which is the p95 phase of 10 to 12 ms.
+  The kernel skips that repeat because the next frame is already kicked
+  off, so one frame is shown a refresh short and the panel is back on
+  the content's grid; what is left takes 48 to 88 frames. Two frames off
+  their count instead of one, and a fraction of the time behind.
+- **60.099 Hz never catches up** on either: half a frame is the fastest
+  refresh, so only a skipped repeat moves it back. Both sat at a fixed
+  offset after the first late frames, Mesa's twice the kernel's in this
+  run. Which offset a run ends on depends on its history; a longer run
+  is needed before reading the difference as a property of either.
+- **Failed checks**: Mesa at 59.826 Hz, two jumps after a repeat
+  committed 2.0 and 2.5 ms late, the userspace wakeup a kernel timer
+  removes; the kernel at 60.099 Hz, one jump with no cause in the trace,
+  of the kind seen before from the display side. Kernel triggers went a
+  median 0.01 ms and a p99 0.11 ms after their place on the grid.
+
+### On the final kernel
+
+2026-10-09, kernel-only build of PR #608 at 5661f21, the same Turnip
+with mesa-008 on both sides.
+
+**Games**, 10 minutes each, flip traces through runemu (Mesa's runs on
+the kernel before, whose Mesa path is the same):
+
+| | Frames shown twice | Scanout - target, median / p95 | Presents late / committed after target | Checks failed |
+|---|---|---|---|---|
+| Super Mario World, Mesa | 35986 of 35988 | 3.88 / 8.82 ms | 339 / 1325 | 0 |
+| Super Mario World, kernel | 35963 of 35967 | 3.08 / 4.88 ms | 282 / 311 | 0 |
+| Tekken 3, Mesa | 35803 of 35811 | 0.65 / 2.10 ms | 564 / 781 | 1 |
+| Tekken 3, kernel | 35781 of 35793 | 0.66 / 1.87 ms | 540 / 587 | 2 |
+
+Tekken 3's failures on the kernel: six phase jumps in the first 2.2 s,
+while the grid is still being found as the game boots (Mesa has targets
+from the first frame), and two later ones with the plane programmed 4.1
+and 2.9 ms after the commit, the display-side kind Mesa's run had too.
+No trigger shared a refresh with another, and the run a refresh behind
+that the build before had for six minutes did not come back. Twice a
+frame came early off the grid, once while booting and once after a
+stall of two 18.6 ms frames, which the grid took for a new rate; its
+repeat went at once, held for the refresh's end, and added nothing.
+
+**Rate changes in one session**, present-probe `rate:A,B switch=5`,
+40 s: after every switch the kernel's count was right two frames on,
+and every frame was shown k times from 0 to 5 frames on (Mesa, from its
+targets: 0 to 2). The build before kept 30 Hz's count after every switch
+to 60 Hz.
+
+**Below 17 Hz without `vblank-rate`** (`--no-hold`): at 12 Hz 345 of
+349 frames got all 9 repeats (6 to 8 on the build before), at 15 Hz 436
+of 437 all 7.
+
+**Pause and menu**, 100 cycles each through RetroArch's network
+commands, both paths: every run ended cleanly, with no DPU or DSI error.
+RetroArch keeps presenting while paused, about every 16 ms but 15 to
+18 ms apart; the kernel's grid then settles just under two refreshes a
+frame and stops repeating, which shows nothing since the paused picture
+does not change, and after a resume takes a frame or two to repeat
+again, where Mesa, following the targets, does not.
+
+**Power and CPU**, present-probe at 30 Hz (k = 4), no tracing, on
+battery, 60 s each, in the order Mesa, kernel, Mesa, kernel:
+
+| | Power, W (sd of 0.5 s samples) | Timer irq/s | All irq/s | Context switches/s | CPU busy, % of one core | present-probe CPU |
+|---|---|---|---|---|---|---|
+| Mesa | 1.737 (0.093), 1.712 (0.099) | 4270, 4214 | 6393, 6340 | 5713, 5694 | 22.6, 24.2 | 2.13, 2.16 % |
+| kernel | 1.620 (0.090), 1.628 (0.109) | 3879, 3962 | 5775, 5866 | 4948, 4953 | 19.9, 20.3 | 1.23, 1.21 % |
+
+About 0.1 W less with the kernel's repeats, at 90 repeats a second.
 
 ## The launch
 

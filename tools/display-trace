@@ -5,41 +5,47 @@
 # Runs a command on a Nova over ssh while tracing the display, and copies
 # the run back for tools/display-check (#595).
 #
-#   tools/display-trace root@nova NAME SECONDS [--crc] -- COMMAND...
+#   tools/display-trace root@nova NAME SECONDS [--crc] [--no-hold] -- COMMAND...
 #
 # The launcher is stopped for the run and started again after it. Written
 # to ./NAME.*: trace (drm_vblank_event, dpu_crtc_complete_flip,
-# dpu_plane_set_scanout and trace_marker lines, trace_clock mono), out
-# (the command's output), and with --crc the DPU's per-refresh CRC.
-# COMMAND runs with MESA_VK_WSI_DISPLAY_TRACE=1, so Mesa's commits are in
-# the trace (mesa-007), and RUN, the run's path prefix on the device, for
-# further files such as present-probe's logs; a command line that names it
-# goes through sh -c:
+# dpu_plane_set_scanout, the kernel's LFC events where it has them, and
+# trace_marker lines, trace_clock mono), out (the command's output), and
+# with --crc the DPU's per-refresh CRC. COMMAND runs with
+# MESA_VK_WSI_DISPLAY_TRACE=1, so Mesa's commits are in the trace
+# (mesa-007), and RUN, the run's path prefix on the device, for further
+# files such as present-probe's logs; a command line that names it goes
+# through sh -c. --no-hold leaves the vblank interrupt to the client, as
+# in a game: refreshes are then not traced while nothing else waits on it.
 #
 #   tools/display-trace root@nova obs 20 -- \
 #     sh -c 'present-probe $RUN 30 observe cadence:2,2,4'
 
 if [ "$1" != "--remote" ]; then
-  [ $# -lt 5 ] && { sed -n '5,21p' "$0" | cut -c3-; exit 1; }
+  [ $# -lt 5 ] && { sed -n '5,22p' "$0" | cut -c3-; exit 1; }
   HOST=$1 NAME=$2 SECS=$3; shift 3
   CRC=0; [ "$1" = "--crc" ] && { CRC=1; shift; }
+  HOLD=1; [ "$1" = "--no-hold" ] && { HOLD=0; shift; }
   [ "$1" = "--" ] && shift
   # ssh hands the remote shell one command line, so the command, quoted
   # word by word, is quoted once more as a whole.
   CMD=$(printf '%q ' "$@")
-  ssh "${HOST}" bash -s -- --remote "${NAME}" "${SECS}" "${CRC}" "$(printf '%q' "${CMD}")" <"$0" || exit 1
+  ssh "${HOST}" bash -s -- --remote "${NAME}" "${SECS}" "${CRC}" "${HOLD}" "$(printf '%q' "${CMD}")" <"$0" || exit 1
   # NAME.[a-z]*, not NAME.*: a run named f40 must not take f40.2's files.
   scp -q "${HOST}:/storage/display-trace/${NAME}.[a-z]*" . && ls -l "${NAME}".[a-z]*
   exit
 fi
 
 shift
-NAME=$1 SECS=$2 CRC=$3 CMD=$4
+NAME=$1 SECS=$2 CRC=$3 HOLD=$4 CMD=$5
 . /etc/profile
 T=/sys/kernel/tracing
 DIR=/storage/display-trace
 RUN=${DIR}/${NAME}
 EVENTS="drm/drm_vblank_event dpu/dpu_crtc_complete_flip dpu/dpu_plane_set_scanout"
+for e in dpu/dpu_enc_lfc_frame dpu/dpu_enc_lfc_repeat; do
+  [ -d $T/events/$e ] && EVENTS="${EVENTS} $e"
+done
 mkdir -p ${DIR}; rm -f ${RUN}.[a-z]*
 
 systemctl stop portarelauncher; sleep 1
@@ -61,8 +67,11 @@ PID=$!
 # Started once the client holds DRM master: the first opener becomes it.
 # The CRC too, after the client's mode set, which leaves it reading 0.
 sleep 2
-vblank-rate -s $((SECS - 2)) >${RUN}.vbl 2>&1 &
-VP=$!
+VP=
+if [ "${HOLD}" = 1 ]; then
+  vblank-rate -s $((SECS - 2)) >${RUN}.vbl 2>&1 &
+  VP=$!
+fi
 if [ "${CRC}" = 1 ]; then
   echo auto > /sys/kernel/debug/dri/0/crtc-0/crc/control
   cat /sys/kernel/debug/dri/0/crtc-0/crc/data > ${RUN}.crc &

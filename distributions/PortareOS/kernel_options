@@ -80,3 +80,6 @@ CONFIG_FUNCTION_TRACER=n
 # the one the timezone names, and the firmware's own 11d detection would
 # otherwise leave the chip on world rules after a fast reconnect.
 CONFIG_ATH_REG_DYNAMIC_USER_REG_HINTS=y
+# The kernel's LFC (patch 1107) kicks every repeat of a slow frame from an
+# hrtimer; at tick resolution a repeat would come up to a tick late.
+CONFIG_HIGH_RES_TIMERS=y
