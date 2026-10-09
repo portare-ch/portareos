@@ -47,10 +47,6 @@ jobs:
       NIGHTLY: ${{ inputs.NIGHTLY }}
       OFFICIAL: ${{ inputs.OFFICIAL }}
     steps:
-      - name: Maximize build space
-        uses: justinthelaw/maximize-github-runner-space@v0.9.0
-        with:
-          skip-components: docker-engine
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0

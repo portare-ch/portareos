@@ -59,13 +59,6 @@ jobs:
       CCACHE_COMPRESSLEVEL: 6
       CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,include_file_ctime
     steps:
-      # Its default profile removes the GitHub CLI, which the base tarball
-      # step needs; the first run died on "gh: command not found".
-      - name: Maximize build space
-        uses: justinthelaw/maximize-github-runner-space@v0.9.0
-        with:
-          skip-components: docker-engine,gh-cli
-
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
