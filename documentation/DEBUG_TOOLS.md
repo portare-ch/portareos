@@ -293,6 +293,7 @@ lateness; the latter records returned presentation timings. Times are
 | `own` | Pace by vblank events without requesting display-timing records; requires a cadence. |
 | `cadence:2,2,4` | Hold successive frames for the listed refresh counts. |
 | `rate:59.826` | Target a content rate; use `MESA_VK_WSI_DISPLAY_VRR=1` for VRR tests. |
+| `rate:30,60` | Step through content rates in one session, `switch=S` seconds each (default 5). |
 | `read=N`, `read=count`, `read=none` | Change how timing records are retrieved. |
 | `late=600:4` | Every 600th frame arrives 4 ms after its target in rate mode; cadence mode adds one refresh. |
 | `mode=119.652` | Select the nearest display mode; default is the fastest. |
@@ -319,6 +320,10 @@ tools/display-trace root@nova cadence-test 30 --crc -- \
   sh -c 'exec present-probe "$RUN" 40 observe cadence:2,2,4'
 python3 tools/display-check cadence-test --cadence 2,2,4
 ```
+
+`--no-hold`, after `--crc`, skips `vblank-rate`, which otherwise keeps the
+vblank interrupt on for the run; without it, refreshes are traced only while
+the client waits on a vblank, as in a game.
 
 The probe duration exceeds the capture window so it remains active until the
 wrapper stops it. Keep `$RUN` single-quoted on the host: the wrapper supplies
