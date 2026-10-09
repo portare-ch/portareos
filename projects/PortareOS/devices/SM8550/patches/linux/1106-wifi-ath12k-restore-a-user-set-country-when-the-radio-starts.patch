@@ -1,0 +1,71 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] wifi: ath12k: restore a user-set country when the radio starts
+
+A country set from userspace (NL80211_USER_REG_HINT_USER, with
+ATH_REG_DYNAMIC_USER_REG_HINTS) lives in the firmware, and the firmware
+starts again from its default when the device was powered down: on
+WCN7850 that is every system suspend, since ath12k_core_suspend_late()
+powers the device down once the hw is off. Crash recovery sends the
+country again in ath12k_mac_op_reconfig_complete(), but a start from
+ATH12K_HW_STATE_OFF did not, and with regdom_set_by_user 11d stays off,
+so the chip kept world rules (no 6 GHz) until the next boot.
+
+Send it again after the radios start from the off state. If the firmware
+still had it, the command repeats what it already holds.
+---
+--- a/drivers/net/wireless/ath/ath12k/mac.c
++++ b/drivers/net/wireless/ath/ath12k/mac.c
+@@ -9951,10 +9951,34 @@
+ 		ath12k_mac_drain_tx(ar);
+ }
+ 
++/* The firmware forgets a country set from userspace when the device is powered
++ * down, as it is for system suspend unless wowlan keeps it up. Crash recovery
++ * sends it again in ath12k_mac_op_reconfig_complete(); a start after a power
++ * cycle has to as well, or the chip keeps its default and, with 11d off for a
++ * country the user set, stays there.
++ */
++static void ath12k_mac_restore_user_country(struct ath12k *ar)
++{
++	struct wmi_set_current_country_arg arg = {};
++	int ret;
++
++	if (!ar->regdom_set_by_user || !ar->ab->hw_params->current_cc_support ||
++	    !ar->alpha2[0] || !ar->alpha2[1])
++		return;
++
++	memcpy(&arg.alpha2, ar->alpha2, 2);
++	reinit_completion(&ar->regd_update_completed);
++	ret = ath12k_wmi_send_set_current_country_cmd(ar, &arg);
++	if (ret)
++		ath12k_warn(ar->ab, "failed to restore country code %c%c: %d\n",
++			    ar->alpha2[0], ar->alpha2[1], ret);
++}
++
+ int ath12k_mac_op_start(struct ieee80211_hw *hw)
+ {
+ 	struct ath12k_hw *ah = ath12k_hw_to_ah(hw);
+ 	struct ath12k *ar;
++	bool from_off;
+ 	int ret, i;
+ 
+ 	if (ath12k_ftm_mode)
+@@ -9966,6 +9990,7 @@
+ 
+ 	guard(mutex)(&ah->hw_mutex);
+ 
++	from_off = ah->state == ATH12K_HW_STATE_OFF;
+ 	switch (ah->state) {
+ 	case ATH12K_HW_STATE_OFF:
+ 		ah->state = ATH12K_HW_STATE_ON;
+@@ -9994,6 +10019,10 @@
+ 		}
+ 	}
+ 
++	if (from_off)
++		for_each_ar(ah, ar, i)
++			ath12k_mac_restore_user_country(ar);
++
+ 	return 0;
+ 
+ fail_start:

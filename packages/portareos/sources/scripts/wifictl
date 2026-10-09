@@ -29,7 +29,6 @@ DEFAULT_CHAN="6"
 
 SSID="${2:-$(get_setting wifi.ssid 2>/dev/null)}"
 PSK="${3:-$(get_setting wifi.key 2>/dev/null)}"
-COUNTRY="${4:-$(get_setting wifi.country | tr -d '[:space:]' 2>/dev/null)}"
 
 if [ "${WIFI_TYPE}" = "1" ]; then
   SSID="NETPLAY_AP"
@@ -52,7 +51,8 @@ wait_for_wifi() {
     iwctl device list | grep -q "${WIFI_DEV}" && break
     sleep 1
   done
-  [ -n "${COUNTRY}" ] && iw reg set "${COUNTRY}"
+  # The regulatory domain follows the timezone's country.
+  /usr/lib/iw/setregdomain
 }
 
 # lists all wifi networks

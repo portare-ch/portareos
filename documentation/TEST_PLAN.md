@@ -462,7 +462,8 @@ Each row once. Wi-Fi off and on reconnects; Bluetooth pairs a pad; SSH off
 then on (`ssh.enabled` follows, `sshd` stops and starts); USB gadget
 mounts on a PC; buttons swaps A/B in the launcher; color as D6; profile
 changes the CPU governor; charging LED as L7; Language & region as L11,
-its time zone changing the clock under About; About shows version,
+its time zone changing the clock under About and the Wi-Fi country
+(`iw reg get`: Europe/Berlin is DE, UTC is 00); About shows version,
 password and IP; power reboots and shuts down.
 
 ### L3 Settings > Consoles (auto+human)
