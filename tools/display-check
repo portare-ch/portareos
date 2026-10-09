@@ -132,20 +132,27 @@ class Run:
 
     def pair_kicks(self, landed, limit=13000000):
         """Each kick of the kernel's LFC with the refresh it started: the
-        first vblank traced after it. A kick during the refresh before is
-        kept for its end, and the vblank is traced from the vsync interrupt,
-        which ran up to 0.7 ms late on the Nova, so the limit is the floor's
-        frame. A kick followed by none within it, or by one a commit landed
-        on, started nothing; one lost and followed by the panel's own
-        refresh shows as a kernel repeat of the floor's length."""
+        first vblank traced after it, one kick to a vblank. A kick during the
+        refresh before is kept for its end, and the vblank is traced from the
+        vsync interrupt, which ran up to 0.7 ms late on the Nova, so the
+        limit is the floor's frame. A kick whose vblank a commit landed on,
+        or none came within the limit, started nothing; one whose vblank an
+        earlier kick already has is a duplicate."""
+        taken, by_kick = set(landed), set()
         for k in self.kicks:
-            k['vblank'] = None
+            k['vblank'], k['duplicate'] = None, False
             if not k['kicked']:
                 continue
             i = bisect.bisect_left(self.vb_hdr, k['t'])
-            if i < len(self.vblanks) and self.vblanks[i][1] not in landed and \
-                    self.vblanks[i][0] - k['t'] < limit:
-                k['vblank'] = self.vblanks[i]
+            if i == len(self.vblanks) or self.vblanks[i][0] - k['t'] >= limit:
+                continue
+            v = self.vblanks[i]
+            if v[1] in taken:
+                k['duplicate'] = v[1] in by_kick
+                continue
+            taken.add(v[1])
+            by_kick.add(v[1])
+            k['vblank'] = v
 
 
 def pct(values, p):
@@ -240,9 +247,16 @@ def main():
     # and how far from its place on the period it went.
     if run.kicks:
         kicked = [k for k in run.kicks if k['kicked']]
-        print('kernel repeats: %d kicked, %d started a refresh, %d skipped for a frame kicked off first'
-              % (len(kicked), len(kicks), len(run.kicks) - len(kicked)))
+        dup = sum(1 for k in kicked if k['duplicate'])
+        print('kernel repeats: %d kicked, %d started a refresh, %d a refresh another kick had, '
+              '%d none; %d skipped for a frame kicked off first'
+              % (len(kicked), len(kicks), dup, len(kicked) - len(kicks) - dup, len(run.kicks) - len(kicked)))
         print('  kick to vblank, ms:', stats([(k['vblank'][0] - k['t']) / 1e6 for k in kicks]))
+        # A kick lost and followed by the panel's own refresh at the floor
+        # pairs like one that started it; the refresh's length tells them apart.
+        floor = 1000 / a.floor_hz - 0.1
+        print('  kernel repeats a floor\'s length after the refresh before (perhaps the panel\'s own): %d'
+              % sum(1 for x in intervals['kernel'] if x >= floor))
         print('  kick after its place on the period, ms:', stats([(k['t'] - k['due']) / 1e6 for k in kicked]))
         if run.lfc_frames:
             counts = collections.Counter(f[4] for f in run.lfc_frames)
