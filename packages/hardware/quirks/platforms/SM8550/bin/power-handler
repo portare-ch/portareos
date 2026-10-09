@@ -10,6 +10,10 @@
 #   suspend switched off       -> blank the internal panel
 #   otherwise                  -> real suspend
 #
+# "idle" is the launcher's request after its menu sat dark and untouched for
+# system.sleepminutes: the same rules, and SSH in use besides. It answers 0
+# when the suspend is queued, 1 when it declines.
+#
 # The "never suspend on an external display" rule is what stops a docked
 # device powering its TV output down mid-session. The blank state is ours and
 # lives in one flag, which sleep.d tears down before any real suspend so the
@@ -52,8 +56,10 @@ EXTERNAL_DISPLAY="/usr/bin/external-display"
 # launcher drives the one connector it opened, and that is the panel.
 frontend_power() {
   local pid
-  pid=$(pidof portarelauncher 2>/dev/null) || return 1
-  [ -n "${pid}" ] || return 1
+  # The service's main process rather than pidof: a test build run from a
+  # drop-in has another file name, and pidof matches that, not the comm.
+  pid=$(systemctl show -p MainPID --value portarelauncher 2>/dev/null)
+  case "${pid}" in ''|0|*[!0-9]*) return 1 ;; esac
   case "${1}" in
     off) kill -USR1 ${pid} 2>/dev/null ;;
     on)  kill -USR2 ${pid} 2>/dev/null ;;
@@ -103,6 +109,40 @@ POWER_LED="/sys/class/leds/power-led"
 # what blanks and unblanks the panel, and a process under SIGSTOP cannot
 # handle the signal that would turn the screen back on.
 
+# SSH in use: a remote command, scp or rsync runs as "sshd-session:
+# user@notty" for as long as it lasts, and an interactive login holds a pty
+# whose access time moves with what is typed into it (the kernel updates it
+# in 8 s steps). A login nobody typed into for the sleep time is not in use.
+ssh_in_use() {
+  local idle_s="${1}" p t now
+  for p in $(pidof sshd-session 2>/dev/null); do
+    grep -q '@notty' /proc/${p}/cmdline 2>/dev/null && return 0
+  done
+  now=$(date +%s)
+  for t in /dev/pts/[0-9]*; do
+    [ -e "${t}" ] || continue
+    [ $(( now - $(stat -c %X "${t}") )) -lt "${idle_s}" ] && return 0
+  done
+  return 1
+}
+
+# Dark screen with the blue LED, at request time: sleep.d does not light the
+# sleep indication until after the WiFi teardown, seconds later, so a press
+# looks dead and invites a second press that wakes the device. Safe on an
+# aborted suspend: resume re-powers the panel and the post hooks restore
+# brightness, and the same restore runs on a failed sleep.
+suspend_now() {
+  if [ -d "${POWER_LED}" ]; then
+    echo none >"${POWER_LED}/trigger"
+    echo 0 0 255 >"${POWER_LED}/multi_intensity"
+    echo 255 >"${POWER_LED}/brightness"
+  fi
+  for BL in /sys/class/backlight/*/brightness; do
+    [ -f "${BL}" ] && echo 0 >"${BL}"
+  done
+  systemctl suspend
+}
+
 case "$1" in
   power)
     # The blank is ours, so a press always ends it first. This also covers the
@@ -145,18 +185,32 @@ case "$1" in
     fi
 
     ${DEBUG} && log $0 "Suspending."
-    if [ -d "${POWER_LED}" ]; then
-      echo none >"${POWER_LED}/trigger"
-      echo 0 0 255 >"${POWER_LED}/multi_intensity"
-      echo 255 >"${POWER_LED}/brightness"
+    suspend_now
+    ;;
+
+  idle)
+    # Blanked by the key while docked or with suspend off: the user chose
+    # a dark screen over sleep, and the rules below would say the same.
+    if [ -e "${BLANK_FLAG}" ]; then
+      exit 1
     fi
-    # Dark screen with the blue LED, at press time. Safe on an aborted
-    # suspend: resume re-powers the panel and the post hooks restore
-    # brightness, and the same restore runs on a failed sleep.
-    for BL in /sys/class/backlight/*/brightness; do
-      [ -f "${BL}" ] && echo 0 >"${BL}"
-    done
-    systemctl suspend
+    if [ -S "${PORTAMP_SOCK}" ] &&
+       echo '{"command":["get_property","pid"]}' |
+       socat -t1 - "UNIX-CONNECT:${PORTAMP_SOCK}" >/dev/null 2>&1; then
+      exit 1
+    fi
+    if external_display connected ||
+       [ "$(get_setting system.suspendmode)" = "off" ]; then
+      exit 1
+    fi
+    SLEEP_MIN=$(get_setting system.sleepminutes)
+    case "${SLEEP_MIN}" in ''|*[!0-9]*) SLEEP_MIN=5 ;; esac
+    if ssh_in_use $(( SLEEP_MIN * 60 )); then
+      ${DEBUG} && log $0 "Idle, but SSH is in use: not sleeping."
+      exit 1
+    fi
+    ${DEBUG} && log $0 "Idle for the sleep time, suspending."
+    suspend_now
     ;;
 
   release)
@@ -169,6 +223,11 @@ case "$1" in
       rm -f "${BLANK_FLAG}"
       external_display unblank
     fi
+    # The launcher's own idle blank holds the CRTC off the same way, and
+    # the key suspends from it as from a lit menu. Have it present again,
+    # under the backlight the key or the idle request already darkened; a
+    # lit menu only redraws.
+    frontend_power on
 
     ;;
 
