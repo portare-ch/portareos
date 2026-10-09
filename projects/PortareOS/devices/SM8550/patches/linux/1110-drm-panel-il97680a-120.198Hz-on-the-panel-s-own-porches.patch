@@ -1,0 +1,90 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] drm/panel: il97680a: 120.198Hz on the panel's own porches
+
+The 120.198Hz mode carried a 142-line back porch, vtotal 1116 at
+174651kHz, for black frame insertion's flip window. The panel does not
+lock to that frame: it scans out of its own memory at about 120.14Hz,
+and the frames arriving from the DSI link land in that memory at a
+drifting point of its scan. The DPU's CRC shows every refresh whole; a
+bar sweeping the screen tears every few seconds at 59.94fps, every
+seven at 60, and all the time at 50fps under variable refresh, the
+mode variable refresh runs on.
+
+The same frame as every other mode, vtotal 1001 at 156654kHz, is
+120.197775Hz, +1.2ppm, and the panel follows it. Measured on the
+120.000Hz mode, which has those porches: no tear at 59.94 or 50fps,
+every frame shown twice.
+---
+--- a/drivers/gpu/drm/panel/panel-ilitek-il97680a.c
++++ b/drivers/gpu/drm/panel/panel-ilitek-il97680a.c
+@@ -223,50 +223,19 @@
+ 		 *                                       every 3.2 seconds
+ 		 *   120.197628 / 60.0988 = 2.0000   <- this one
+ 		 *
+-		 *   174651000 / (1302 * 1116) = 120.197628
++		 *   156654000 / (1302 * 1001) = 120.197775, +1.2ppm
+ 		 *
+-		 * Exact, to the six figures a whole-kHz pixel clock can express:
+-		 * 0.00ppm, a frame of drift every 823 hours. Every other mode in
+-		 * this table is a near miss of one to two ppm, and this is the
+-		 * only one above 120Hz.
+-		 *
+-		 * The back porch is 142 lines rather than the 27 every other mode
+-		 * here carries, and that is the other half of the point. Black
+-		 * frame insertion flips on every refresh instead of every second
+-		 * one, so it meets the vertical blanking deadline twice as often,
+-		 * and the DPU begins fetching the next frame inside that window.
+-		 * At 27 lines the window is 340.8us; measured with BFI on snes9x,
+-		 * about three flips in 10,800 missed it, and a missed flip
+-		 * inverts the light/dark alternation and shows as a black band
+-		 * rolling down the panel.
+-		 *
+-		 *    41 lines / 8.31126us a line =  340.8us
+-		 *   156 lines / 7.45489us a line = 1163.0us
+-		 *
+-		 * 3.41x the margin, and with no drift the frontend has no
+-		 * correction to make either, so the BFI cadence holds on its own
+-		 * rather than being re-established every couple of hours.
+-		 *
+-		 * The cost is DSI bit clock: 1047.9MHz a lane against 939.9, up
+-		 * 11.5%. That was a test when this mode was added and it has
+-		 * passed - the panel takes it, and nothing since measures it
+-		 * costing anything. tear-test counts no torn frame from the
+-		 * DPU's per-frame CRC here, over synthetic flips or over a real
+-		 * game, and dsi_err_worker stays silent. 1306 x 1005 at
+-		 * 157763kHz would give the clock back for +0.048ppm and a frame
+-		 * of drift every 48 hours instead of 823; it is not done because
+-		 * the accuracy is measured and the saving is not.
+-		 *
+-		 * vtotal has to be even. The ideal clock is about 156497.31Hz per
+-		 * line, so an even vtotal lands near a whole kHz and an odd one
+-		 * near the half, which is the worst place to round from: 1041
+-		 * would be +1.8ppm where 1042 is -1.2.
+-		 *
+-		 * None of this transfers to the 119.88 mode. Its exactness needs
+-		 * htotal * vtotal divisible by 1001 and vtotal supplies the 11
+-		 * and the 13, so it only grows in steps of 143 lines.
++		 * The same 1001-line frame as every other mode here, the panel's
++		 * own porches. A wider vertical blanking, vtotal 1116 at 174651kHz
++		 * and exact to 0.00ppm, was tried for black frame insertion's
++		 * flip window, and the panel does not lock to it: it scans from
++		 * its own memory at about 120.14Hz instead. The DPU's CRC cannot
++		 * see that; a bar sweeping the screen tears every few seconds at
++		 * 59.94fps and all the time at 50fps under variable refresh
++		 * (#623). With these porches it follows the input, the stretched
++		 * front porch of variable refresh included.
+ 		 */
+-		.clock = 174651,
++		.clock = 156654,
+ 		.hdisplay = 1280,
+ 		.hsync_start = 1280 + 12,
+ 		.hsync_end = 1280 + 12 + 2,
+@@ -274,7 +243,7 @@
+ 		.vdisplay = 960,
+ 		.vsync_start = 960 + 12,
+ 		.vsync_end = 960 + 12 + 2,
+-		.vtotal = 960 + 12 + 2 + 142,
++		.vtotal = 960 + 12 + 2 + 27,
+ 	},
+ 	{
+ 		/*
