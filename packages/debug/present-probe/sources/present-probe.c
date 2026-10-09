@@ -27,6 +27,8 @@
 //   mode=HZ     the display mode nearest HZ (default: the fastest)
 //   recreate=S  replace the swapchain every S seconds (oldSwapchain)
 //   switch=S    with several rates, how long each lasts (default 5)
+//   bar=PX      a full-height white bar, 64 px wide, moving PX pixels a frame:
+//               a panel that tears shows it broken at a line
 //
 // Every frame draws its number as a barcode, so each frame's pixels, and the
 // DPU's CRC of them, differ from the last.
@@ -37,7 +39,7 @@
 // none (read, asked, got, result, then the record's fields). Times are
 // CLOCK_MONOTONIC in ns.
 //
-// usage: present-probe OUT SECONDS own|observe|partial cadence:N,N,..|rate:HZ[,HZ..] [read=..] [late=E:MS] [mode=HZ] [recreate=S] [switch=S]
+// usage: present-probe OUT SECONDS own|observe|partial cadence:N,N,..|rate:HZ[,HZ..] [read=..] [late=E:MS] [mode=HZ] [recreate=S] [switch=S] [bar=PX]
 
 #define _GNU_SOURCE
 #include <errno.h>
@@ -53,6 +55,7 @@
 #define MAX_IMAGES 8
 #define BLOCK 24
 #define BITS 24
+#define BAR_W 64
 
 enum mode { MODE_OWN, MODE_OBSERVE, MODE_PARTIAL };
 
@@ -91,6 +94,7 @@ static VkCommandBuffer cmds[MAX_IMAGES];
 static VkFence fences[MAX_IMAGES];
 static VkSemaphore acquired[MAX_IMAGES + 1], rendered[MAX_IMAGES];
 static VkBuffer staging;
+static int bar_speed;
 static VkDeviceMemory staging_mem;
 
 static PFN_vkGetPastPresentationTimingGOOGLE get_past_timing;
@@ -355,10 +359,12 @@ static void recreate_swapchain(void)
 
 static void create_staging(void)
 {
-	// A white block and a black one, copied into place for each bit.
+	// A white block and a black one, copied into place for each bit, and
+	// behind them the bar's white column.
+	VkDeviceSize bar_px = bar_speed ? (VkDeviceSize)BAR_W * extent.height : 0;
 	VkBufferCreateInfo bci = {
 		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		.size = 2 * BLOCK * BLOCK * 4,
+		.size = (2 * BLOCK * BLOCK + bar_px) * 4,
 		.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 	};
 	VK(vkCreateBuffer(device, &bci, NULL, &staging));
@@ -378,6 +384,8 @@ static void create_staging(void)
 		px[i] = 0xffffffff;
 		px[BLOCK * BLOCK + i] = 0xff000000;
 	}
+	for (VkDeviceSize i = 0; i < bar_px; i++)
+		px[2 * BLOCK * BLOCK + i] = 0xffffffff;
 	vkUnmapMemory(device, staging_mem);
 }
 
@@ -435,6 +443,15 @@ static uint32_t render(uint32_t frame, uint32_t slot)
 		};
 	}
 	vkCmdCopyBufferToImage(cb, staging, images[img], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, BITS, regions);
+	if (bar_speed) {
+		VkBufferImageCopy bar = {
+			.bufferOffset = 2 * BLOCK * BLOCK * 4,
+			.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
+			.imageOffset = { (int32_t)((frame * (uint64_t)bar_speed) % (extent.width - BAR_W)), 0, 0 },
+			.imageExtent = { BAR_W, extent.height, 1 },
+		};
+		vkCmdCopyBufferToImage(cb, staging, images[img], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bar);
+	}
 	barrier(cb, images[img], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 		VK_ACCESS_TRANSFER_WRITE_BIT, 0,
 		VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
@@ -599,7 +616,7 @@ int main(int argc, char **argv)
 {
 	if (argc < 5) {
 		fprintf(stderr, "usage: present-probe OUT SECONDS own|observe|partial cadence:N,N,..|rate:HZ[,HZ..]"
-			" [read=N|count|none] [late=E:MS] [mode=HZ] [recreate=S] [switch=S]\n");
+			" [read=N|count|none] [late=E:MS] [mode=HZ] [recreate=S] [switch=S] [bar=PX]\n");
 		return 2;
 	}
 	const char *out = argv[1];
@@ -656,6 +673,8 @@ int main(int argc, char **argv)
 			mode_mhz = (uint32_t)(atof(argv[i] + 5) * 1000 + 0.5);
 		else if (!strncmp(argv[i], "recreate=", 9))
 			recreate_s = atof(argv[i] + 9);
+		else if (!strncmp(argv[i], "bar=", 4))
+			bar_speed = atoi(argv[i] + 4);
 		else if (!strncmp(argv[i], "switch=", 7))
 			switch_s = atof(argv[i] + 7);
 	}
