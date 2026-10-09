@@ -104,6 +104,9 @@ fi
 echo "Sync modules..." >>${LOG}
 tocon "Update tool modules..."
 rsync -a /usr/config/modules/* /storage/.config/modules/
+# The sync only adds. A tool the image dropped would stay in Tools and fail
+# when started, so remove those by name.
+rm -f /storage/.config/modules/GPcal.sh
 cp -f /usr/config/retroarch/retroarch-core-options.cfg /storage/.config/retroarch/retroarch-core-options.cfg
 
 # ...and retroarch.cfg itself, which was not refreshed here and so froze at

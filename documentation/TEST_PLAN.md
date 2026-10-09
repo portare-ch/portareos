@@ -516,16 +516,12 @@ appearing and die for the session (#446).
 Start mpv (it has no hotkey of its own); Home + Start returns to the
 launcher within three seconds.
 
-### L9 Stick and trigger calibration (auto+human)
+### L9 A saved stick calibration (auto)
 
-Human: Tools > Calibrate Gamepad starts and shows both sticks moving (it
-finds the pad by its evdev name, "AYN Odin2 Gamepad"). Calibrate, Save,
-quit, reboot: the sticks read centred in the launcher and in a game, and
-a full deflection reaches the edge in RetroArch's input test. Auto after
-the save:
+GPcal is gone, but a calibration saved with it still runs at boot from
+`/storage/.config/autostart/GPcal.sh`. Where one exists:
 
 ```
-ls -l /storage/.config/autostart/GPcal.sh          # executable
 grep -o 'echo [-0-9]* > [^ ]*' /storage/.config/autostart/GPcal.sh | \
   while read -r _ v _ f; do [ "$(cat $f)" = "$v" ] || echo "MISMATCH $f"; done
 ```
