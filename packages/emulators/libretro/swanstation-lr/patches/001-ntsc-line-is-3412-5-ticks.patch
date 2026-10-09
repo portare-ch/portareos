@@ -1,5 +1,5 @@
 diff --git a/src/core/gpu.cpp b/src/core/gpu.cpp
-index 24c38e2..e4709bf 100644
+index bd443b7..7d81eea 100644
 --- a/src/core/gpu.cpp
 +++ b/src/core/gpu.cpp
 @@ -72,6 +72,7 @@ void GPU::Reset(bool clear_vram)
@@ -10,7 +10,7 @@ index 24c38e2..e4709bf 100644
    m_crtc_state.interlaced_field = 0;
    m_crtc_state.interlaced_display_field = 0;
    SoftReset();
-@@ -455,11 +456,21 @@ void GPU::SynchronizeCRTC()
+@@ -503,11 +504,21 @@ void GPU::SynchronizeCRTC()
  float GPU::ComputeVerticalFrequency() const
  {
    const CRTCState& cs = m_crtc_state;
@@ -35,7 +35,7 @@ index 24c38e2..e4709bf 100644
  }
  
  float GPU::GetDisplayAspectRatio() const
-@@ -513,6 +524,7 @@ void GPU::UpdateCRTCConfig()
+@@ -561,6 +572,7 @@ void GPU::UpdateCRTCConfig()
      cs.vertical_total = PAL_TOTAL_LINES;
      cs.current_scanline %= PAL_TOTAL_LINES;
      cs.horizontal_total = PAL_TICKS_PER_LINE;
@@ -43,7 +43,7 @@ index 24c38e2..e4709bf 100644
      cs.horizontal_sync_start = PAL_HSYNC_TICKS;
      cs.current_tick_in_scanline %= System::ScaleTicksToOverclock(PAL_TICKS_PER_LINE);
    }
-@@ -521,6 +533,7 @@ void GPU::UpdateCRTCConfig()
+@@ -569,6 +581,7 @@ void GPU::UpdateCRTCConfig()
      cs.vertical_total = NTSC_TOTAL_LINES;
      cs.current_scanline %= NTSC_TOTAL_LINES;
      cs.horizontal_total = NTSC_TICKS_PER_LINE;
@@ -51,7 +51,7 @@ index 24c38e2..e4709bf 100644
      cs.horizontal_sync_start = NTSC_HSYNC_TICKS;
      cs.current_tick_in_scanline %= System::ScaleTicksToOverclock(NTSC_TICKS_PER_LINE);
    }
-@@ -552,6 +565,7 @@ void GPU::UpdateCRTCConfig()
+@@ -600,6 +613,7 @@ void GPU::UpdateCRTCConfig()
      cs.vertical_total = NTSC_TOTAL_LINES;
      cs.current_scanline %= NTSC_TOTAL_LINES;
      cs.horizontal_total = NTSC_TICKS_PER_LINE;
@@ -59,7 +59,7 @@ index 24c38e2..e4709bf 100644
      cs.current_tick_in_scanline %= NTSC_TICKS_PER_LINE;
    }
  
-@@ -559,6 +573,12 @@ void GPU::UpdateCRTCConfig()
+@@ -607,6 +621,12 @@ void GPU::UpdateCRTCConfig()
      static_cast<uint16_t>(System::ScaleTicksToOverclock(static_cast<TickCount>(cs.horizontal_display_start)));
    cs.horizontal_display_end =
      static_cast<uint16_t>(System::ScaleTicksToOverclock(static_cast<TickCount>(cs.horizontal_display_end)));
@@ -72,7 +72,7 @@ index 24c38e2..e4709bf 100644
    cs.horizontal_total = static_cast<uint16_t>(System::ScaleTicksToOverclock(static_cast<TickCount>(cs.horizontal_total)));
  
    System::SetVerticalFrequency(ComputeVerticalFrequency());
-@@ -764,7 +784,7 @@ void GPU::UpdateCRTCTickEvent()
+@@ -818,7 +838,7 @@ void GPU::UpdateCRTCTickEvent()
      lines_until_event = std::min(lines_until_event, g_timers.GetTicksUntilIRQ(HBLANK_TIMER_INDEX));
  
    TickCount ticks_until_event =
@@ -81,7 +81,7 @@ index 24c38e2..e4709bf 100644
    if (g_timers.IsExternalIRQEnabled(DOT_TIMER_INDEX))
    {
      const TickCount dots_until_irq = g_timers.GetTicksUntilIRQ(DOT_TIMER_INDEX);
-@@ -779,7 +799,7 @@ void GPU::UpdateCRTCTickEvent()
+@@ -835,7 +855,7 @@ void GPU::UpdateCRTCTickEvent()
  bool GPU::IsCRTCScanlinePending() const
  {
    const TickCount ticks = (GetPendingCRTCTicks() + m_crtc_state.current_tick_in_scanline);
@@ -90,7 +90,7 @@ index 24c38e2..e4709bf 100644
  }
  
  bool GPU::IsCommandCompletionPending() const
-@@ -804,7 +824,7 @@ void GPU::CRTCTickEvent(TickCount ticks)
+@@ -860,7 +880,7 @@ void GPU::CRTCTickEvent(TickCount ticks)
      }
    }
  
@@ -99,7 +99,7 @@ index 24c38e2..e4709bf 100644
    {
      // short path when we execute <1 line.. this shouldn't occur often.
      const bool old_hblank = m_crtc_state.in_hblank;
-@@ -817,8 +837,15 @@ void GPU::CRTCTickEvent(TickCount ticks)
+@@ -873,8 +893,15 @@ void GPU::CRTCTickEvent(TickCount ticks)
      return;
    }
  
@@ -118,18 +118,18 @@ index 24c38e2..e4709bf 100644
    const bool old_hblank = m_crtc_state.in_hblank;
    const bool new_hblank = (m_crtc_state.current_tick_in_scanline >= m_crtc_state.horizontal_sync_start);
 diff --git a/src/core/gpu.h b/src/core/gpu.h
-index 0312a7f..eccdd4f 100644
+index 0a0959f..0562676 100644
 --- a/src/core/gpu.h
 +++ b/src/core/gpu.h
-@@ -40,6 +40,7 @@ public:
- 
-   static constexpr uint32_t MAX_FIFO_SIZE = 4096, DOT_TIMER_INDEX = 0, HBLANK_TIMER_INDEX = 1;
+@@ -46,6 +46,7 @@ public:
+   /* DMA time one command batch may take before it counts as GPU time; see ExecuteCommands(). */
+   static constexpr TickCount MAX_DMA_TICKS_PER_BATCH = 65536;
  
 +  // An NTSC line is 227.5 subcarrier periods, 3412.5 GPU ticks: lines alternate between 3413 and 3412 ticks.
    static constexpr uint16_t NTSC_TICKS_PER_LINE = 3413, NTSC_HSYNC_TICKS = 200, NTSC_TOTAL_LINES = 263,
                         PAL_TICKS_PER_LINE = 3406,
                         PAL_HSYNC_TICKS = 200, // actually one more on odd lines
-@@ -113,6 +114,13 @@ public:
+@@ -122,6 +123,13 @@ public:
    virtual void UpdateSettings();
  
    float ComputeVerticalFrequency() const;
@@ -143,7 +143,7 @@ index 0312a7f..eccdd4f 100644
    float GetDisplayAspectRatio() const;
  
    // gpu_hw_d3d11.cpp
-@@ -448,6 +456,8 @@ protected:
+@@ -457,6 +465,8 @@ protected:
  
      uint16_t horizontal_total;
      uint16_t horizontal_sync_start; // <- not currently saved to state, so we don't have to bump the version
