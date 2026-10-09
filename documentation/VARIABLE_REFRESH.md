@@ -538,8 +538,58 @@ Turnip build with mesa-008 for both sides (`VK_DRIVER_FILES`), only
   of the kind seen before from the display side. Kernel triggers went a
   median 0.01 ms and a p99 0.11 ms after their place on the grid.
 
-Not measured yet: games through RetroArch, longer runs, a pause and
-resume, CPU wakeups and power.
+### On the final kernel
+
+2026-10-09, kernel-only build of PR #608 at 5661f21, the same Turnip
+with mesa-008 on both sides.
+
+**Games**, 10 minutes each, flip traces through runemu (Mesa's runs on
+the kernel before, whose Mesa path is the same):
+
+| | Frames shown twice | Scanout - target, median / p95 | Presents late / committed after target | Checks failed |
+|---|---|---|---|---|
+| Super Mario World, Mesa | 35986 of 35988 | 3.88 / 8.82 ms | 339 / 1325 | 0 |
+| Super Mario World, kernel | 35963 of 35967 | 3.08 / 4.88 ms | 282 / 311 | 0 |
+| Tekken 3, Mesa | 35803 of 35811 | 0.65 / 2.10 ms | 564 / 781 | 1 |
+| Tekken 3, kernel | 35781 of 35793 | 0.66 / 1.87 ms | 540 / 587 | 2 |
+
+Tekken 3's failures on the kernel: six phase jumps in the first 2.2 s,
+while the grid is still being found as the game boots (Mesa has targets
+from the first frame), and two later ones with the plane programmed 4.1
+and 2.9 ms after the commit, the display-side kind Mesa's run had too.
+No trigger shared a refresh with another, and the run a refresh behind
+that the build before had for six minutes did not come back. Twice a
+frame came early off the grid, once while booting and once after a
+stall of two 18.6 ms frames, which the grid took for a new rate; its
+repeat went at once, held for the refresh's end, and added nothing.
+
+**Rate changes in one session**, present-probe `rate:A,B switch=5`,
+40 s: after every switch the kernel's count was right two frames on,
+and every frame was shown k times from 0 to 5 frames on (Mesa, from its
+targets: 0 to 2). The build before kept 30 Hz's count after every switch
+to 60 Hz.
+
+**Below 17 Hz without `vblank-rate`** (`--no-hold`): at 12 Hz 345 of
+349 frames got all 9 repeats (6 to 8 on the build before), at 15 Hz 436
+of 437 all 7.
+
+**Pause and menu**, 100 cycles each through RetroArch's network
+commands, both paths: every run ended cleanly, with no DPU or DSI error.
+RetroArch keeps presenting while paused, about every 16 ms but 15 to
+18 ms apart; the kernel's grid then settles just under two refreshes a
+frame and stops repeating, which shows nothing since the paused picture
+does not change, and after a resume takes a frame or two to repeat
+again, where Mesa, following the targets, does not.
+
+**Power and CPU**, present-probe at 30 Hz (k = 4), no tracing, on
+battery, 60 s each, in the order Mesa, kernel, Mesa, kernel:
+
+| | Power, W (sd of 0.5 s samples) | Timer irq/s | All irq/s | Context switches/s | CPU busy, % of one core | present-probe CPU |
+|---|---|---|---|---|---|---|
+| Mesa | 1.737 (0.093), 1.712 (0.099) | 4270, 4214 | 6393, 6340 | 5713, 5694 | 22.6, 24.2 | 2.13, 2.16 % |
+| kernel | 1.620 (0.090), 1.628 (0.109) | 3879, 3962 | 5775, 5866 | 4948, 4953 | 19.9, 20.3 | 1.23, 1.21 % |
+
+About 0.1 W less with the kernel's repeats, at 90 repeats a second.
 
 ## The launch
 
