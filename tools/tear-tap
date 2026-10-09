@@ -9,25 +9,27 @@
 # CLOCK_MONOTONIC times, the trace's clock, next to display-trace's record
 # of the same run.
 #
-#   tools/tear-tap root@nova NAME SECONDS [vrr|fixed|ab] [rate=HZ] [bar=PX]
+#   tools/tear-tap root@nova NAME SECONDS [vrr|fixed|ab] [rate=HZ] [bar=PX] [mode=HZ]
 #
 # vrr (default) presents HZ (default 59.94) with variable refresh; fixed
 # holds each frame two refreshes on the mode nearest twice HZ. ab runs both
 # in random order as NAME-1 and NAME-2 and names them only at the end, so
 # what is reported is not what was expected. bar=PX is the bar's step a
-# frame (default 16). Writes display-trace's NAME.* and NAME.taps, one tap
-# a line. PROBE=path runs another present-probe build.
+# frame (default 16). mode=HZ puts variable refresh on the mode nearest HZ
+# rather than the fastest. Writes display-trace's NAME.* and NAME.taps, one
+# tap a line. PROBE=path runs another present-probe build.
 #
 #   tools/tear-tap root@nova tear 60 ab
 
-[ $# -lt 3 ] && { sed -n '5,20p' "$0" | cut -c3-; exit 1; }
+[ $# -lt 3 ] && { sed -n '5,21p' "$0" | cut -c3-; exit 1; }
 HOST=$1 NAME=$2 SECS=$3; shift 3
-MODE=vrr RATE=59.94 BAR=16
+MODE=vrr RATE=59.94 BAR=16 PMODE=
 for a in "$@"; do
   case "${a}" in
     vrr|fixed|ab) MODE=${a} ;;
     rate=*) RATE=${a#rate=} ;;
     bar=*) BAR=${a#bar=} ;;
+    mode=*) PMODE=${a} ;;
     *) echo "unknown argument ${a}" >&2; exit 1 ;;
   esac
 done
@@ -61,7 +63,7 @@ one() {
   sleep 1
   if [ "${mode}" = vrr ]; then
     "${TRACE}" "${HOST}" "${name}" "${SECS}" -- env MESA_VK_WSI_DISPLAY_VRR=1 \
-      "${PROBE}" /tmp/tear-tap "$((SECS + 2))" observe "rate:${RATE}" "bar=${BAR}" >/dev/null
+      "${PROBE}" /tmp/tear-tap "$((SECS + 2))" observe "rate:${RATE}" "bar=${BAR}" ${PMODE} >/dev/null
   else
     hz=$(awk -v r="${RATE}" 'BEGIN { printf "%.3f", 2 * r }')
     "${TRACE}" "${HOST}" "${name}" "${SECS}" -- env MESA_VK_WSI_DISPLAY_VRR=0 \

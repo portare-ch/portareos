@@ -380,8 +380,9 @@ tools/tear-tap root@nova tear 60 ab
 `ab` runs variable refresh and fixed refresh one after the other in random
 order, as `tear-1` and `tear-2`, and only says which was which at the end.
 `vrr` or `fixed` runs one of them; `rate=HZ` sets the content rate (default
-59.94, fixed refresh then uses the mode nearest twice it) and `bar=PX` the
-bar's step a frame. Each run leaves display-trace's files and `NAME.taps`,
+59.94, fixed refresh then uses the mode nearest twice it), `bar=PX` the
+bar's step a frame and `mode=HZ` the mode variable refresh runs on (default
+the fastest). Each run leaves display-trace's files and `NAME.taps`,
 the tap times in `CLOCK_MONOTONIC` seconds, the trace's clock, and prints
 the gaps between taps. A reaction lags a tear by a few hundred
 milliseconds, so set taps against the trace with that margin; a steady gap
