@@ -1,0 +1,269 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] drm/panel: il97680a: the panel's own vertical timing for every mode
+
+Every mode carried 27 lines of vertical back porch, three more than the
+panel's own timing (Android's, for both of its rates: 12 lines of front
+porch, 2 of sync, 24 of back porch), so that 1302 x 1001 would make the
+119.88Hz mode exactly 120000/1001. The panel holds lock to that only
+while variable refresh stretches a frame by about 0.3ms; past it, it
+refreshes from its own memory and the frame arriving later tears. On
+998 lines it follows the stretch: at 50fps under variable refresh, a
+bar sweeping the screen tore on 1001 lines and not on 998, in a blind
+comparison and again on its own (#623).
+
+Every mode goes to 998 lines, its pixel clock recomputed for the rate
+its comment names; all are within 3.2ppm of it but the SNES mode,
+rounded up to +4.4ppm since variable refresh runs on it.
+---
+--- a/drivers/gpu/drm/panel/panel-ilitek-il97680a.c
++++ b/drivers/gpu/drm/panel/panel-ilitek-il97680a.c
+@@ -154,24 +154,25 @@
+ 		 * the content, and black frame insertion turns that correction
+ 		 * into a visible flash.
+ 		 *
+-		 * The rate is exact rather than near. refresh is
+-		 * clock * 1000 / (htotal * vtotal), so if htotal * vtotal is a
+-		 * multiple of 1001 then 120 * htotal * vtotal / 1001 is a whole
+-		 * number of kHz and the division comes back to 120000/1001 with
+-		 * nothing left over. 1001 is 7 x 11 x 13; htotal 1302 already
+-		 * carries the 7, and vtotal 1001 supplies the rest, which costs
+-		 * three extra lines of vertical back porch.
++		 * Every mode here has the panel's own vertical timing, Android's
++		 * for both its rates: 12 lines of front porch, 2 of sync and 24
++		 * of back porch, 998 lines. vtotal 1001 would make this rate
++		 * exact - 1001 is 7 x 11 x 13 and htotal 1302 carries the 7 -
++		 * and the three lines of back porch that costs were tried. The
++		 * panel then held lock only while variable refresh stretched a
++		 * frame by about 0.3ms: at 50fps a bar sweeping the screen tore
++		 * on 1001 lines and not on 998 (#623).
+ 		 *
+-		 *   156240000 / (1302 * 1001) = 119.88011988...
++		 *   155772000 / (1302 * 998) = 119.88031, +1.6ppm
+ 		 *
+-		 * so the frontend never has a correction to make for 59.94
+-		 * content and the BFI cadence holds indefinitely.
++		 * A frame in about 3 hours at 59.94, which the frontend's audio rate
++		 * control absorbs.
+ 		 *
+ 		 * drm_mode_vrefresh() still rounds this to 120, so the panel's
+ 		 * frame-rate register (0x60) is programmed 0x00 exactly as
+ 		 * before - see il97680a_rpnova_init_sequence().
+ 		 */
+-		.clock = 156240,
++		.clock = 155772,
+ 		.hdisplay = 1280,
+ 		.hsync_start = 1280 + 12,
+ 		.hsync_end = 1280 + 12 + 2,
+@@ -179,7 +180,7 @@
+ 		.vdisplay = 960,
+ 		.vsync_start = 960 + 12,
+ 		.vsync_end = 960 + 12 + 2,
+-		.vtotal = 960 + 12 + 2 + 27,
++		.vtotal = 960 + 12 + 2 + 24,
+ 	},
+ 	{
+ 		/*
+@@ -192,14 +193,14 @@
+ 		 *                                       every 2.3 seconds
+ 		 *   119.455046 / 59.7275 = 2.0000   <- this one
+ 		 *
+-		 *   155686000 / (1302 * 1001) = 119.45505...
++		 *   155219000 / (1302 * 998) = 119.45473
+ 		 *
+-		 * +0.4ppm from 2 x 59.7275. Same totals as the modes above,
++		 * -2.2ppm from 2 x 59.7275. Same totals as the modes above,
+ 		 * the pixel clock alone moves; drm_mode_vrefresh() rounds it to
+ 		 * 119, which is why the frame-rate register is chosen by class
+ 		 * (il97680a_rate_class()) rather than by that number.
+ 		 */
+-		.clock = 155686,
++		.clock = 155219,
+ 		.hdisplay = 1280,
+ 		.hsync_start = 1280 + 12,
+ 		.hsync_end = 1280 + 12 + 2,
+@@ -207,7 +208,7 @@
+ 		.vdisplay = 960,
+ 		.vsync_start = 960 + 12,
+ 		.vsync_end = 960 + 12 + 2,
+-		.vtotal = 960 + 12 + 2 + 27,
++		.vtotal = 960 + 12 + 2 + 24,
+ 	},
+ 	{
+ 		/*
+@@ -223,9 +224,13 @@
+ 		 *                                       every 3.2 seconds
+ 		 *   120.197628 / 60.0988 = 2.0000   <- this one
+ 		 *
+-		 *   156654000 / (1302 * 1001) = 120.197775, +1.2ppm
++		 *   156185000 / (1302 * 998) = 120.198154, +4.4ppm
+ 		 *
+-		 * The same 1001-line frame as every other mode here, the panel's
++		 * Rounded up, not to the nearest: variable refresh runs on this,
++		 * the fastest mode, and its refresh must be no longer than half a
++		 * frame of the fastest content, or that content falls behind.
++		 *
++		 * The same 998-line frame as every other mode here, the panel's
+ 		 * own porches. A wider vertical blanking, vtotal 1116 at 174651kHz
+ 		 * and exact to 0.00ppm, was tried for black frame insertion's
+ 		 * flip window, and the panel does not lock to it: it scans from
+@@ -235,7 +240,7 @@
+ 		 * (#623). With these porches it follows the input, the stretched
+ 		 * front porch of variable refresh included.
+ 		 */
+-		.clock = 156654,
++		.clock = 156185,
+ 		.hdisplay = 1280,
+ 		.hsync_start = 1280 + 12,
+ 		.hsync_end = 1280 + 12 + 2,
+@@ -243,7 +248,7 @@
+ 		.vdisplay = 960,
+ 		.vsync_start = 960 + 12,
+ 		.vsync_end = 960 + 12 + 2,
+-		.vtotal = 960 + 12 + 2 + 27,
++		.vtotal = 960 + 12 + 2 + 24,
+ 	},
+ 	{
+ 		/*
+@@ -257,9 +262,9 @@
+ 		 *                                       every 4.3 seconds
+ 		 *   119.652237 / 59.82610 = 2.0000   <- this one
+ 		 *
+-		 *   155943000 / (1302 * 1001) = 119.65224...
++		 *   155476000 / (1302 * 998) = 119.65252
+ 		 *
+-		 * +0.35ppm from 2 x 59.82610, a frame in about 8 hours.
++		 * +2.6ppm from 2 x 59.82610, a frame in about 2 hours.
+ 		 *
+ 		 * The NTSC PlayStation in 240p is the same rate: 263 lines of
+ 		 * 3412.5 GPU clocks at 53.693175MHz, 59.82610 too, since the
+@@ -267,7 +272,7 @@
+ 		 * it the core rounded the line to 3413 clocks, ran at 59.8173,
+ 		 * and had a 155920kHz mode of its own here.
+ 		 */
+-		.clock = 155943,
++		.clock = 155476,
+ 		.hdisplay = 1280,
+ 		.hsync_start = 1280 + 12,
+ 		.hsync_end = 1280 + 12 + 2,
+@@ -275,7 +280,7 @@
+ 		.vdisplay = 960,
+ 		.vsync_start = 960 + 12,
+ 		.vsync_end = 960 + 12 + 2,
+-		.vtotal = 960 + 12 + 2 + 27,
++		.vtotal = 960 + 12 + 2 + 24,
+ 	},
+ 	{
+ 		/*
+@@ -288,15 +293,15 @@
+ 		 *                                        every 28 seconds
+ 		 *   119.845592 / 59.92274 = 2.00000   <- this one
+ 		 *
+-		 *   156195000 / (1302 * 1001) = 119.84559...
++		 *   155727000 / (1302 * 998) = 119.84568
+ 		 *
+-		 * +0.9ppm from 2 x 59.92274. The closest neighbour of the 119.88
++		 * +1.7ppm from 2 x 59.92274. The closest neighbour of the 119.88
+ 		 * mode, 0.035Hz below it; setsettings asks for a mode within
+ 		 * 0.002Hz and RetroArch takes the closest, so neither is confused
+ 		 * for the other. PicoDrive (32X) reports a flat 60 and stays on
+ 		 * 119.88.
+ 		 */
+-		.clock = 156195,
++		.clock = 155727,
+ 		.hdisplay = 1280,
+ 		.hsync_start = 1280 + 12,
+ 		.hsync_end = 1280 + 12 + 2,
+@@ -304,7 +309,7 @@
+ 		.vdisplay = 960,
+ 		.vsync_start = 960 + 12,
+ 		.vsync_end = 960 + 12 + 2,
+-		.vtotal = 960 + 12 + 2 + 27,
++		.vtotal = 960 + 12 + 2 + 24,
+ 	},
+ 	{
+ 		/*
+@@ -319,13 +324,13 @@
+ 		 *                                     every 0.7 seconds
+ 		 *   118.360134 / 59.18 = 2.00000   <- this one
+ 		 *
+-		 *   154259000 / (1302 * 1001) = 118.36013...
++		 *   153797000 / (1302 * 998) = 118.36038
+ 		 *
+-		 * +1.1ppm from 2 x 59.18. The lowest pixel clock in the table,
++		 * +3.2ppm from 2 x 59.18. The lowest pixel clock in the table,
+ 		 * 1.27% below the 119.88 mode's; drm_mode_vrefresh() rounds it to
+ 		 * 118 and il97680a_rate_class() still puts it in the 120Hz class.
+ 		 */
+-		.clock = 154259,
++		.clock = 153797,
+ 		.hdisplay = 1280,
+ 		.hsync_start = 1280 + 12,
+ 		.hsync_end = 1280 + 12 + 2,
+@@ -333,7 +338,7 @@
+ 		.vdisplay = 960,
+ 		.vsync_start = 960 + 12,
+ 		.vsync_end = 960 + 12 + 2,
+-		.vtotal = 960 + 12 + 2 + 27,
++		.vtotal = 960 + 12 + 2 + 24,
+ 	},
+ 	{
+ 		/*
+@@ -346,11 +351,11 @@
+ 		 *                                        every 1.5 seconds
+ 		 *   119.199541 / 59.59990 = 2.00000   <- this one
+ 		 *
+-		 *   155353000 / (1302 * 1001) = 119.19954...
++		 *   154888000 / (1302 * 998) = 119.20000
+ 		 *
+-		 * -2.3ppm from 2 x 59.59990, a frame in about 1 hour.
++		 * +1.7ppm from 2 x 59.59990, a frame in about 3 hours.
+ 		 */
+-		.clock = 155353,
++		.clock = 154888,
+ 		.hdisplay = 1280,
+ 		.hsync_start = 1280 + 12,
+ 		.hsync_end = 1280 + 12 + 2,
+@@ -358,11 +363,11 @@
+ 		.vdisplay = 960,
+ 		.vsync_start = 960 + 12,
+ 		.vsync_end = 960 + 12 + 2,
+-		.vtotal = 960 + 12 + 2 + 27,
++		.vtotal = 960 + 12 + 2 + 24,
+ 	},
+ 	{
+ 		/*
+-		 * 120.00000Hz exactly, for Steam. gamescope asks for 120 and
++		 * 120.0004Hz, for Steam. gamescope asks for 120 and
+ 		 * takes the mode whose exact rate is closest to it (its patch
+ 		 * 0007); every emulator asks for its own rate or takes the
+ 		 * preferred mode, and this one is neither. PC games that pace
+@@ -370,17 +375,11 @@
+ 		 * VKD3D's frame limiter - make 60.000 frames a second, and at
+ 		 * 119.88Hz gamescope drops one of them about every 17 seconds.
+ 		 *
+-		 * The preferred mode's pixel clock over one line fewer: 26 lines
+-		 * of vertical back porch instead of 27, still two more than the
+-		 * panel's own timing had before the 1001 above.
+-		 *
+-		 *   156240000 / (1302 * 1000) = 120.00000
++		 * Android's own 120Hz timing, exactly:
+ 		 *
+-		 * Set from userspace before it was added here: 120.003Hz over a
+-		 * minute of vblanks, against 119.884 for the preferred mode on
+-		 * the same count, and no DSI errors.
++		 *   155928000 / (1302 * 998) = 120.00037, +3.1ppm
+ 		 */
+-		.clock = 156240,
++		.clock = 155928,
+ 		.hdisplay = 1280,
+ 		.hsync_start = 1280 + 12,
+ 		.hsync_end = 1280 + 12 + 2,
+@@ -388,7 +387,7 @@
+ 		.vdisplay = 960,
+ 		.vsync_start = 960 + 12,
+ 		.vsync_end = 960 + 12 + 2,
+-		.vtotal = 960 + 12 + 2 + 26,
++		.vtotal = 960 + 12 + 2 + 24,
+ 	},
+ };
+ 
