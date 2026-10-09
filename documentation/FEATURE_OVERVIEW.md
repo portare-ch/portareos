@@ -44,7 +44,8 @@ Details: [CPU isolation](CPU_ISOLATION.md), [power measurements](POWER.md).
 * Hardware-accurate N64 graphics through ParaLLEl-RDP.
 
 Details: [variable refresh](VARIABLE_REFRESH.md), [console timing](CONSOLE_CLOCKS.md),
-[fixed-refresh modes](PER_DEVICE_DOCUMENTATION/SM8550/REFRESH_RATES.md).
+[fixed-refresh modes](PER_DEVICE_DOCUMENTATION/SM8550/REFRESH_RATES.md),
+[latency per system](LATENCY.md).
 
 ## Audio
 
