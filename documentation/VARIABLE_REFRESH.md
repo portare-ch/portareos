@@ -425,11 +425,19 @@ Patch 1107 repeats a slow frame in the DPU's video encoder instead of
 in Mesa (#586). It is off unless `msm.dpu_lfc` is set, so the two can be
 compared on the same image.
 
-- **Period.** The distance between kickoffs, smoothed the way mesa-005
-  smooths its targets: one distance off it is noise, a new period is
-  taken once seen twice. A frame is shown `count = (P + R/50) / R` times,
-  none below two refreshes or above 100 ms. A phase follows the kickoffs
-  slowly, so the repeats of a late frame keep their place on the period.
+- **Period.** The kickoffs of a steady source fall on a grid, the
+  content's own clock, which stands in for mesa-005's targets. A kickoff
+  within an eighth of a period of its place pulls the grid and its
+  period a little towards itself; a late or dropped one moves neither, so
+  a late frame's repeats keep their places and the panel catches up on
+  them. Two kickoffs off the grid in a row, the same distance apart, are
+  a new rate, and the grid starts again from them, as from the first
+  two. A frame is shown `count = (P + R/50) / R` times, none below two
+  refreshes or above 100 ms. Smoothing the distances between kickoffs
+  instead, as a first build did, failed at 40 Hz: the frame after one
+  6 ms late came 18.8 ms after it, close enough to count, and three
+  refreshes a frame became two for seven frames. `dpu_enc_lfc_frame`
+  traces the grid at every kickoff.
 - **Repeat.** After each refresh of a frame, the vsync interrupt arms an
   hrtimer for the next one at kickoff + shown x P/count, and the timer
   writes `AVR_TRIGGER`. A kickoff cancels what is left of the frame

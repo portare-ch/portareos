@@ -8,25 +8,27 @@ unrelated to the next frame, which then waits out a whole refresh.
 Mesa's wsi_display does it today for applications that time their
 presents, by committing the same buffer again (mesa-005).
 
-Do it in the encoder, for every client and without a commit. The period
-is the distance between kickoffs, smoothed as mesa-005 smooths its
-targets, and a frame is shown period / refresh times. After each of its
-refreshes an hrtimer writes AVR_TRIGGER at the next place on the period;
-a kickoff cancels what is left of the frame before.
+Do it in the encoder, for every client and without a commit. Kickoffs
+of a steady source fall on a grid, the content's clock: one near its
+place pulls the grid and its period a little towards itself, a late or
+dropped one moves neither, and two off it the same distance apart are a
+new rate. A frame is shown period / refresh times; after each of its
+refreshes an hrtimer writes AVR_TRIGGER at the next place on the grid.
+A kickoff cancels what is left of the frame before.
 
 Measured on the Retroid Pocket Nova (SM8550, continuous AVR):
 AVR_TRIGGER alone starts a refresh, and one written while the INTF still
 scans the refresh before is kept for its end, as a flush is. So the
-trigger goes at its place on the period and the hardware waits for the
+trigger goes at its place on the grid, and the hardware waits for the
 shortest frame where the panel is behind. Timing it from the vsync
 interrupt instead does not work: the interrupt ran 0.68 ms after the
 vsync, and repeats timed from it came 9.0 ms apart instead of 8.33.
-With the trigger on the period, present-probe at 60.099 Hz, where half
-a frame is the shortest refresh, had 1772 of 1775 frames shown twice,
-refreshes 2 us from P/2 at the median; at 30 Hz 878 of 885 four times.
+A period smoothed from the distances between kickoffs does not either:
+at 40 Hz the distance after a frame 6 ms late was short enough to count,
+and three refreshes a frame became two for seven frames.
 
 Off unless msm.dpu_lfc is set, while it is compared with mesa-005.
-dpu_enc_lfc_frame traces the period at every kickoff, dpu_enc_lfc_repeat
+dpu_enc_lfc_frame traces the grid at every kickoff, dpu_enc_lfc_repeat
 every trigger.
 ---
 --- a/drivers/gpu/drm/msm/disp/dpu1/dpu_trace.h
@@ -98,7 +100,7 @@ every trigger.
  #include <linux/jiffies.h>
  
  #include "dpu_kms.h"
-@@ -139,6 +140,33 @@
+@@ -139,6 +140,35 @@
  };
  
  /**
@@ -110,8 +112,9 @@ every trigger.
 + * @refresh_ns:		The mode's frame, the shortest refresh
 + * @last_commit:	When the last frame was kicked off
 + * @last_interval:	The distance of that kickoff from the one before
-+ * @period:		Kickoff distances, smoothed
-+ * @phase:		Where the last frame's kickoff belongs on that period
++ * @period:		The frame period, 0 until two kickoffs agree on one
++ * @phase:		Where the last frame's kickoff belongs on the grid
++ * @misses:		Kickoffs off the grid in a row
 + * @due:		Where the armed repeat belongs on the period
 + * @count:		Refreshes per frame, 0 for no repeats
 + * @shown:		Refreshes of the frame on screen so far, 0 before its first
@@ -123,6 +126,7 @@ every trigger.
 +	u64 last_interval;
 +	u64 period;
 +	ktime_t phase;
++	unsigned int misses;
 +	ktime_t due;
 +	unsigned int count;
 +	unsigned int shown;
@@ -132,7 +136,7 @@ every trigger.
   * struct dpu_encoder_phys - physical encoder that drives a single INTF block
   *	tied to a specific panel / sub-panel. Abstract type, sub-classed by
   *	phys_vid or phys_cmd for video mode or command mode encs respectively.
-@@ -172,6 +200,7 @@
+@@ -172,6 +202,7 @@
   * @pending_kickoff_wq:		Wait queue for blocking until kickoff completes
   * @irq:			IRQ indices
   * @has_intf_te:		Interface TE configuration support
@@ -140,7 +144,7 @@ every trigger.
   */
  struct dpu_encoder_phys {
  	struct drm_encoder *parent;
-@@ -200,6 +229,7 @@
+@@ -200,6 +231,7 @@
  	bool has_intf_te;
  	bool avr_capable;
  	bool avr_enabled;
@@ -171,7 +175,7 @@ every trigger.
  	}
  	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
  
-@@ -320,6 +323,177 @@
+@@ -320,6 +323,184 @@
  
  	DRM_INFO("intf%d: variable refresh %s\n",
  		 phys_enc->hw_intf->idx - INTF_0, want ? "on" : "off");
@@ -270,20 +274,26 @@ every trigger.
 +}
 +
 +/*
-+ * A frame was kicked off. The period is the distance between kickoffs,
-+ * smoothed: one distance off it, from a late or dropped frame, is noise,
-+ * and a new period is taken once it is seen twice. A fiftieth of a refresh
-+ * of slack keeps a frame of exactly two refreshes, the SNES on the
-+ * 120.198 Hz mode, from rounding down to one. The phase follows the
-+ * kickoffs slowly, so the repeats of a late frame stay where they belong
-+ * and the panel catches up on each of them.
++ * A frame was kicked off. The kickoffs of a steady source fall on a grid,
++ * the content's own clock, which stands in for mesa-005's targets. A
++ * kickoff within an eighth of a period of its place on the grid pulls the
++ * grid and its period a little towards itself. One off it, a late or a
++ * dropped frame, moves neither: the late frame's repeats keep their places,
++ * so the panel catches up on them, and the next frame finds the grid where
++ * it was. Taking the distances between kickoffs instead, a frame 6 ms late
++ * at 40 Hz was left out but the short distance after it was not, and the
++ * period dropped below three refreshes for seven frames. Two kickoffs off
++ * the grid in a row, the same distance apart, are a new rate, and the grid
++ * starts again from them, as it starts from the first two. A fiftieth of a
++ * refresh of slack keeps a frame of exactly two refreshes, the SNES on the
++ * 120.198 Hz mode, from rounding down to one.
 + */
 +static void dpu_encoder_phys_vid_lfc_kickoff(struct dpu_encoder_phys *phys_enc)
 +{
 +	struct dpu_encoder_lfc *lfc = &phys_enc->lfc;
 +	ktime_t now = ktime_get();
 +	unsigned long lock_flags;
-+	u64 seen = 0, period, prev;
++	u64 seen = 0, prev;
 +	s64 err = 0;
 +
 +	spin_lock_irqsave(phys_enc->enc_spinlock, lock_flags);
@@ -296,43 +306,44 @@ every trigger.
 +
 +	if (lfc->last_commit && ktime_after(now, lfc->last_commit))
 +		seen = ktime_to_ns(ktime_sub(now, lfc->last_commit));
-+	period = lfc->period;
 +	prev = lfc->last_interval;
-+	if (!seen)
-+		period = 0;
-+	else if (!period)
-+		period = seen;
-+	else if (seen > period - period / 4 && seen < period + period / 4)
-+		period = period - period / 8 + seen / 8;
-+	else if (prev && seen > prev - prev / 16 && seen < prev + prev / 16)
-+		period = seen;
 +	lfc->last_commit = now;
 +	lfc->last_interval = seen;
-+	lfc->period = period;
 +
-+	if (period && lfc->phase && ktime_after(now, lfc->phase)) {
-+		u64 n = div64_u64(ktime_to_ns(ktime_sub(now, lfc->phase)) +
-+				  period / 2, period);
-+		ktime_t pred = ktime_add_ns(lfc->phase, max_t(u64, n, 1) * period);
++	if (lfc->period) {
++		s64 d = ktime_to_ns(ktime_sub(now, lfc->phase));
++		u64 n = 0;
 +
-+		err = ktime_to_ns(ktime_sub(now, pred));
-+		if (abs(err) < period / 4)
-+			lfc->phase = ktime_add(pred, ns_to_ktime(err / 8));
-+		else
-+			lfc->phase = now;
-+	} else {
++		if (d > -(s64)(lfc->period / 8))
++			n = div64_u64((u64)d + lfc->period / 8, lfc->period);
++		err = d - (s64)(n * lfc->period);
++		if (n == 1 && abs(err) < lfc->period / 8) {
++			lfc->phase = ktime_add(lfc->phase,
++					       ns_to_ktime(lfc->period + err / 8));
++			lfc->period = (s64)lfc->period + err / 32;
++			lfc->misses = 0;
++		} else {
++			if (n)
++				lfc->phase = ktime_add_ns(lfc->phase, n * lfc->period);
++			lfc->misses++;
++		}
++	}
++	if ((!lfc->period || lfc->misses >= 2) && seen && prev &&
++	    seen > prev - prev / 16 && seen < prev + prev / 16) {
++		lfc->period = seen;
 +		lfc->phase = now;
++		lfc->misses = 0;
 +	}
 +
 +	lfc->count = 0;
-+	if (period && period <= DPU_LFC_MAX_PERIOD_NS)
-+		lfc->count = div64_u64(period + lfc->refresh_ns / 50,
++	if (lfc->period && lfc->period <= DPU_LFC_MAX_PERIOD_NS)
++		lfc->count = div64_u64(lfc->period + lfc->refresh_ns / 50,
 +				       lfc->refresh_ns);
 +	if (lfc->count < 2)
 +		lfc->count = 0;
 +	trace_dpu_enc_lfc_frame(DRMID(phys_enc->parent),
 +				phys_enc->hw_intf->idx - INTF_0,
-+				seen, period, err, lfc->count);
++				seen, lfc->period, err, lfc->count);
 +
 +	/* The last frame's repeats are over; the vsync of this one arms its own. */
 +	hrtimer_try_to_cancel(&lfc->timer);
@@ -349,7 +360,7 @@ every trigger.
  }
  
  static void dpu_encoder_phys_vid_setup_timing_engine(
-@@ -407,6 +581,7 @@
+@@ -407,6 +588,7 @@
  	struct dpu_hw_ctl *hw_ctl;
  	unsigned long lock_flags;
  	u32 flush_register = 0;
@@ -357,7 +368,7 @@ every trigger.
  
  	hw_ctl = phys_enc->hw_ctl;
  
-@@ -426,7 +601,9 @@
+@@ -426,7 +608,9 @@
  		flush_register = hw_ctl->ops.get_flush_register(hw_ctl);
  
  	if (!(flush_register & hw_ctl->ops.get_pending_flush(hw_ctl)))
@@ -368,7 +379,7 @@ every trigger.
  	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
  
  	/* Signal any waiting atomic commit thread */
-@@ -692,6 +869,7 @@
+@@ -692,6 +876,7 @@
  	if (dpu_encoder_phys_vid_is_master(phys_enc))
  		dpu_encoder_phys_inc_pending(phys_enc);
  	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
@@ -376,7 +387,7 @@ every trigger.
  
  	/*
  	 * Wait for a vsync so we know the ENABLE=0 latched before
-@@ -759,6 +937,8 @@
+@@ -759,6 +944,8 @@
  		phys_enc->hw_intf->ops.avr_trigger(phys_enc->hw_intf);
  		spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
  	}
@@ -385,7 +396,7 @@ every trigger.
  }
  
  static void dpu_encoder_phys_vid_irq_enable(struct dpu_encoder_phys *phys_enc)
-@@ -857,6 +1037,7 @@
+@@ -857,6 +1044,7 @@
  		struct dpu_enc_phys_init_params *p)
  {
  	struct dpu_encoder_phys *phys_enc = NULL;
@@ -393,7 +404,7 @@ every trigger.
  
  	if (!p) {
  		DPU_ERROR("failed to create encoder due to invalid parameter\n");
-@@ -878,6 +1059,12 @@
+@@ -878,6 +1066,12 @@
  	dpu_encoder_phys_vid_init_ops(&phys_enc->ops);
  	phys_enc->intf_mode = INTF_MODE_VIDEO;
  
