@@ -298,6 +298,7 @@ lateness; the latter records returned presentation timings. Times are
 | `late=600:4` | Every 600th frame arrives 4 ms after its target in rate mode; cadence mode adds one refresh. |
 | `mode=119.652` | Select the nearest display mode; default is the fastest. |
 | `recreate=10` | Recreate the swapchain every ten seconds. |
+| `bar=16` | Sweep a full-height white bar, 64 px wide, 16 px a frame, for watching a panel tear (`tools/tear-tap`). |
 
 Running with no arguments prints usage and exits 2. A completed probe alone
 does not establish correct scanout; pair it with the trace/check workflow.
@@ -364,6 +365,31 @@ for event in drm/drm_vblank_event dpu/dpu_crtc_complete_flip dpu/dpu_plane_set_s
 done
 systemctl start portarelauncher
 ```
+
+### tear-tap: tears the CRC cannot see
+
+The DPU's CRC covers what the display controller sends; a panel that tears
+inside itself sends nothing back. `tools/tear-tap` makes a person the
+detector: present-probe sweeps a full-height bar across the panel, and
+whoever watches taps the touchscreen at each tear they see. Run blind:
+
+```sh
+tools/tear-tap root@nova tear 60 ab
+```
+
+`ab` runs variable refresh and fixed refresh one after the other in random
+order, as `tear-1` and `tear-2`, and only says which was which at the end.
+`vrr` or `fixed` runs one of them; `rate=HZ` sets the content rate (default
+59.94, fixed refresh then uses the mode nearest twice it) and `bar=PX` the
+bar's step a frame. Each run leaves display-trace's files and `NAME.taps`,
+the tap times in `CLOCK_MONOTONIC` seconds, the trace's clock, and prints
+the gaps between taps. A reaction lags a tear by a few hundred
+milliseconds, so set taps against the trace with that margin; a steady gap
+between taps is a beat between two clocks.
+
+Measured this way on 2026-10-10 (#623): the il97680a tore about every 4 s
+with variable refresh at 59.94 and not at all at fixed refresh, while the
+CRC of the same runs showed every refresh whole.
 
 ## Audio-driver measurements
 

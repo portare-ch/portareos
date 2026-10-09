@@ -1,0 +1,82 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
+
+# A tear test with a person as the detector (#623). present-probe sweeps a
+# full-height bar across the panel; whoever watches taps the touchscreen at
+# each tear. A tear inside the panel never reaches the DPU's CRC, so this
+# finds what tools/display-check cannot. The taps are kept with their
+# CLOCK_MONOTONIC times, the trace's clock, next to display-trace's record
+# of the same run.
+#
+#   tools/tear-tap root@nova NAME SECONDS [vrr|fixed|ab] [rate=HZ] [bar=PX]
+#
+# vrr (default) presents HZ (default 59.94) with variable refresh; fixed
+# holds each frame two refreshes on the mode nearest twice HZ. ab runs both
+# in random order as NAME-1 and NAME-2 and names them only at the end, so
+# what is reported is not what was expected. bar=PX is the bar's step a
+# frame (default 16). Writes display-trace's NAME.* and NAME.taps, one tap
+# a line. PROBE=path runs another present-probe build.
+#
+#   tools/tear-tap root@nova tear 60 ab
+
+[ $# -lt 3 ] && { sed -n '5,20p' "$0" | cut -c3-; exit 1; }
+HOST=$1 NAME=$2 SECS=$3; shift 3
+MODE=vrr RATE=59.94 BAR=16
+for a in "$@"; do
+  case "${a}" in
+    vrr|fixed|ab) MODE=${a} ;;
+    rate=*) RATE=${a#rate=} ;;
+    bar=*) BAR=${a#bar=} ;;
+    *) echo "unknown argument ${a}" >&2; exit 1 ;;
+  esac
+done
+PROBE=${PROBE:-present-probe}
+TRACE="$(dirname "$0")/display-trace"
+
+# Touch-downs on the touchscreen, with EVIOCSCLOCKID set so the times are
+# CLOCK_MONOTONIC like the trace's. The panel is the Nova's ft5x06.
+TAPLOG='
+import fcntl, os, struct, sys, time, select
+dev, secs = sys.argv[1], float(sys.argv[2])
+fd = os.open(dev, os.O_RDONLY | os.O_NONBLOCK)
+fcntl.ioctl(fd, 0x400445a0, struct.pack("i", time.CLOCK_MONOTONIC))
+end = time.monotonic() + secs
+fmt = "llHHi"
+sz = struct.calcsize(fmt)
+while time.monotonic() < end:
+    if not select.select([fd], [], [], 0.5)[0]:
+        continue
+    data = os.read(fd, sz * 64)
+    for i in range(0, len(data) - sz + 1, sz):
+        s, us, typ, code, val = struct.unpack(fmt, data[i:i + sz])
+        if typ == 1 and code == 330 and val == 1:
+            print("%d.%06d" % (s, us), flush=True)
+'
+
+one() {
+  local name=$1 mode=$2 hz
+  printf '%s\n' "${TAPLOG}" | ssh "${HOST}" "for d in /sys/class/input/event*; do grep -q ft5x06 \$d/device/name 2>/dev/null && exec timeout $((SECS + 25)) python3 - /dev/input/\${d##*/} $((SECS + 25)); done; echo no touchscreen >&2" >"${name}.taps" &
+  local logger=$!
+  sleep 1
+  if [ "${mode}" = vrr ]; then
+    "${TRACE}" "${HOST}" "${name}" "${SECS}" -- env MESA_VK_WSI_DISPLAY_VRR=1 \
+      "${PROBE}" /tmp/tear-tap "$((SECS + 2))" observe "rate:${RATE}" "bar=${BAR}" >/dev/null
+  else
+    hz=$(awk -v r="${RATE}" 'BEGIN { printf "%.3f", 2 * r }')
+    "${TRACE}" "${HOST}" "${name}" "${SECS}" -- env MESA_VK_WSI_DISPLAY_VRR=0 \
+      "${PROBE}" /tmp/tear-tap "$((SECS + 2))" own cadence:2 "mode=${hz}" "bar=${BAR}" >/dev/null
+  fi
+  wait "${logger}"
+  awk 'NR > 1 { g = g sprintf(" %.2f", $1 - p) } { p = $1 } END { printf "%s: %d taps; gaps, s:%s\n", FILENAME, NR, g }' "${name}.taps"
+}
+
+if [ "${MODE}" = ab ]; then
+  if [ $((RANDOM % 2)) = 0 ]; then FIRST=vrr SECOND=fixed; else FIRST=fixed SECOND=vrr; fi
+  one "${NAME}-1" "${FIRST}"
+  sleep 5
+  one "${NAME}-2" "${SECOND}"
+  echo "${NAME}-1 was ${FIRST}, ${NAME}-2 ${SECOND}" | tee "${NAME}.key"
+else
+  one "${NAME}" "${MODE}"
+fi
