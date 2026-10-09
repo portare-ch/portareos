@@ -18,7 +18,9 @@ timestamp - the time= payload, CLOCK_MONOTONIC, which the flip event hands
 Mesa truncated to microseconds - is when that commit reached the screen.
 Each refresh is then a new frame, a repeat of one (mesa-005), or a refresh
 with no commit since the last: a held frame on a fixed refresh, the panel
-refreshing on its own on a variable one.
+refreshing on its own on a variable one. With the kernel doing the repeats
+(msm.dpu_lfc, patch 1107) a repeat is a dpu_enc_lfc_repeat kick, paired
+with the first vblank after it, and is counted as a kernel repeat.
 """
 
 import argparse
@@ -35,6 +37,8 @@ VBLANK = re.compile(r'crtc=(\d+), seq=(\d+), time=(\d+)')
 SCANOUT = re.compile(r'index:(\d+) layout:\{\d+x\d+ @ \[(\d+)/')
 MARKER = re.compile(r'wsi_display: (frame|repeat) image=(\d+) serial=(\d+) id=(-?\d+) target=(\d+)'
                     r'(?: queued=(\d+))? commit=(\d+)')
+LFC_REPEAT = re.compile(r'repeat=(\d+)/(\d+), due=(-?\d+), kicked=(\d)')
+LFC_FRAME = re.compile(r'interval=(\d+), period=(\d+), phase_err=(-?\d+), count=(\d+)')
 
 
 def ns(sec, frac):
@@ -47,6 +51,8 @@ class Run:
         self.flips = []        # header ns
         self.scanouts = []     # (header ns, address)
         self.commits = []      # dicts from Mesa's markers
+        self.kicks = []        # dicts from the kernel's LFC repeats
+        self.lfc_frames = []   # (header ns, interval, period, phase error, count)
         with open(prefix + '.trace', errors='replace') as f:
             for line in f:
                 m = EVENT.search(line)
@@ -72,10 +78,20 @@ class Run:
                             serial=int(c.group(3)), id=int(c.group(4)),
                             target=int(c.group(5)), queued=int(c.group(6) or 0),
                             commit=int(c.group(7))))
+                elif ev == 'dpu_enc_lfc_repeat':
+                    k = LFC_REPEAT.search(rest)
+                    if k:
+                        self.kicks.append(dict(t=t, n=int(k.group(1)), count=int(k.group(2)),
+                                               due=int(k.group(3)), kicked=k.group(4) == '1'))
+                elif ev == 'dpu_enc_lfc_frame':
+                    k = LFC_FRAME.search(rest)
+                    if k:
+                        self.lfc_frames.append((t,) + tuple(int(x) for x in k.groups()))
         self.vblanks.sort()
         self.flips.sort()
         self.scanouts.sort()
         self.commits.sort(key=lambda c: c['commit'])
+        self.kicks.sort(key=lambda k: k['t'])
         self.vb_hdr = [v[0] for v in self.vblanks]
         self.seq_time = {v[1]: v[2] for v in self.vblanks}
 
@@ -113,6 +129,23 @@ class Run:
             c['programmed'] = self.scanouts[si][0] if si < len(self.scanouts) else None
             si += 1
         return lost
+
+    def pair_kicks(self, landed, limit=13000000):
+        """Each kick of the kernel's LFC with the refresh it started: the
+        first vblank traced after it. A kick during the refresh before is
+        kept for its end, and the vblank is traced from the vsync interrupt,
+        which ran up to 0.7 ms late on the Nova, so the limit is the floor's
+        frame. A kick followed by none within it, or by one a commit landed
+        on, started nothing; one lost and followed by the panel's own
+        refresh shows as a kernel repeat of the floor's length."""
+        for k in self.kicks:
+            k['vblank'] = None
+            if not k['kicked']:
+                continue
+            i = bisect.bisect_left(self.vb_hdr, k['t'])
+            if i < len(self.vblanks) and self.vblanks[i][1] not in landed and \
+                    self.vblanks[i][0] - k['t'] < limit:
+                k['vblank'] = self.vblanks[i]
 
 
 def pct(values, p):
@@ -175,28 +208,45 @@ def main():
         return 1
 
     # Refreshes: every vblank from the first frame on, as a new frame, a
-    # repeat, or none (held, or the panel on its own).
+    # repeat (Mesa's commit or the kernel's kick), or none (held, or the
+    # panel on its own).
     landed = {}
     for c in frames + repeats:
         landed[c['vblank'][1]] = c
+    run.pair_kicks(landed)
+    kicks = [k for k in run.kicks if k['vblank']]
+    for k in kicks:
+        landed[k['vblank'][1]] = dict(repeat=True, kernel=True)
     first, last = frames[0]['vblank'][1], frames[-1]['vblank'][1]
     seqs = [s for _, s, _ in run.vblanks if first <= s <= last]
     kinds = collections.Counter()
     intervals = collections.defaultdict(list)
     for s in seqs:
         c = landed.get(s)
-        kind = 'none' if c is None else 'repeat' if c['repeat'] else 'frame'
+        kind = 'none' if c is None else 'kernel' if c.get('kernel') else 'repeat' if c['repeat'] else 'frame'
         kinds[kind] += 1
         if s - 1 in run.seq_time:
             intervals[kind].append((run.seq_time[s] - run.seq_time[s - 1]) / 1e6)
     missing = (last - first + 1) - len(seqs)
-    print('refreshes: %d new frame, %d repeat, %d with no commit; %d vblanks not traced'
-          % (kinds['frame'], kinds['repeat'], kinds['none'], missing))
+    print('refreshes: %d new frame, %d repeat, %d kernel repeat, %d with no commit; %d vblanks not traced'
+          % (kinds['frame'], kinds['repeat'], kinds['kernel'], kinds['none'], missing))
     if missing:
         print('  (the vblank interrupt was off for those: their count is rebuilt from the mode, not measured)')
-    for k in ('frame', 'repeat', 'none'):
+    for k in ('frame', 'repeat', 'kernel', 'none'):
         if intervals[k]:
-            print('  interval ending in %-6s %s' % (k + ':', stats(intervals[k])))
+            print('  interval ending in %-7s %s' % (k + ':', stats(intervals[k])))
+
+    # The kernel's repeats: whether each kick started a refresh, how soon,
+    # and how far from its place on the period it went.
+    if run.kicks:
+        kicked = [k for k in run.kicks if k['kicked']]
+        print('kernel repeats: %d kicked, %d started a refresh, %d skipped for a frame kicked off first'
+              % (len(kicked), len(kicks), len(run.kicks) - len(kicked)))
+        print('  kick to vblank, ms:', stats([(k['vblank'][0] - k['t']) / 1e6 for k in kicks]))
+        print('  kick after its place on the period, ms:', stats([(k['t'] - k['due']) / 1e6 for k in kicked]))
+        if run.lfc_frames:
+            counts = collections.Counter(f[4] for f in run.lfc_frames)
+            print('  refreshes per frame the kernel chose:', '  '.join('%d: %d' % kv for kv in sorted(counts.items())))
 
     # Per frame: refreshes shown, from its first scanout to the next frame's.
     shown = []
@@ -265,7 +315,7 @@ def main():
         step = period / k
         print('rate %.3f Hz: period %.3f ms, k = %d, P/k = %.3f ms%s' % (
             a.rate, period, k, step, '' if step >= r - 0.001 and step <= 1000 / a.floor_hz else '  (outside the panel range)'))
-        errs = [abs(x - step) for kind in ('frame', 'repeat') for x in intervals[kind]]
+        errs = [abs(x - step) for kind in ('frame', 'repeat', 'kernel') for x in intervals[kind]]
         print('  refresh interval error vs P/k:', stats(errs))
         off = sum(1 for e in errs if e > a.bound_ms)
         print('  refreshes off by more than %.2f ms: %d' % (a.bound_ms, off))
@@ -318,6 +368,7 @@ def main():
             # before the frame (a repeat, or the frame before) committed
             # after it was due, or a commit slow to reach the screen.
             order = {id(c): j for j, c in enumerate(run.commits)}
+            kick_t = [x['t'] for x in run.kicks]
             for i in bad[:10]:
                 c = timed[i]
                 prev = run.commits[order[id(c)] - 1]
@@ -325,6 +376,15 @@ def main():
                 why = []
                 if prev['repeat'] and prev['commit'] > due:
                     why.append('the repeat before it committed %.2f ms after it was due' % ((prev['commit'] - due) / 1e6))
+                j = bisect.bisect_left(kick_t, c['commit']) - 1
+                if j >= 0 and run.kicks[j]['t'] > prev['commit']:
+                    kb = run.kicks[j]
+                    if not kb['kicked']:
+                        why.append('the kernel skipped the repeat before it')
+                    elif not kb['vblank']:
+                        why.append('the kernel repeat before it started no refresh')
+                    elif kb['t'] - kb['due'] > 1e6:
+                        why.append('the kernel repeat before it kicked %.2f ms after its place' % ((kb['t'] - kb['due']) / 1e6))
                 for name, x in (('the refresh before', prev), ('the frame', c)):
                     if x['vblank'] and x['vblank'][2] - x['commit'] > 2e6:
                         why.append('%s took %.2f ms from commit to screen' % (name, (x['vblank'][2] - x['commit']) / 1e6))
