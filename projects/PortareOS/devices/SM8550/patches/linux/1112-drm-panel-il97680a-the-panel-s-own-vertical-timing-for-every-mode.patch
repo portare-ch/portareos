@@ -12,7 +12,8 @@ bar sweeping the screen tore on 1001 lines and not on 998, in a blind
 comparison and again on its own (#623).
 
 Every mode goes to 998 lines, its pixel clock recomputed for the rate
-its comment names; all are within 3.2ppm of it.
+its comment names; all are within 3.2ppm of it but the SNES mode,
+rounded up to +4.4ppm since variable refresh runs on it.
 ---
 --- a/drivers/gpu/drm/panel/panel-ilitek-il97680a.c
 +++ b/drivers/gpu/drm/panel/panel-ilitek-il97680a.c
@@ -89,28 +90,32 @@ its comment names; all are within 3.2ppm of it.
  	},
  	{
  		/*
-@@ -223,9 +224,9 @@
+@@ -223,9 +224,13 @@
  		 *                                       every 3.2 seconds
  		 *   120.197628 / 60.0988 = 2.0000   <- this one
  		 *
 -		 *   156654000 / (1302 * 1001) = 120.197775, +1.2ppm
-+		 *   156184000 / (1302 * 998) = 120.197384, -2.0ppm
++		 *   156185000 / (1302 * 998) = 120.198154, +4.4ppm
  		 *
 -		 * The same 1001-line frame as every other mode here, the panel's
++		 * Rounded up, not to the nearest: variable refresh runs on this,
++		 * the fastest mode, and its refresh must be no longer than half a
++		 * frame of the fastest content, or that content falls behind.
++		 *
 +		 * The same 998-line frame as every other mode here, the panel's
  		 * own porches. A wider vertical blanking, vtotal 1116 at 174651kHz
  		 * and exact to 0.00ppm, was tried for black frame insertion's
  		 * flip window, and the panel does not lock to it: it scans from
-@@ -235,7 +236,7 @@
+@@ -235,7 +240,7 @@
  		 * (#623). With these porches it follows the input, the stretched
  		 * front porch of variable refresh included.
  		 */
 -		.clock = 156654,
-+		.clock = 156184,
++		.clock = 156185,
  		.hdisplay = 1280,
  		.hsync_start = 1280 + 12,
  		.hsync_end = 1280 + 12 + 2,
-@@ -243,7 +244,7 @@
+@@ -243,7 +248,7 @@
  		.vdisplay = 960,
  		.vsync_start = 960 + 12,
  		.vsync_end = 960 + 12 + 2,
@@ -119,7 +124,7 @@ its comment names; all are within 3.2ppm of it.
  	},
  	{
  		/*
-@@ -257,9 +258,9 @@
+@@ -257,9 +262,9 @@
  		 *                                       every 4.3 seconds
  		 *   119.652237 / 59.82610 = 2.0000   <- this one
  		 *
@@ -131,7 +136,7 @@ its comment names; all are within 3.2ppm of it.
  		 *
  		 * The NTSC PlayStation in 240p is the same rate: 263 lines of
  		 * 3412.5 GPU clocks at 53.693175MHz, 59.82610 too, since the
-@@ -267,7 +268,7 @@
+@@ -267,7 +272,7 @@
  		 * it the core rounded the line to 3413 clocks, ran at 59.8173,
  		 * and had a 155920kHz mode of its own here.
  		 */
@@ -140,7 +145,7 @@ its comment names; all are within 3.2ppm of it.
  		.hdisplay = 1280,
  		.hsync_start = 1280 + 12,
  		.hsync_end = 1280 + 12 + 2,
-@@ -275,7 +276,7 @@
+@@ -275,7 +280,7 @@
  		.vdisplay = 960,
  		.vsync_start = 960 + 12,
  		.vsync_end = 960 + 12 + 2,
@@ -149,7 +154,7 @@ its comment names; all are within 3.2ppm of it.
  	},
  	{
  		/*
-@@ -288,15 +289,15 @@
+@@ -288,15 +293,15 @@
  		 *                                        every 28 seconds
  		 *   119.845592 / 59.92274 = 2.00000   <- this one
  		 *
@@ -168,7 +173,7 @@ its comment names; all are within 3.2ppm of it.
  		.hdisplay = 1280,
  		.hsync_start = 1280 + 12,
  		.hsync_end = 1280 + 12 + 2,
-@@ -304,7 +305,7 @@
+@@ -304,7 +309,7 @@
  		.vdisplay = 960,
  		.vsync_start = 960 + 12,
  		.vsync_end = 960 + 12 + 2,
@@ -177,7 +182,7 @@ its comment names; all are within 3.2ppm of it.
  	},
  	{
  		/*
-@@ -319,13 +320,13 @@
+@@ -319,13 +324,13 @@
  		 *                                     every 0.7 seconds
  		 *   118.360134 / 59.18 = 2.00000   <- this one
  		 *
@@ -194,7 +199,7 @@ its comment names; all are within 3.2ppm of it.
  		.hdisplay = 1280,
  		.hsync_start = 1280 + 12,
  		.hsync_end = 1280 + 12 + 2,
-@@ -333,7 +334,7 @@
+@@ -333,7 +338,7 @@
  		.vdisplay = 960,
  		.vsync_start = 960 + 12,
  		.vsync_end = 960 + 12 + 2,
@@ -203,7 +208,7 @@ its comment names; all are within 3.2ppm of it.
  	},
  	{
  		/*
-@@ -346,11 +347,11 @@
+@@ -346,11 +351,11 @@
  		 *                                        every 1.5 seconds
  		 *   119.199541 / 59.59990 = 2.00000   <- this one
  		 *
@@ -218,7 +223,7 @@ its comment names; all are within 3.2ppm of it.
  		.hdisplay = 1280,
  		.hsync_start = 1280 + 12,
  		.hsync_end = 1280 + 12 + 2,
-@@ -358,11 +359,11 @@
+@@ -358,11 +363,11 @@
  		.vdisplay = 960,
  		.vsync_start = 960 + 12,
  		.vsync_end = 960 + 12 + 2,
@@ -232,17 +237,17 @@ its comment names; all are within 3.2ppm of it.
  		 * takes the mode whose exact rate is closest to it (its patch
  		 * 0007); every emulator asks for its own rate or takes the
  		 * preferred mode, and this one is neither. PC games that pace
-@@ -370,17 +371,11 @@
+@@ -370,17 +375,11 @@
  		 * VKD3D's frame limiter - make 60.000 frames a second, and at
  		 * 119.88Hz gamescope drops one of them about every 17 seconds.
  		 *
 -		 * The preferred mode's pixel clock over one line fewer: 26 lines
 -		 * of vertical back porch instead of 27, still two more than the
 -		 * panel's own timing had before the 1001 above.
+-		 *
+-		 *   156240000 / (1302 * 1000) = 120.00000
 +		 * Android's own 120Hz timing, exactly:
  		 *
--		 *   156240000 / (1302 * 1000) = 120.00000
--		 *
 -		 * Set from userspace before it was added here: 120.003Hz over a
 -		 * minute of vblanks, against 119.884 for the preferred mode on
 -		 * the same count, and no DSI errors.
@@ -253,7 +258,7 @@ its comment names; all are within 3.2ppm of it.
  		.hdisplay = 1280,
  		.hsync_start = 1280 + 12,
  		.hsync_end = 1280 + 12 + 2,
-@@ -388,7 +383,7 @@
+@@ -388,7 +387,7 @@
  		.vdisplay = 960,
  		.vsync_start = 960 + 12,
  		.vsync_end = 960 + 12 + 2,

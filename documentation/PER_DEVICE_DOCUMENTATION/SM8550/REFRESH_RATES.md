@@ -1,6 +1,6 @@
 # Refresh and audio rates on the Retroid Pocket Nova (SM8550)
 
-RetroArch defaults to **variable refresh from 80 to 120.197384 Hz** on the
+RetroArch defaults to **variable refresh from 80 to 120.198154 Hz** on the
 built-in panel when it is the only connected display and no display mode
 is pinned. It uses the fastest mode for every system and times frames at
 the core's reported rate; the display driver repeats them to keep the
@@ -25,7 +25,7 @@ Every mode uses the panel's own timing, 1302 × 998, and changes only the pixel 
 |---|---|---|---|
 | 119.88031 Hz | 155772 kHz | +1.6 ppm | default (launcher, everything else) |
 | 119.45473 Hz | 155219 kHz | -2.2 ppm | `gambatte`, `mgba` |
-| 120.197384 Hz | 156184 kHz | -2.0 ppm | `snes9x`, `mesen2`; variable refresh runs on it |
+| 120.198154 Hz | 156185 kHz | +4.4 ppm, rounded up | `snes9x`, `mesen2`; variable refresh runs on it |
 | 119.65252 Hz | 155476 kHz | +2.6 ppm | `parallel_n64`, `swanstation`, `ymir` |
 | 119.84568 Hz | 155727 kHz | +1.7 ppm | `genesis_plus_gx` |
 | 118.36038 Hz | 153797 kHz | +3.2 ppm | `fbneo`, for `neogeo` only |
@@ -37,9 +37,10 @@ Every mode uses the panel's own timing, 1302 × 998, and changes only the pixel 
 The panel's own timing, Android's for both of its rates, is 12 lines of
 vertical front porch, 2 of sync and 24 of back porch: 998 lines. Every mode
 here uses it and moves only the pixel clock, so none is exact to the console;
-all are within 3.2 ppm, a frame of drift every few hours, which RetroArch's
-audio rate control absorbs. Variable refresh runs on the fastest, the SNES
-mode.
+all are within 3.2 ppm, which at fixed refresh RetroArch's audio rate control
+absorbs. Variable refresh runs on the fastest, the SNES mode, and that one is
+rounded up, +4.4 ppm: its refresh must be no longer than half the fastest
+content's frame, or that content falls a refresh behind about once an hour.
 
 Two departures from it were tried, and the panel took neither under variable
 refresh.
