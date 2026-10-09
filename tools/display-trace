@@ -13,18 +13,16 @@
 # trace_marker lines, trace_clock mono), out (the command's output), and
 # with --crc the DPU's per-refresh CRC. COMMAND runs with
 # MESA_VK_WSI_DISPLAY_TRACE=1, so Mesa's commits are in the trace
-# (mesa-007), MESA_VK_WSI_DISPLAY_REPEAT=0 while msm.dpu_lfc is on, so the
-# kernel does the repeats (patch 1107, mesa-008), and RUN, the run's path
-# prefix on the device, for further files such as present-probe's logs; a
-# command line that names it goes through sh -c. --no-hold leaves the
-# vblank interrupt to the client, as in a game: refreshes are then not
-# traced while nothing else waits on it.
+# (mesa-007), and RUN, the run's path prefix on the device, for further
+# files such as present-probe's logs; a command line that names it goes
+# through sh -c. --no-hold leaves the vblank interrupt to the client, as
+# in a game: refreshes are then not traced while nothing else waits on it.
 #
 #   tools/display-trace root@nova obs 20 -- \
 #     sh -c 'present-probe $RUN 30 observe cadence:2,2,4'
 
 if [ "$1" != "--remote" ]; then
-  [ $# -lt 5 ] && { sed -n '5,25p' "$0" | cut -c3-; exit 1; }
+  [ $# -lt 5 ] && { sed -n '5,22p' "$0" | cut -c3-; exit 1; }
   HOST=$1 NAME=$2 SECS=$3; shift 3
   CRC=0; [ "$1" = "--crc" ] && { CRC=1; shift; }
   HOLD=1; [ "$1" = "--no-hold" ] && { HOLD=0; shift; }
@@ -48,10 +46,7 @@ EVENTS="drm/drm_vblank_event dpu/dpu_crtc_complete_flip dpu/dpu_plane_set_scanou
 for e in dpu/dpu_enc_lfc_frame dpu/dpu_enc_lfc_repeat; do
   [ -d $T/events/$e ] && EVENTS="${EVENTS} $e"
 done
-REPEAT=1
-[ "$(cat /sys/module/msm/parameters/dpu_lfc 2>/dev/null)" = "Y" ] && REPEAT=0
 mkdir -p ${DIR}; rm -f ${RUN}.[a-z]*
-echo "repeats: $([ ${REPEAT} = 0 ] && echo kernel || echo mesa)"
 
 systemctl stop portarelauncher; sleep 1
 # A player left over keeps DRM master and the launcher cannot take it back.
@@ -64,8 +59,7 @@ cat $T/trace_pipe > ${RUN}.trace &
 TP=$!
 echo 1 > $T/tracing_on
 
-RUN=${RUN} MESA_VK_WSI_DISPLAY_TRACE=1 MESA_VK_WSI_DISPLAY_REPEAT=${REPEAT} \
-  bash -c "exec ${CMD}" >${RUN}.out 2>&1 &
+RUN=${RUN} MESA_VK_WSI_DISPLAY_TRACE=1 bash -c "exec ${CMD}" >${RUN}.out 2>&1 &
 PID=$!
 # msm turns the vblank interrupt off whenever nothing waits on it, and then
 # rebuilds the vblank count from the mode's nominal frame time, which is

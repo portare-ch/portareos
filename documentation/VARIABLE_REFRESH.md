@@ -237,7 +237,10 @@ rate (see the launch below).
 
 ## Showing a frame more than once
 
-The repeat lives in Mesa's KMS backend (`mesa-005`). RetroArch presents
+The repeat is the display driver's (patch 1107, see
+[repeats in the kernel](#repeats-in-the-kernel-lfc)). Until 2026-10-09 it
+lived in Mesa's KMS backend (`mesa-005`, dropped then), as described here
+with what was measured on it. RetroArch presents
 each frame once (`0018`), aimed at the frame's start plus a budget: what
 the last 64 frames needed to be ready, measured after the GPU fence, and
 a millisecond. Mesa takes the frame period from the distance between
@@ -269,9 +272,7 @@ still shown twice. A PlayStation frame leaves 0.038 ms a refresh to catch
 up, about a second after a loading stall.
 
 The general form is LFC in the DPU driver, which covers every client,
-not only timed VK_KHR_display presents. Patch 1107 adds it behind a
-switch, to be compared with this: see
-[repeats in the kernel](#repeats-in-the-kernel-lfc-on-trial).
+not only timed VK_KHR_display presents: patch 1107, which replaced this.
 
 ## Checked frame by frame
 
@@ -419,11 +420,12 @@ phase as the panel catching up, k x (P/k - R) a frame: 3.4 ms at 50 Hz,
 over the 2 ms jump. Of the 149 jumps at 50 Hz on the 90 Hz floor, 125
 were that.
 
-## Repeats in the kernel (LFC), on trial
+## Repeats in the kernel (LFC)
 
 Patch 1107 repeats a slow frame in the DPU's video encoder instead of
-in Mesa (#586). It is off unless `msm.dpu_lfc` is set, so the two can be
-compared on the same image.
+in Mesa (#586). It was compared with mesa-005 on the same image, below,
+and replaced it: on by default, `msm.dpu_lfc=0` turns it off and leaves
+a slow frame to the panel's own refresh at the floor.
 
 - **Period.** The kickoffs of a steady source fall on a grid, the
   content's own clock, which stands in for mesa-005's targets. A kickoff
@@ -458,13 +460,11 @@ compared on the same image.
   holds the interrupt; `--no-hold` leaves it to the client. The encoder
   now holds it while AVR is on with LFC.
 - **Clients.** Any commit while `VRR_ENABLED` is set, timed or not.
-  Mesa's own repeats have to be off, or the kernel takes them for
-  frames: `MESA_VK_WSI_DISPLAY_REPEAT=0` (mesa-008), which runemu and
-  `tools/display-trace` set while `msm.dpu_lfc` is on. Mesa repeats only
-  with `VRR_ENABLED`, which only runemu's launches set, so those are the
-  only clients concerned. Toggle `dpu_lfc` between launches: a client
-  started before keeps the repeats it started with, and with both on the
-  kernel takes Mesa's repeats for frames and adds none of its own.
+  For the comparison, Mesa's repeats could be turned off
+  (`MESA_VK_WSI_DISPLAY_REPEAT=0`, mesa-008, dropped with mesa-005);
+  with both on, the kernel took Mesa's repeats for frames and added none
+  of its own. Change `dpu_lfc` between clients: the vsync interrupt is
+  held from when AVR goes on.
 
 Two things about AVR in continuous mode had to be found on the Nova,
 with a build that had them as parameters (2026-10-09, present-probe,

@@ -303,8 +303,9 @@ case ${EMULATOR} in
     esac
 
     ### Variable refresh (documentation/VARIABLE_REFRESH.md): RetroArch times
-    ### each frame at the game's own rate, Mesa turns VRR_ENABLED on and shows
-    ### every frame twice, and the panel follows. For every game, on KMS, on a
+    ### each frame at the game's own rate, Mesa turns VRR_ENABLED on, the
+    ### display driver shows every frame twice (patch 1107), and the panel
+    ### follows. For every game, on KMS, on a
     ### panel that says vrr_capable and is the only output (a dock brings a
     ### fixed-rate one), unless the game pins a display_mode. vrr=0 for a
     ### system or a game turns it off to compare. setsettings reads the same
@@ -321,12 +322,6 @@ case ${EMULATOR} in
     fi
     export MESA_VK_WSI_DISPLAY_VRR
     ${VERBOSE} && log $0 "Variable refresh: ${MESA_VK_WSI_DISPLAY_VRR}"
-    ### With msm.dpu_lfc the kernel shows a slow frame again itself (patch
-    ### 1107), and Mesa's own repeats (mesa-005) would count there as frames.
-    if [ "$(cat /sys/module/msm/parameters/dpu_lfc 2>/dev/null)" = "Y" ]; then
-      export MESA_VK_WSI_DISPLAY_REPEAT=0
-      ${VERBOSE} && log $0 "Repeats: kernel"
-    fi
 
 
     RUNTHIS='${EMUPERF} /usr/bin/${RABIN} -L /tmp/cores/${CORE}_libretro.so --config ${RETROARCH_TEMP_CONFIG} --appendconfig ${RETROARCH_APPEND_CONFIG} "${ROMNAME}"'

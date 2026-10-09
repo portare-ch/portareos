@@ -1,10 +1,10 @@
 # Refresh and audio rates on the Retroid Pocket Nova (SM8550)
 
-RetroArch defaults to **variable refresh from 90 to 120.197628 Hz** on the
+RetroArch defaults to **variable refresh from 80 to 120.197628 Hz** on the
 built-in panel when it is the only connected display and no display mode
 is pinned. It uses the fastest mode for every system and times frames at
-the core's reported rate; Mesa repeats them to keep the panel within its
-range. See [variable refresh](../../VARIABLE_REFRESH.md) for the launch
+the core's reported rate; the display driver repeats them to keep the
+panel within its range. See [variable refresh](../../VARIABLE_REFRESH.md) for the launch
 conditions, rate limits and measurements.
 
 ## Fixed-refresh modes

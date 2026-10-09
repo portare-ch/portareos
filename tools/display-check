@@ -16,7 +16,8 @@ The trace is the reference. A commit marker is paired with the flip it
 caused, the flip with the vblank it landed on, and the vblank's own
 timestamp - the time= payload, CLOCK_MONOTONIC, which the flip event hands
 Mesa truncated to microseconds - is when that commit reached the screen.
-Each refresh is then a new frame, a repeat of one (mesa-005), or a refresh
+Each refresh is then a new frame, a repeat of one (mesa-005, in traces from
+before it was dropped), or a refresh
 with no commit since the last: a held frame on a fixed refresh, the panel
 refreshing on its own on a variable one. With the kernel doing the repeats
 (msm.dpu_lfc, patch 1107) a repeat is a dpu_enc_lfc_repeat kick, paired
