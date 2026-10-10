@@ -57,6 +57,18 @@ post_install() {
   cp ${PKG_DIR}/sources/post-update ${INSTALL}/usr/share
   chmod 755 ${INSTALL}/usr/share/post-update
 
+  # A marker for every migration in post-update. A fresh install starts on
+  # this image's defaults, where each migration would move an older one,
+  # but post-update runs only after an update, so the first update after
+  # installing ran every migration against what the player had set since:
+  # SNES at 4:3 went back to core, integer scaling off back on. First boot
+  # copies these with the rest of /usr/config; post-update never syncs
+  # them, so an updated device keeps its own.
+  mkdir -p ${INSTALL}/usr/config/system/.migrations
+  for _m in $(sed -n 's/^migrate \([^ ]*\) .*/\1/p' ${PKG_DIR}/sources/post-update); do
+    touch ${INSTALL}/usr/config/system/.migrations/${_m}
+  done
+
   # RetroArch shaders of our own, beside the slang-shaders package's; the
   # /tmp/shaders overlay RetroArch reads has this directory as a lower layer.
   mkdir -p ${INSTALL}/usr/share/slang-shaders/portare
