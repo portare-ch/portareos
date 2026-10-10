@@ -2,7 +2,7 @@
 # Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
 
 PKG_NAME="ymir-lr"
-PKG_VERSION="98348d07aec60b4823bcea51a2120b578cc94d83"
+PKG_VERSION="58e7643cf4f12a4b21207b7fa86f9deb535acb2b"
 PKG_LICENSE="GPL-3.0-only"
 PKG_SITE="https://github.com/ymir-emu/Ymir"
 PKG_URL="${PKG_SITE}.git"
