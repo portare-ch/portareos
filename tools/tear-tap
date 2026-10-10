@@ -10,26 +10,31 @@
 # of the same run.
 #
 #   tools/tear-tap root@nova NAME SECONDS [vrr|fixed|ab] [rate=HZ] [bar=PX] [mode=HZ]
+#                  [kms=CLOCK,HFP,HSYNC,HBP,VFP,VSYNC,VBP]
 #
 # vrr (default) presents HZ (default 59.94) with variable refresh; fixed
 # holds each frame two refreshes on the mode nearest twice HZ. ab runs both
 # in random order as NAME-1 and NAME-2 and names them only at the end, so
 # what is reported is not what was expected. bar=PX is the bar's step a
 # frame (default 16). mode=HZ puts variable refresh on the mode nearest HZ
-# rather than the fastest. Writes display-trace's NAME.* and NAME.taps, one
-# tap a line. PROBE=path runs another present-probe build.
+# rather than the fastest. kms= sets that timing itself through vrr-probe
+# instead, any porches and pixel clock, not only the modes the kernel lists;
+# frames are paced by vrr-probe at RATE, under chrt. Writes display-trace's
+# NAME.* and NAME.taps, one tap a line. PROBE=path and VPROBE=path run other
+# present-probe and vrr-probe builds.
 #
 #   tools/tear-tap root@nova tear 60 ab
 
-[ $# -lt 3 ] && { sed -n '5,21p' "$0" | cut -c3-; exit 1; }
+[ $# -lt 3 ] && { sed -n '5,25p' "$0" | cut -c3-; exit 1; }
 HOST=$1 NAME=$2 SECS=$3; shift 3
-MODE=vrr RATE=59.94 BAR=16 PMODE=
+MODE=vrr RATE=59.94 BAR=16 PMODE= KMS=
 for a in "$@"; do
   case "${a}" in
     vrr|fixed|ab) MODE=${a} ;;
     rate=*) RATE=${a#rate=} ;;
     bar=*) BAR=${a#bar=} ;;
     mode=*) PMODE=${a} ;;
+    kms=*) KMS=${a#kms=} ;;
     *) echo "unknown argument ${a}" >&2; exit 1 ;;
   esac
 done
@@ -61,7 +66,12 @@ one() {
   printf '%s\n' "${TAPLOG}" | ssh "${HOST}" "for d in /sys/class/input/event*; do grep -q ft5x06 \$d/device/name 2>/dev/null && exec timeout $((SECS + 25)) python3 - /dev/input/\${d##*/} $((SECS + 25)); done; echo no touchscreen >&2" >"${name}.taps" &
   local logger=$!
   sleep 1
-  if [ "${mode}" = vrr ]; then
+  if [ -n "${KMS}" ]; then
+    local v=
+    [ "${mode}" = vrr ] && v=vrr
+    "${TRACE}" "${HOST}" "${name}" "${SECS}" -- chrt -f 50 "${VPROBE:-vrr-probe}" /tmp/tear-tap.csv \
+      "${SECS}" custom "${KMS}" "${RATE}" ${v} "bar=${BAR}" >/dev/null
+  elif [ "${mode}" = vrr ]; then
     "${TRACE}" "${HOST}" "${name}" "${SECS}" -- env MESA_VK_WSI_DISPLAY_VRR=1 \
       "${PROBE}" /tmp/tear-tap "$((SECS + 2))" observe "rate:${RATE}" "bar=${BAR}" ${PMODE} >/dev/null
   else
