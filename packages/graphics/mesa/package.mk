@@ -14,6 +14,13 @@ PKG_DEPENDS_TARGET="toolchain expat libdrm Mako:host pyyaml:host"
 PKG_LONGDESC="Mesa is a 3-D graphics library with an API."
 PKG_PATCH_DIRS+=" ${DEVICE}"
 
+# The shader caches - Mesa's own, and every emulator's pipeline cache
+# checked against the driver's UUID - are keyed on the driver's build-id.
+# freedreno's isa and register generators walk Python sets, so a random
+# hash seed reorders isa/encode.h and the driver comes out different from
+# the same source: every nightly threw every cache away (#623).
+export PYTHONHASHSEED=0
+
 get_graphicdrivers
 
 if listcontains "${GRAPHIC_DRIVERS}" "panfrost"; then
