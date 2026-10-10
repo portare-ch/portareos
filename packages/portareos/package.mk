@@ -83,6 +83,9 @@ EOF
   ### Take a backup of the system configuration on shutdown
   enable_service save-sysconfig.service
 
+  ### Reset to stock, in the boot the initramfs starts for it
+  enable_service portareos-factory-reset.service
+
   ### Bluetooth pairing agent, brought up with bluetoothd
   enable_service bluetooth-agent.service
 
