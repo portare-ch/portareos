@@ -1,0 +1,64 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] shaders: a saved preset wins over --set-shader
+
+--set-shader is meant to work like a global auto-shader, as the comment
+over this code says, but it won outright: with a --set-shader path the
+driver could load, game, folder, core and global presets were never
+looked for. A launcher passing the system's shader at every start, as
+ours does, made saving a preset from the menu look broken - the file
+was written and never loaded.
+
+Look for a saved preset first and fall back to --set-shader.
+
+Tested on SM8550 (Retroid Pocket Nova), Super Mario World started with
+--set-shader crt-guest-advanced and a game preset referencing the Game
+Boy shader: before, crt-guest-advanced loaded and the preset was never
+found; after, "Shader preset found" and the Game Boy passes compiled.
+With the preset removed, crt-guest-advanced loads as before.
+
+Signed-off-by: PortareOS <hello@portare.org>
+---
+diff --git a/gfx/video_shader_parse.c b/gfx/video_shader_parse.c
+--- a/gfx/video_shader_parse.c
++++ b/gfx/video_shader_parse.c
+@@ -4163,27 +4163,24 @@ const char *video_shader_get_current_shader_preset(void)
+ 
+       video_driver_modify_disp_flags(0, VIDEO_FLAG_SHADER_PRESETS_NEED_RELOAD);
+ 
+-      if (BIT32_GET(flags.flags,
+-               video_shader_type_to_flag(video_shader_parse_type(video_st->cli_shader_path))))
+-         strlcpy(runloop_st->runtime_shader_preset_path,
+-               video_st->cli_shader_path,
+-               sizeof(runloop_st->runtime_shader_preset_path));
+-      else
+-      {
+-         if (auto_shaders_enable) /* sets runtime_shader_preset_path */
+-         {
+-            if (video_shader_load_auto_shader_preset(
++      /* A preset the player saved - game, folder, core or global -
++       * comes first, as the comment above says. The --set-shader path
++       * used to win outright, so with a launcher passing one at every
++       * start a saved preset was written and never loaded. */
++      if (     auto_shaders_enable /* sets runtime_shader_preset_path */
++            && video_shader_load_auto_shader_preset(
+                      settings->paths.directory_video_shader,
+                      settings->paths.directory_menu_config,
+                      runloop_st->system.info.library_name,
+                      runloop_st->runtime_shader_preset_path,
+                      sizeof(runloop_st->runtime_shader_preset_path)))
+-            {
+-               RARCH_LOG("[Shaders] Shader preset found at \"%s\".\n",
+-                     runloop_st->runtime_shader_preset_path);
+-            }
+-         }
+-      }
++         RARCH_LOG("[Shaders] Shader preset found at \"%s\".\n",
++               runloop_st->runtime_shader_preset_path);
++      else if (BIT32_GET(flags.flags,
++               video_shader_type_to_flag(video_shader_parse_type(video_st->cli_shader_path))))
++         strlcpy(runloop_st->runtime_shader_preset_path,
++               video_st->cli_shader_path,
++               sizeof(runloop_st->runtime_shader_preset_path));
+       return runloop_st->runtime_shader_preset_path;
+    }
+ 
