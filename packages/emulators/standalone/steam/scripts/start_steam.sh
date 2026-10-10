@@ -132,7 +132,6 @@ steam_debug_print() {
   echo "LSFG FLOW SCALE set to: ${LSFG_FLOW_SCALE}"
   echo "LSFG PERFORMANCE MODE set to: ${LSFG_PERFORMANCE_MODE}"
   echo "LSFG FPS LIMIT set to: ${FPS_LIMIT}"
-  echo "VSYNC set to: ${VSYNC}"
 }
 
 # Asks DRM directly rather than asking a compositor. modetest is a query and

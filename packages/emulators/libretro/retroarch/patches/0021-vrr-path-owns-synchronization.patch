@@ -11,7 +11,8 @@ through a saved override, left that path for the session or for every
 launch.
 
 On that path vsync is off and Sync to Exact Content Framerate on after
-the config loads and after an override is loaded or unloaded, both
+the config loads, after an override is loaded or unloaded and after
+Reset to Default Values, both
 entries leave the menu (Video > Synchronization, Latency, Frame
 Throttle), and the hotkey does nothing. Vsync is not used there at all:
 content that does not fit twice into the panel's rate, a few arcade
@@ -163,7 +164,16 @@ diff --git a/retroarch.c b/retroarch.c
     /* Content av_info based automatic swap interval must be set early. */
     runloop_set_video_swap_interval(settings);
  
-@@ -6173,6 +6190,8 @@
+@@ -5244,6 +5261,8 @@
+ #endif
+       case CMD_EVENT_MENU_RESET_TO_DEFAULT_CONFIG:
+          config_set_defaults(global_get_ptr(), config_get_ptr());
++         /* The defaults have vsync on and the exact-rate loop off. */
++         config_vrr_path_owns_sync(config_get_ptr());
+          break;
+       case CMD_EVENT_MENU_SAVE_CURRENT_CONFIG:
+          /* Same as at quit: the companion's live layout first. */
+@@ -6173,6 +6192,8 @@
           }
           break;
        case CMD_EVENT_VRR_RUNLOOP_TOGGLE:
