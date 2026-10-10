@@ -14,7 +14,8 @@ surface_scale = 1
 
 [display.window]
 fullscreen_on_startup = true
-vsync = true
+# Off, as for every emulator here; see start_xemu.sh.
+vsync = false
 
 [display.ui]
 show_menubar = false

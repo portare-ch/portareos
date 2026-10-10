@@ -50,7 +50,6 @@ GRENDERER=$(get_setting graphics_backend "${PLATFORM}" "${GAME}")
 SHOWFPS=$(get_setting show_fps "${PLATFORM}" "${GAME}")
 SKIPBOOT=$(get_setting skip_boot_animation "${PLATFORM}" "${GAME}")
 SMEM=$(get_setting system_memory "${PLATFORM}" "${GAME}")
-VSYNC=$(get_setting vsync "${PLATFORM}" "${GAME}")
 
 # Set the cores to use
 CORES=$(get_setting "cores" "${PLATFORM}" "${GAME}")
@@ -167,12 +166,9 @@ fi
                 sed -i "/mem_limit =/c\mem_limit = '64'" "${CONF_DIR}/${XEMU_INI}"
         fi
 
-  #Vsync
-        if [ "$VSYNC" = "false" ] || [ "$VSYNC" = "0" ]; then
-                sed -i "/vsync =/c\vsync = false" "${CONF_DIR}/${XEMU_INI}"
-        else
-                sed -i "/vsync =/c\vsync = true" "${CONF_DIR}/${XEMU_INI}"
-        fi
+  # No vsync setting: vsync is off for every emulator here, and the copy
+  # of xemu.toml above has it so. The panel latches each flip at vblank,
+  # so off cannot tear; on only adds a frame of waiting.
 
 # Debugging info:
   echo "GAME set to: ${GAME}"
@@ -187,7 +183,6 @@ fi
   echo "SHOW FPS set to: ${SHOWFPS}"
   echo "SKIP BOOT SCREEN set to: ${SKIPBOOT}"
   echo "SYSTEM MEMORY set to: ${SMEM}"
-  echo "VSYNC set to: ${VSYNC}"
   echo "CONF DIR set to: ${CONF_DIR}"
   echo "SOURCE DIR set to: ${SOURCE_DIR}"
   echo "INI set to: ${XEMU_INI}"
