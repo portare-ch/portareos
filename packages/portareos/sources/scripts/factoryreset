@@ -4,23 +4,23 @@
 # Copyright (C) 2020-present Shanti Gilbert (https://github.com/shantigilbert)
 # Copyright (C) 2023 JELOS (https://github.com/JustEnoughLinuxOS)
 
-# Back to stock: every setting goes, what the player has stays.
+# Back to a fresh install, to find or rule out a regression on one.
 #
 #   factoryreset         flag the reset and restart into it
 #   factoryreset --wipe  the reset itself, run by factory-reset.service
 #
-# Stays: the games, BIOS, saves and states (roms, games-internal,
-# games-external), a staged update, favourites and recently played, the
-# play history, and Steam as installed - its x86 RootFS is a 4 GB download
-# and its games and own settings are in roms. Everything else under
-# /storage goes, the Wi-Fi networks and SSH keys with it; first boot then
-# sets the device up from /usr/config as on a new install.
+# Stays: the roms folder (roms, games-internal, games-external) - games,
+# BIOS and what is saved beside them - and Wi-Fi, so the device is still
+# on the network. Everything else under /storage goes, Steam, favourites
+# and SSH keys with it; first boot then sets the device up from
+# /usr/config as on a new install.
 #
 # The wipe runs in a boot of its own: the initramfs sees the flag and starts
 # factory-reset.target instead of the system, so nothing is running that
 # could write a setting back between the wipe and the restart.
 
 FLAG="/storage/.cache/reset_oe"
+CFG="/storage/.config/system/configs/system.cfg"
 
 # Removes everything in a directory but the names given, never crossing
 # into a mount.
@@ -52,11 +52,17 @@ case "${1}" in
     # First, so a failure below restarts into the system, not into this.
     rm -f "${FLAG}" /storage/.cache/reset_xbmc
     sync
-    keep_only /storage roms games-internal games-external .update lost+found \
-              .config playlists .steam .local
-    keep_only /storage/.config portarelauncher
-    keep_only /storage/.local share
-    keep_only /storage/.local/share Steam fex-emu applications
+    # Wi-Fi: iwd's known networks, and the wifi.* keys over the image's
+    # system.cfg. First boot copies /usr/config without overwriting, so
+    # the system.cfg written here is the one it keeps.
+    wifi="$(grep '^wifi\.' "${CFG}" 2>/dev/null)"
+    keep_only /storage roms games-internal games-external lost+found .cache
+    keep_only /storage/.cache iwd
+    if [ -n "${wifi}" ]; then
+      mkdir -p "${CFG%/*}"
+      grep -v '^wifi\.' /usr/config/system/configs/system.cfg >"${CFG}"
+      printf '%s\n' "${wifi}" >>"${CFG}"
+    fi
     sync
   ;;
   *)
