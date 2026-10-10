@@ -230,15 +230,6 @@ sed -i -e '/^snes\(\[.*\]\)\?\.core=bsnes$/d' \
        -e '/^snesmsu1\(\[.*\]\)\?\.core=bsnes$/d' \
   /storage/.config/system/configs/system.cfg
 
-### Saturn's picture: Ymir hands over the console's own frame, 320x224 and
-### up, so the beam shader at native resolution (crt-240-1x) draws its
-### lines, and the 4:3 frame fills the 4:3 panel instead of an integer
-### 4x that left a border all round. Only the old defaults change; a value
-### someone chose stays.
-sed -i -e 's|^saturn\.shaderset=crt/crt-guest-advanced\.slangp$|saturn.shaderset=portare/crt-240-1x.slangp|' \
-       -e 's|^saturn\.integerscale=1$|saturn.integerscale=0|' \
-  /storage/.config/system/configs/system.cfg
-
 ### The same for Nestopia, which MesenCE (mesen2) replaced for the NES.
 sed -i -e '/^nes\(\[.*\]\)\?\.core=nestopia$/d' \
        -e '/^famicom\(\[.*\]\)\?\.core=nestopia$/d' \
@@ -453,6 +444,17 @@ migrate_led_battery_off() {
   set_setting sleep.led.color off
 }
 
+# Saturn's picture: Ymir hands over the console's own frame, 320x224 and
+# up, so the beam shader at native resolution (crt-240-1x) draws its
+# lines, and the 4:3 frame fills the 4:3 panel instead of an integer 4x
+# that left a border all round. This ran on every update, so it also took
+# back crt-guest-advanced or integer scaling chosen since; once is enough.
+migrate_saturn_picture() {
+  sed -i -e 's|^saturn\.shaderset=crt/crt-guest-advanced\.slangp$|saturn.shaderset=portare/crt-240-1x.slangp|' \
+         -e 's|^saturn\.integerscale=1$|saturn.integerscale=0|' \
+    /storage/.config/system/configs/system.cfg
+}
+
 migrate cpugovernor-schedutil migrate_cpugovernor
 migrate audiolatency-24 migrate_audiolatency_24
 migrate audiolatency-8 migrate_audiolatency_8
@@ -466,3 +468,4 @@ migrate music-little-cores migrate_music_little_cores
 migrate nes-ratio-core migrate_nes_ratio_core
 migrate snes-ratio-core migrate_snes_ratio_core
 migrate led-battery-off migrate_led_battery_off
+migrate saturn-picture migrate_saturn_picture
