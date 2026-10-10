@@ -4,66 +4,63 @@
 # Copyright (C) 2020-present Shanti Gilbert (https://github.com/shantigilbert)
 # Copyright (C) 2023 JELOS (https://github.com/JustEnoughLinuxOS)
 
+# Back to stock: every setting goes, what the player has stays.
+#
+#   factoryreset         flag the reset and restart into it
+#   factoryreset --wipe  the reset itself, run by factory-reset.service
+#
+# Stays: the games, BIOS, saves and states (roms, games-internal,
+# games-external), a staged update, favourites and recently played, the
+# play history, and Steam as installed - its x86 RootFS is a 4 GB download
+# and its games and own settings are in roms. Everything else under
+# /storage goes, the Wi-Fi networks and SSH keys with it; first boot then
+# sets the device up from /usr/config as on a new install.
+#
+# The wipe runs in a boot of its own: the initramfs sees the flag and starts
+# factory-reset.target instead of the system, so nothing is running that
+# could write a setting back between the wipe and the restart.
+
+FLAG="/storage/.cache/reset_oe"
+
+# Removes everything in a directory but the names given, never crossing
+# into a mount.
+keep_only() {
+  local dir="${1}" entry name kept k
+  shift
+  for entry in "${dir}"/* "${dir}"/.[!.]* "${dir}"/..?*; do
+    [ -e "${entry}" ] || [ -L "${entry}" ] || continue
+    name="${entry##*/}"
+    kept=0
+    for k in "$@"; do
+      [ "${name}" = "${k}" ] && kept=1
+    done
+    [ "${kept}" = 1 ] && continue
+    mountpoint -q "${entry}" && continue
+    # BusyBox rm has no --one-file-system; find stays on this one.
+    find "${entry}" -xdev -depth -delete
+  done
+}
+
 case "${1}" in
-  "retroarch")
-    rm -f /storage/.config/retroarch/retroarch.cfg
-    cp -rf /usr/config/retroarch/retroarch.cfg /storage/.config/retroarch/retroarch.cfg
-  ;;
-  "retroarch-full")
-    rm -rf /storage/.config/retroarch
-    cp -rf /usr/config/retroarch /storage/.config/
-  ;;
-  "mednafen")
-    rm -f /storage/.config/mednafen/mednafen.cfg
-  ;;
-  "standalone")
-    rm -rf /storage/.config/amiberry
-    cp -rf /usr/config/amiberry /storage/.config/
-
-    rm -rf /storage/.config/dolphin-emu
-    cp -rf /usr/config/dolphin-emu /storage/.config/
-
-
-    rm -rf /storage/.config/flycast
-    cp -rf /usr/config/flycast /storage/.config/
-
-    rm -rf /storage/.config/gzdoom
-    cp -rf /usr/config/gzdoom /storage/.config/
-
-    rm -rf /storage/.config/hatari
-    cp -rf /usr/config/hatari /storage/.config/
-
-    rm -rf /storage/.config/melonDS
-    cp -rf /usr/config/melonDS /storage/.config/
-
-    rm -rf /storage/.config/openbor
-    cp -rf /usr/config/openbor /storage/.config/
-
-    rm -rf /storage/.config/ppsspp
-    cp -rf /usr/config/ppsspp /storage/.config/
-
-    rm -rf /storage/.config/azahar
-    cp -rf /usr/config/azahar /storage/.config/
-
-  ;;
-  "overlays")
-    rm -rf $(cat /usr/lib/systemd/system/tmp-*.mount | grep -Eo 'upperdir=.*,' | sed -e 's~upperdir=~~g; s~,~~g')
+  "")
+    mkdir -p "${FLAG%/*}"
+    touch "${FLAG}"
     sync
     systemctl reboot
   ;;
-  "audio")
-    systemctl stop pipewire-pulse pipewire-pulse.socket pipewire pipewire.socket wireplumber
-    rm -rf /storage/.local/state /storage/.config/pulse /storage/asound*
-    systemctl reboot
+  "--wipe")
+    # First, so a failure below restarts into the system, not into this.
+    rm -f "${FLAG}" /storage/.cache/reset_xbmc
+    sync
+    keep_only /storage roms games-internal games-external .update lost+found \
+              .config playlists .steam .local
+    keep_only /storage/.config portarelauncher
+    keep_only /storage/.local share
+    keep_only /storage/.local/share Steam fex-emu applications
+    sync
   ;;
-  "ALL")
-    swapoff -a 2>/dev/null
-    umount /storage/roms 2>/dev/null ||:
-    umount /storage/games-external 2>/dev/null ||:
-    cd /
-    find /storage -mindepth 1 \( ! -regex '^/storage/.update.*' -a ! -regex '^/storage/roms.*' -a ! -regex '^/storage/games-.*' \) -delete 2>/dev/null
-    mkdir /storage/.config/
-    sync 2>/dev/null
-    systemctl reboot
+  *)
+    echo "usage: factoryreset [--wipe]" >&2
+    exit 2
   ;;
 esac
