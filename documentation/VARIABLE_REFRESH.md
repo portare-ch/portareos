@@ -709,7 +709,7 @@ Otherwise it is 0.
   and SDL's KMS emulators present through the same backend without
   timing their frames.
 - setsettings uses the fastest mode for every game, Sync to Exact Content
-  Framerate, vsync off whatever the vsync setting says, and no frame
+  Framerate, vsync off (there is no vsync setting), and no frame
   delay. The table of a mode at twice each system's rate is for fixed
   refresh.
 - RetroArch (`0019`) keeps presents timed under Sync to Exact Content

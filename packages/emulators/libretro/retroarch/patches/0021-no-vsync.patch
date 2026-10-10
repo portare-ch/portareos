@@ -1,85 +1,87 @@
 From: PortareOS <hello@portare.org>
-Subject: [PATCH] On the variable refresh path, the launch owns synchronization
+Subject: [PATCH] No vsync
 
-PortareOS runs every game on the variable refresh path; runemu exports
-MESA_VK_WSI_DISPLAY_VRR=1 for it, which Mesa and setsettings read as
-well (fixed refresh is left for debugging timing). There frames are
-timed at the core's rate with vsync off (0018, 0019) and the display
-driver repeats them below the panel's range. Turning vsync on, or Sync
-to Exact Content Framerate off, in the menu or with the hotkey, or
-through a saved override, left that path for the session or for every
-launch.
+PortareOS has no vsync. Frames are timed at the core's rate (Sync to
+Exact Content Framerate, 0018, 0019). On the variable refresh path -
+runemu exports MESA_VK_WSI_DISPLAY_VRR=1 for it, which Mesa and
+setsettings read as well - the panel follows them and the display
+driver repeats them below its range; at fixed refresh, kept for
+debugging timing, each frame is shown at the next refresh. The display
+offers FIFO only and latches every flip at vblank, so nothing tears.
 
-On that path vsync is off and Sync to Exact Content Framerate on after
-the config loads, after an override is loaded or unloaded and after
-Reset to Default Values, both
-entries leave the menu (Video > Synchronization, Latency, Frame
-Throttle), and the hotkey does nothing. Vsync is not used there at all:
-content that does not fit twice into the panel's rate, a few arcade
-boards at 60.1 to 63 Hz against 120.198, is refused. drivers_init finds
-it from the content's rate; the core never runs, "This game is not
-supported" shows for three seconds, and RetroArch quits. With the
-variable unset or 0 nothing changes.
+Vsync is off and Sync to Exact Content Framerate on after the config
+loads, after an override is loaded or unloaded and after Reset to
+Default Values. Both entries leave the menu (Video > Synchronization,
+Latency, Frame Throttle), and with vsync off so do the settings that
+need it, black frame insertion among them; the hotkey does nothing.
+
+On the variable refresh path, content that does not fit twice into the
+panel's rate, a few arcade boards at 60.1 to 63 Hz against 120.198, is
+refused. drivers_init finds it from the content's rate; the core never
+runs, "This game is not supported" shows for three seconds, and
+RetroArch quits.
 
 Signed-off-by: PortareOS <hello@portare.org>
 ---
 diff --git a/configuration.c b/configuration.c
 --- a/configuration.c
 +++ b/configuration.c
-@@ -6040,6 +6040,32 @@
+@@ -6040,6 +6040,34 @@
  #ifdef HAVE_CONFIGFILE
     config_parse_file(global);
  #endif
-+   config_vrr_path_owns_sync(config_st);
++   config_no_vsync(config_st);
 +}
 +
-+/* PortareOS runs every game on the variable refresh path unless black
-+ * frame insertion asks for fixed refresh, and runemu says which by
-+ * exporting MESA_VK_WSI_DISPLAY_VRR, which Mesa and setsettings read too.
-+ * On that path the launch owns synchronization: frames are timed at the
-+ * core's rate (Sync to Exact Content Framerate, 0018) with vsync off, and
-+ * the display driver repeats them below the panel's range. Neither the
-+ * menu, the hotkey nor a saved override turns vsync on there, and content
-+ * that does not fit twice into the panel's rate is refused rather than
-+ * locked to the display with vsync (runloop_refuse_content). */
++/* PortareOS has no vsync. Frames are timed at the core's rate (Sync to
++ * Exact Content Framerate, 0018); on the variable refresh path the panel
++ * follows them and the display driver repeats them below its range, and
++ * at fixed refresh, kept for debugging timing, each is shown at the next
++ * refresh. Neither the menu, the hotkey, a saved override nor a reset to
++ * defaults turns vsync on.
++ *
++ * runemu says which path a launch is on by exporting
++ * MESA_VK_WSI_DISPLAY_VRR, which Mesa and setsettings read too. On the
++ * variable refresh path content that does not fit twice into the
++ * panel's rate is refused (runloop_refuse_content). */
 +bool config_vrr_path(void)
 +{
 +   const char *v = getenv("MESA_VK_WSI_DISPLAY_VRR");
 +   return v && v[0] == '1' && v[1] == '\0';
 +}
 +
-+void config_vrr_path_owns_sync(settings_t *settings)
++void config_no_vsync(settings_t *settings)
 +{
-+   if (!settings || !config_vrr_path())
++   if (!settings)
 +      return;
 +   if (settings->bools.video_vsync || !settings->bools.vrr_runloop_enable)
-+      RARCH_LOG("[Config] Variable refresh: vsync off, Sync to Exact Content Framerate on.\n");
++      RARCH_LOG("[Config] No vsync: vsync off, Sync to Exact Content Framerate on.\n");
 +   settings->bools.video_vsync        = false;
 +   settings->bools.vrr_runloop_enable = true;
  }
  
  #ifdef HAVE_CONFIGFILE
-@@ -7463,6 +7489,7 @@
+@@ -7463,6 +7491,7 @@
     else
        runloop_state_get_ptr()->flags &= ~RUNLOOP_FLAG_OVERRIDES_ACTIVE;
  
-+   config_vrr_path_owns_sync(config_st);
++   config_no_vsync(config_st);
     return true;
  }
  
-@@ -7506,6 +7533,7 @@
+@@ -7506,6 +7535,7 @@
     else
        runloop_state_get_ptr()->flags &= ~RUNLOOP_FLAG_OVERRIDES_ACTIVE;
  
-+   config_vrr_path_owns_sync(config_st);
++   config_no_vsync(config_st);
     return true;
  }
  
-@@ -7629,6 +7657,8 @@
+@@ -7629,6 +7659,8 @@
              path_get(RARCH_PATH_CONFIG), config_st))
        return false;
  
-+   config_vrr_path_owns_sync(config_st);
++   config_no_vsync(config_st);
 +
     if (settings->bools.video_fullscreen != fullscreen_prev)
     {
@@ -91,10 +93,10 @@ diff --git a/configuration.h b/configuration.h
  
  void config_load(void *data);
  
-+/* Whether this launch runs on the variable refresh path, and on it, the
-+ * synchronization the launch owns put back. See configuration.c. */
++/* Whether this launch runs on the variable refresh path, and vsync off
++ * with Sync to Exact Content Framerate on put back. See configuration.c. */
 +bool config_vrr_path(void);
-+void config_vrr_path_owns_sync(settings_t *settings);
++void config_no_vsync(settings_t *settings);
 +
  #if !defined(HAVE_DYNAMIC)
  /* Salamander config file contains a single
@@ -108,31 +110,31 @@ diff --git a/menu/menu_displaylist.c b/menu/menu_displaylist.c
                 {
 +                  case MENU_ENUM_LABEL_VIDEO_VSYNC:
 +                  case MENU_ENUM_LABEL_VRR_RUNLOOP_ENABLE:
-+                     /* The launch owns both on the variable refresh
-+                      * path (config_vrr_path_owns_sync). */
-+                     build_list[i].checked = !config_vrr_path();
++                     /* No vsync, Sync to Exact Content Framerate
++                      * always (config_no_vsync). */
++                     build_list[i].checked = false;
 +                     break;
                    case MENU_ENUM_LABEL_VIDEO_SWAP_INTERVAL:
                    case MENU_ENUM_LABEL_VIDEO_BLACK_FRAME_INSERTION:
                       build_list[i].checked = video_vsync;
-@@ -12139,7 +12145,10 @@
+@@ -12139,10 +12145,7 @@
  #endif
              };
  
 -            if (MENU_DISPLAYLIST_PARSE_SETTINGS_ENUM(list,
-+            /* The launch owns vsync on the variable refresh path
-+             * (config_vrr_path_owns_sync). */
-+            if (     !config_vrr_path()
-+                  && MENU_DISPLAYLIST_PARSE_SETTINGS_ENUM(list,
-                      MENU_ENUM_LABEL_VIDEO_VSYNC,
-                      PARSE_ONLY_BOOL, false) == 0)
-                count++;
-@@ -13371,6 +13380,9 @@
+-                     MENU_ENUM_LABEL_VIDEO_VSYNC,
+-                     PARSE_ONLY_BOOL, false) == 0)
+-               count++;
++            /* No vsync entry (config_no_vsync). */
+ 
+             if (video_vsync)
+             {
+@@ -13371,6 +13374,9 @@
                    case MENU_ENUM_LABEL_MENU_THROTTLE_FRAMERATE:
                       build_list[i].checked = settings->bools.vrr_runloop_enable;
                       break;
 +                  case MENU_ENUM_LABEL_VRR_RUNLOOP_ENABLE:
-+                     build_list[i].checked = !config_vrr_path();
++                     build_list[i].checked = false;
 +                     break;
                    default:
                       break;
@@ -169,19 +171,31 @@ diff --git a/retroarch.c b/retroarch.c
        case CMD_EVENT_MENU_RESET_TO_DEFAULT_CONFIG:
           config_set_defaults(global_get_ptr(), config_get_ptr());
 +         /* The defaults have vsync on and the exact-rate loop off. */
-+         config_vrr_path_owns_sync(config_get_ptr());
++         config_no_vsync(config_get_ptr());
           break;
        case CMD_EVENT_MENU_SAVE_CURRENT_CONFIG:
           /* Same as at quit: the companion's live layout first. */
-@@ -6173,6 +6192,8 @@
+@@ -6173,19 +6192,7 @@
           }
           break;
        case CMD_EVENT_VRR_RUNLOOP_TOGGLE:
-+         if (config_vrr_path())
-+            break;
-          {
-             const char *_msg = msg_hash_to_str(
-                      settings->bools.vrr_runloop_enable ? MSG_VRR_RUNLOOP_ENABLED
+-         {
+-            const char *_msg = msg_hash_to_str(
+-                     settings->bools.vrr_runloop_enable ? MSG_VRR_RUNLOOP_ENABLED
+-                     : MSG_VRR_RUNLOOP_DISABLED);
+-            settings->bools.vrr_runloop_enable = !(settings->bools.vrr_runloop_enable);
+-            /* Re-adjust audio/video system rates for the new VRR mode so the
+-             * hotkey matches the menu toggle instead of leaving the audio
+-             * input rate stale until the next reinit. */
+-            driver_ctl(RARCH_DRIVER_CTL_SET_REFRESH_RATE,
+-                  &settings->floats.video_refresh_rate);
+-            runloop_msg_queue_push(_msg, strlen(_msg), 1, 100, false, NULL,
+-                  MESSAGE_QUEUE_ICON_DEFAULT, MESSAGE_QUEUE_CATEGORY_INFO);
+-         }
++         /* Sync to Exact Content Framerate is always on (config_no_vsync). */
+          break;
+       case CMD_EVENT_NONE:
+          return false;
 diff --git a/runloop.c b/runloop.c
 --- a/runloop.c
 +++ b/runloop.c
@@ -189,7 +203,7 @@ diff --git a/runloop.c b/runloop.c
     if (auto_overrides_enable)
        config_load_override(&runloop_st->system);
  #endif
-+   config_vrr_path_owns_sync(settings);
++   config_no_vsync(settings);
  
     /* Cannot access these settings-related parameters
      * until *after* config overrides have been loaded */
