@@ -145,7 +145,6 @@ Details: [package inventory](PACKAGE_INVENTORY.md), [audio measurements](../docs
 ## Experimental and incomplete
 
 * Preemptive frames and run-ahead: optional; compatibility and performance depend on the core.
-* Black frame insertion: experimental, disabled by default, with unresolved visual issues.
 * sRGB/D65 color profiles: implemented, but currently crush dark greys.
 * Temperature-based charging-current reduction: implemented, awaiting device verification.
 * External displays and display-audio routing: incomplete.

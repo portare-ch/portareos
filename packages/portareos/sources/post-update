@@ -294,6 +294,10 @@ for KEY in system.suspend.enable system.suspend.enable_timed_shutdown \
   sed -i "/^${KEY}=/d" /storage/.config/system/configs/system.cfg
 done
 
+# Vsync is gone (RetroArch 0021, setsettings): no key turns it on, so the
+# keys go too - global.vsync, and any a system or a game was given.
+sed -i '/^[^#=]*\.vsync=/d' /storage/.config/system/configs/system.cfg
+
 ### One-shot migrations
 ################################################################################
 #

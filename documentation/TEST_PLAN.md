@@ -83,29 +83,6 @@ not 119.88.
 Fail if the config names a different rate or the log shows the default
 mode for a system with its own row.
 
-### D2 Timed presents on Vulkan display (auto+human)
-
-Needs vsync on: run it with `<system>.vsync=1` while `global.vsync=0`
-ships, and skip it otherwise.
-
-Auto, game running: the RetroArch log contains
-
-```
-[Vulkan] Timed presents: swap interval 2, one present a frame, 16.683 ms apart.
-```
-with the interval in ms equal to 2000 divided by the D1 rate (16.683 at
-119.880, 16.715 at 119.652 and so on, within 0.005). Read the vblank
-counter twice ten seconds apart; the difference divided by ten is the
-panel rate, not the game rate.
-
-A core that runs at the panel rate (ScummVM, 119.88 fps) presents every
-refresh at swap interval 1, so it has no such line and the test is skipped.
-
-Human: film the screen with a 240 fps phone camera for five seconds during
-a smooth horizontal scroll (Sonic, Super Mario World). Every game frame
-shows for exactly two camera frames at 120 Hz class rates; no frame shows
-for one or three. Fail on any visible judder in the scroll.
-
 ### D3 Two-image swapchain, no threaded video (auto)
 
 Game running, in the launched config:
@@ -113,12 +90,13 @@ Game running, in the launched config:
 ```
 video_max_swapchain_images = "2"
 video_threaded = "false"
-video_swap_interval = "0"      # RetroArch picks 2 for 60 Hz content; 1 with black frame insertion
-video_vsync = "false"          # global.vsync=0; "true" with <system>.vsync=1
-vrr_runloop_enable = "true"    # with vsync off only; "false" with vsync on
+video_swap_interval = "0"      # RetroArch takes 1 under Sync to Exact Content Framerate
+video_black_frame_insertion = "0"
+video_vsync = "false"          # always: there is no vsync (0021)
+vrr_runloop_enable = "true"    # always
 ```
 
-With vsync off, the MangoHud frame rate over a minute is the core's own
+The MangoHud frame rate over a minute is the core's own
 rate within 0.01%: 59.826 for Saturn, 60.099 for SNES. Fail at 0.4% or more
 above it, which is the loop running on audio sync alone.
 
