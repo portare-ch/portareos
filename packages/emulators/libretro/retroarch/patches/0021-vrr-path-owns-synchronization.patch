@@ -1,0 +1,212 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] On the variable refresh path, the launch owns synchronization
+
+PortareOS runs every game on the variable refresh path unless black frame
+insertion asks for fixed refresh; runemu exports MESA_VK_WSI_DISPLAY_VRR=1
+for it, which Mesa and setsettings read as well. There frames are timed at
+the core's rate with vsync off (0018, 0019) and the display driver repeats
+them below the panel's range. Turning vsync on, or Sync to Exact Content
+Framerate off, in the menu or with the hotkey, or through a saved
+override, left that path for the session or for every launch.
+
+On that path drivers_init decides from the content's rate alone whether
+it fits twice into the display's rate (0019's check) and the answer is
+kept for the content. After the config loads, after an override is
+loaded or unloaded, and in drivers_init, both settings are set from it:
+vsync off and Sync to Exact Content Framerate on, or the reverse for
+content locked to the display. Loading or unloading an override while
+the content runs rereads both from the files without reinitialising the
+drivers; without the kept answer that undid the lock. Both entries leave
+the menu (Video > Synchronization, Latency, Frame Throttle), and the
+hotkey does nothing. With the variable unset or 0 nothing changes.
+
+Signed-off-by: PortareOS <hello@portare.org>
+---
+diff --git a/configuration.c b/configuration.c
+--- a/configuration.c
++++ b/configuration.c
+@@ -6040,6 +6040,52 @@
+ #ifdef HAVE_CONFIGFILE
+    config_parse_file(global);
+ #endif
++   config_vrr_path_owns_sync(config_st);
++}
++
++/* PortareOS runs every game on the variable refresh path unless black
++ * frame insertion asks for fixed refresh, and runemu says which by
++ * exporting MESA_VK_WSI_DISPLAY_VRR, which Mesa and setsettings read too.
++ * On that path the launch owns synchronization: frames are timed at the
++ * core's rate (Sync to Exact Content Framerate, 0018) with vsync off, and
++ * the display driver repeats them below the panel's range. Neither the
++ * menu, the hotkey nor a saved override turns vsync on there.
++ *
++ * Content that does not fit twice into the panel's rate is locked to the
++ * display instead (0019): vsync on, Sync to Exact Content Framerate off.
++ * drivers_init decides that from the content's rate and it holds for the
++ * content. It is kept here, not only in the two settings: loading or
++ * unloading an override while the content runs rereads both from the
++ * files without reinitialising the drivers, which would leave the running
++ * drivers locked and the runloop pacing at the core's rate. */
++static bool config_vrr_display_lock = false;
++
++bool config_vrr_path(void)
++{
++   const char *v = getenv("MESA_VK_WSI_DISPLAY_VRR");
++   return v && v[0] == '1' && v[1] == '\0';
++}
++
++void config_vrr_set_display_lock(bool lock)
++{
++   config_vrr_display_lock = lock;
++}
++
++void config_vrr_path_owns_sync(settings_t *settings)
++{
++   bool vsync, runloop;
++   if (!settings || !config_vrr_path())
++      return;
++   vsync   = config_vrr_display_lock;
++   runloop = !config_vrr_display_lock;
++   if (     settings->bools.video_vsync        != vsync
++         || settings->bools.vrr_runloop_enable != runloop)
++      RARCH_LOG("[Config] Variable refresh: vsync %s, Sync to Exact Content Framerate %s%s.\n",
++            vsync   ? "on" : "off",
++            runloop ? "on" : "off",
++            config_vrr_display_lock ? ", locked to the display" : "");
++   settings->bools.video_vsync        = vsync;
++   settings->bools.vrr_runloop_enable = runloop;
+ }
+ 
+ #ifdef HAVE_CONFIGFILE
+@@ -7463,6 +7509,7 @@
+    else
+       runloop_state_get_ptr()->flags &= ~RUNLOOP_FLAG_OVERRIDES_ACTIVE;
+ 
++   config_vrr_path_owns_sync(config_st);
+    return true;
+ }
+ 
+@@ -7506,6 +7553,7 @@
+    else
+       runloop_state_get_ptr()->flags &= ~RUNLOOP_FLAG_OVERRIDES_ACTIVE;
+ 
++   config_vrr_path_owns_sync(config_st);
+    return true;
+ }
+ 
+@@ -7629,6 +7677,8 @@
+             path_get(RARCH_PATH_CONFIG), config_st))
+       return false;
+ 
++   config_vrr_path_owns_sync(config_st);
++
+    if (settings->bools.video_fullscreen != fullscreen_prev)
+    {
+       /* This is for 'win32_common.c', so we don't save
+diff --git a/configuration.h b/configuration.h
+--- a/configuration.h
++++ b/configuration.h
+@@ -1543,6 +1543,13 @@
+ 
+ void config_load(void *data);
+ 
++/* Whether this launch runs on the variable refresh path; on it, the
++ * content's lock to the display (decided in drivers_init) and the
++ * synchronization the launch owns put back. See configuration.c. */
++bool config_vrr_path(void);
++void config_vrr_set_display_lock(bool lock);
++void config_vrr_path_owns_sync(settings_t *settings);
++
+ #if !defined(HAVE_DYNAMIC)
+ /* Salamander config file contains a single
+  * entry (libretro_path), which is linked to
+diff --git a/menu/menu_displaylist.c b/menu/menu_displaylist.c
+--- a/menu/menu_displaylist.c
++++ b/menu/menu_displaylist.c
+@@ -11547,6 +11547,12 @@
+             {
+                switch (build_list[i].enum_idx)
+                {
++                  case MENU_ENUM_LABEL_VIDEO_VSYNC:
++                  case MENU_ENUM_LABEL_VRR_RUNLOOP_ENABLE:
++                     /* The launch owns both on the variable refresh
++                      * path (config_vrr_path_owns_sync). */
++                     build_list[i].checked = !config_vrr_path();
++                     break;
+                   case MENU_ENUM_LABEL_VIDEO_SWAP_INTERVAL:
+                   case MENU_ENUM_LABEL_VIDEO_BLACK_FRAME_INSERTION:
+                      build_list[i].checked = video_vsync;
+@@ -12139,7 +12145,10 @@
+ #endif
+             };
+ 
+-            if (MENU_DISPLAYLIST_PARSE_SETTINGS_ENUM(list,
++            /* The launch owns vsync on the variable refresh path
++             * (config_vrr_path_owns_sync). */
++            if (     !config_vrr_path()
++                  && MENU_DISPLAYLIST_PARSE_SETTINGS_ENUM(list,
+                      MENU_ENUM_LABEL_VIDEO_VSYNC,
+                      PARSE_ONLY_BOOL, false) == 0)
+                count++;
+@@ -13371,6 +13380,9 @@
+                   case MENU_ENUM_LABEL_MENU_THROTTLE_FRAMERATE:
+                      build_list[i].checked = settings->bools.vrr_runloop_enable;
+                      break;
++                  case MENU_ENUM_LABEL_VRR_RUNLOOP_ENABLE:
++                     build_list[i].checked = !config_vrr_path();
++                     break;
+                   default:
+                      break;
+                }
+diff --git a/retroarch.c b/retroarch.c
+--- a/retroarch.c
++++ b/retroarch.c
+@@ -1635,8 +1635,25 @@
+     * arcade boards run at 60.1 to 61 Hz against 120.198 - has no multiple
+     * in range. Lock it to the display instead, as on a fixed refresh
+     * display: vsync, and the core's rate adjusted to half the display's.
+-    * For this session; the next launch sets both again. */
+-   if (     settings->bools.vrr_runloop_enable
++    * For this session; the next launch sets both again.
++    *
++    * On the variable refresh path the launch owns both settings, so the
++    * decision comes from the content's rate alone and is kept for the
++    * content (config_vrr_path_owns_sync): an override loaded later puts it
++    * back instead of undoing it. */
++   if (config_vrr_path())
++   {
++      bool lock =    video_st->av_info.timing.fps > 0.0
++                  && settings->floats.video_refresh_rate > 0.0f
++                  && video_st->av_info.timing.fps * 2.0
++                     > (double)settings->floats.video_refresh_rate * 1.0001;
++      if (lock)
++         RARCH_LOG("[Video] %.3f fps does not fit twice into %.3f Hz, locked to the display.\n",
++               video_st->av_info.timing.fps, settings->floats.video_refresh_rate);
++      config_vrr_set_display_lock(lock);
++      config_vrr_path_owns_sync(settings);
++   }
++   else if (settings->bools.vrr_runloop_enable
+          && video_st->av_info.timing.fps > 0.0
+          && settings->floats.video_refresh_rate > 0.0f
+          && video_st->av_info.timing.fps * 2.0
+@@ -6193,6 +6210,8 @@
+          }
+          break;
+       case CMD_EVENT_VRR_RUNLOOP_TOGGLE:
++         if (config_vrr_path())
++            break;
+          {
+             const char *_msg = msg_hash_to_str(
+                      settings->bools.vrr_runloop_enable ? MSG_VRR_RUNLOOP_ENABLED
+diff --git a/runloop.c b/runloop.c
+--- a/runloop.c
++++ b/runloop.c
+@@ -5428,6 +5428,8 @@
+    if (auto_overrides_enable)
+       config_load_override(&runloop_st->system);
+ #endif
++   config_vrr_set_display_lock(false);
++   config_vrr_path_owns_sync(settings);
+ 
+    /* Cannot access these settings-related parameters
+     * until *after* config overrides have been loaded */
