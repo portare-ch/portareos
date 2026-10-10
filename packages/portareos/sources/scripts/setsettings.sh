@@ -700,9 +700,7 @@ function set_filtering() {
 # it has to be the rate of the mode the panel is actually in, not a number
 # inherited from another device's config. The Nova panel exposes only
 # 120 Hz, a per-game display_mode may pick another, and a dock brings a
-# 60 Hz output. video_swap_interval 0 lets RetroArch pick the interval from
-# the core's own rate, so 60 fps content at 120 Hz swaps every second
-# refresh instead of running against the audio clock.
+# 60 Hz output.
 ### The exact refresh rate of the mode the compositor is driving.
 ###
 ### wlr-randr answers from the Wayland protocol, which carries refresh as
@@ -880,9 +878,10 @@ function set_ra_refresh_rate() {
     if [ -n "${RATE}" ]; then
         add_setting "none" "video_refresh_rate" "${RATE}"
 
-        # Swap interval 0 means "work it out from the core's rate", which for
-        # 60 fps content on the 120 Hz panel means holding each frame for two
-        # refreshes.
+        # Swap interval 0 leaves it to RetroArch, which takes 1 under Sync to
+        # Exact Content Framerate (set_vsync, always on): one present a frame,
+        # timed at the core's rate (0018), shown until the next. It no longer
+        # holds 60 fps content for two refreshes by counting them.
         add_setting "none" "video_swap_interval" "0"
     fi
 }
@@ -1213,6 +1212,9 @@ function set_vsync() {
     # frames. No key turns vsync on; RetroArch holds the same (0021).
     add_setting "none" "video_vsync" "false"
     add_setting "none" "vrr_runloop_enable" "true"
+    # Black frame insertion went with vsync; a value saved before would
+    # turn the core-rate timed presents off. RetroArch clears it too.
+    add_setting "none" "video_black_frame_insertion" "0"
 }
 
 function set_frame_delay() {

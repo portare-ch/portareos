@@ -90,7 +90,8 @@ Game running, in the launched config:
 ```
 video_max_swapchain_images = "2"
 video_threaded = "false"
-video_swap_interval = "0"      # RetroArch picks 2 for 60 Hz content
+video_swap_interval = "0"      # RetroArch takes 1 under Sync to Exact Content Framerate
+video_black_frame_insertion = "0"
 video_vsync = "false"          # always: there is no vsync (0021)
 vrr_runloop_enable = "true"    # always
 ```

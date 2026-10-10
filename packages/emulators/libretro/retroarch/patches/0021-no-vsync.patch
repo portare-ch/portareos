@@ -13,7 +13,9 @@ Vsync is off and Sync to Exact Content Framerate on after the config
 loads, after an override is loaded or unloaded and after Reset to
 Default Values. Both entries leave the menu (Video > Synchronization,
 Latency, Frame Throttle), and with vsync off so do the settings that
-need it, black frame insertion among them; the hotkey does nothing.
+need it, black frame insertion among them; a BFI value saved before is
+cleared with the rest, since it would still turn the core-rate timed
+presents off. The hotkey does nothing.
 
 On the variable refresh path, content that does not fit twice into the
 panel's rate, a few arcade boards at 60.1 to 63 Hz against 120.198, is
@@ -26,19 +28,19 @@ Signed-off-by: PortareOS <hello@portare.org>
 diff --git a/configuration.c b/configuration.c
 --- a/configuration.c
 +++ b/configuration.c
-@@ -6040,6 +6040,34 @@
+@@ -6040,8 +6040,43 @@
  #ifdef HAVE_CONFIGFILE
     config_parse_file(global);
  #endif
 +   config_no_vsync(config_st);
-+}
-+
+ }
+ 
 +/* PortareOS has no vsync. Frames are timed at the core's rate (Sync to
 + * Exact Content Framerate, 0018); on the variable refresh path the panel
 + * follows them and the display driver repeats them below its range, and
 + * at fixed refresh, kept for debugging timing, each is shown at the next
 + * refresh. Neither the menu, the hotkey, a saved override nor a reset to
-+ * defaults turns vsync on.
++ * defaults turns vsync or black frame insertion on.
 + *
 + * runemu says which path a launch is on by exporting
 + * MESA_VK_WSI_DISPLAY_VRR, which Mesa and setsettings read too. On the
@@ -58,10 +60,19 @@ diff --git a/configuration.c b/configuration.c
 +      RARCH_LOG("[Config] No vsync: vsync off, Sync to Exact Content Framerate on.\n");
 +   settings->bools.video_vsync        = false;
 +   settings->bools.vrr_runloop_enable = true;
- }
- 
++   /* Black frame insertion went with vsync. A value saved before would
++    * still turn the core-rate timed presents (0018) off and run the
++    * driver's BFI pass with its menu entry gone. The dark frames are
++    * only read inside that pass, clamped to it, so they can stay. */
++   if (settings->uints.video_black_frame_insertion)
++      RARCH_LOG("[Config] No black frame insertion.\n");
++   settings->uints.video_black_frame_insertion = 0;
++}
++
  #ifdef HAVE_CONFIGFILE
-@@ -7463,6 +7491,7 @@
+ #if defined(HAVE_MENU) && defined(HAVE_RGUI)
+ static bool check_menu_driver_compatibility(settings_t *settings)
+@@ -7463,6 +7498,7 @@
     else
        runloop_state_get_ptr()->flags &= ~RUNLOOP_FLAG_OVERRIDES_ACTIVE;
  
@@ -69,7 +80,7 @@ diff --git a/configuration.c b/configuration.c
     return true;
  }
  
-@@ -7506,6 +7535,7 @@
+@@ -7506,6 +7542,7 @@
     else
        runloop_state_get_ptr()->flags &= ~RUNLOOP_FLAG_OVERRIDES_ACTIVE;
  
@@ -77,15 +88,15 @@ diff --git a/configuration.c b/configuration.c
     return true;
  }
  
-@@ -7629,6 +7659,8 @@
+@@ -7628,6 +7665,8 @@
+    if (!config_load_file(global_get_ptr(),
              path_get(RARCH_PATH_CONFIG), config_st))
        return false;
- 
-+   config_no_vsync(config_st);
 +
++   config_no_vsync(config_st);
+ 
     if (settings->bools.video_fullscreen != fullscreen_prev)
     {
-       /* This is for 'win32_common.c', so we don't save
 diff --git a/configuration.h b/configuration.h
 --- a/configuration.h
 +++ b/configuration.h
@@ -251,14 +262,14 @@ diff --git a/runloop.c b/runloop.c
 diff --git a/runloop.h b/runloop.h
 --- a/runloop.h
 +++ b/runloop.h
-@@ -678,6 +678,10 @@
+@@ -677,6 +677,10 @@
+  * RetroArch iteration loop.
   **/
  int runloop_iterate(void);
- 
++
 +/* Refuses the loaded content: the core does not run, "This game is not
 + * supported" shows, and RetroArch quits after it (0021). */
 +void runloop_refuse_content(void);
-+
+ 
  void runloop_system_info_free(void);
  
- /**
