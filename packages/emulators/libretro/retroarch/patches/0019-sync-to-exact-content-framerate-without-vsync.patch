@@ -1,7 +1,5 @@
 From: PortareOS <hello@portare.org>
-Subject: [PATCH] Sync to Exact Content Framerate: timed with vsync off, locked when it cannot fit
-
-Two things for a variable refresh display.
+Subject: [PATCH] Sync to Exact Content Framerate: timed with vsync off
 
 With Sync to Exact Content Framerate, the runloop's timer paces every
 frame, and a context that times its presents (0014, 0018) shows each one
@@ -12,19 +10,9 @@ length, below the panel's range for a 60 Hz game. Video now stays
 blocking under Sync to Exact Content Framerate, at init and when the
 nonblock state is applied. Fast-forward still presents without blocking.
 
-A frame is shown for a whole number of refreshes, each no shorter than
-the display's fastest. Content that does not fit twice into the display's
-rate, such as the few arcade boards at 60.1 to 61 Hz against 120.198,
-has no multiple in range. For that session, drivers_init turns Sync to
-Exact Content Framerate off and vsync on before the swap interval is
-chosen. The content is then locked to half the display's rate, with
-audio resampled, as on a fixed refresh display.
-
 Measured on SM8550 (Retroid Pocket Nova), VRR on: Super Mario World,
 vsync off, 3606 refreshes for 1803 frames in 30 s, none longer than
-8.42 ms. The same forced onto the 119.88 Hz mode: "60.099 fps does not
-fit twice", swap interval 2, the audio rate adjusted to 59.94 frames a
-second, 2398 refreshes in 20 s, none longer than 8.46 ms.
+8.42 ms.
 
 Signed-off-by: PortareOS <hello@portare.org>
 ---
@@ -62,30 +50,3 @@ diff --git a/retroarch.c b/retroarch.c
              video_nonblock = true;
           video_st->current_video->set_nonblock_state(video_st->data,
                 video_nonblock,
-@@ -1625,6 +1628,26 @@
- 
-    DRIVER_FLAGS_NORMALIZE(flags);
- 
-+   /* Sync to Exact Content Framerate on a variable refresh display shows
-+    * each frame for a whole number of refreshes, each no shorter than the
-+    * display's fastest: twice for 45 to 60 Hz content on a 120 Hz panel.
-+    * Content that does not fit twice into the display's rate - a few
-+    * arcade boards run at 60.1 to 61 Hz against 120.198 - has no multiple
-+    * in range. Lock it to the display instead, as on a fixed refresh
-+    * display: vsync, and the core's rate adjusted to half the display's.
-+    * For this session; the next launch sets both again. */
-+   if (     settings->bools.vrr_runloop_enable
-+         && video_st->av_info.timing.fps > 0.0
-+         && settings->floats.video_refresh_rate > 0.0f
-+         && video_st->av_info.timing.fps * 2.0
-+            > (double)settings->floats.video_refresh_rate * 1.0001)
-+   {
-+      RARCH_LOG("[Video] %.3f fps does not fit twice into %.3f Hz, locked to the display.\n",
-+            video_st->av_info.timing.fps, settings->floats.video_refresh_rate);
-+      settings->bools.vrr_runloop_enable = false;
-+      settings->bools.video_vsync        = true;
-+   }
-+
-    /* Content av_info based automatic swap interval must be set early. */
-    runloop_set_video_swap_interval(settings);
- 

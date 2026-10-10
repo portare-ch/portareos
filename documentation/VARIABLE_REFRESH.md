@@ -225,15 +225,20 @@ the fastest refresh, so every rate between has one; at 90 Hz, 40.07 to
 45 Hz had none. DRM keeps `monitor_range` inside the kernel
 for a panel without EDID; the repeat below needs only the mode's refresh.
 
-Rates between 60.1 and 61 Hz, a few arcade boards, have no multiple in
+Rates between 60.1 and 63 Hz, a few arcade boards, have no multiple in
 range, and the range cannot grow upward. `vrr-probe fast`, 2026-10-08:
 the fastest mode's 174.651 MHz clock and 12-line front porch, with the
 back porch cut from 142 lines to 135 (120.956 Hz) and 126 (121.946 Hz).
 The SoC delivered every frame exactly one period apart, within 10 us, at
 all three rates. By eye the moving block jumped at 121 and 122 Hz and was
 clean at 120.198: the panel does not show frames faster than its 120 Hz
-class evenly. Those boards are locked to the display instead, at half its
-rate (see the launch below).
+class evenly. Those boards are not supported: RetroArch refuses them
+(0021, see the launch below) rather than lock them to the display with
+vsync. In FBNeo that is 34 games, 67 sets: Namco System 1 and System 86
+at 60.60 Hz (Splatterhouse, Pac-Mania, Galaga '88, Dragon Spirit, Rolling
+Thunder and 21 others), Tehkan World Cup, Gridiron Fight and Tee'd Off
+(60.60), Yie Ar Kung-Fu and Akazukin (60.58), Drift Out '94 (60.18),
+Tetris: The Grand Master 2 (61.68) and Sky Fox (62.65).
 
 ## Showing a frame more than once
 
@@ -347,7 +352,7 @@ The edges of k, present-probe at 60 s each:
 |---|---|---|
 | 60.05, 40.066, 30.049, 29.9 Hz | fits | every frame exactly k times |
 | 60.15, 40.2, 30.1 Hz | mesa-005's R/50 slack picks a k below the shortest refresh | 6, 24, 12 frames a minute shown one refresh short; the content 0.01-0.02% slow |
-| 60.5 Hz | 2, 8.264 ms | the panel at its fastest, the content 0.6% slow; RetroArch locks it to the display instead (0019) |
+| 60.5 Hz | 2, 8.264 ms | the panel at its fastest, the content 0.6% slow; RetroArch refuses such content (0021) |
 | 45.1 Hz | 2, 11.086 ms, just inside the floor | 39% of frames with a refresh of the panel's own |
 | 44.9 Hz | 2, 11.136 ms, past the floor | 46% |
 | 42 Hz | 2, 11.905 ms: no k fits | 60% |
@@ -706,9 +711,9 @@ Otherwise it is 0.
   refresh.
 - RetroArch (`0019`) keeps presents timed under Sync to Exact Content
   Framerate with vsync off. Vsync off would otherwise show each frame
-  whenever it was ready. Content that does not fit twice into the
-  display's rate is locked to the display for that session: vsync,
-  half its rate, audio resampled.
+  whenever it was ready. Vsync is never on (`0021`): content that does
+  not fit twice into the display's rate is refused, "This game is not
+  supported", and RetroArch quits.
 
 `vrr=0` in `system.cfg`, for everything (`global.`), a system or a game,
 turns it off to compare. The fixed refresh path is then as before.
@@ -718,7 +723,6 @@ Measured 2026-10-08 through runemu, flip traces:
 | | Refreshes | Longest refresh | |
 |---|---|---|---|
 | Super Mario World, 30 s | 3606, every frame twice | 8.42 ms | `VRR_ENABLED` 0 before, 1 while running, 0 after exit |
-| Super Mario World forced onto 119.88 Hz, 20 s | 2398 | 8.46 ms | "does not fit twice", swap interval 2, the core at 59.94 |
 | Tekken 3 with `global.vrr=0` | - | - | a `VRR_ENABLED` left on was turned off; 119.652 Hz mode |
 
 ## Do not
