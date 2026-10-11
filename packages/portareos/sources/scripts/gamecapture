@@ -1,0 +1,666 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
+"""Record the game being played as a benchmark workload.
+
+  gamecapture start            record until stopped
+  gamecapture --duration N     record for N minutes, then stop
+  gamecapture stop             stop and file the capture; nothing to stop is fine
+  gamecapture status           what is being recorded, for how long, where to
+  gamecapture verify DIR       play a capture back and check it follows the recording
+  gamecapture list             the captures and whether each is validated
+
+For ssh, while a game runs; nothing is pressed or shown on the device. A
+capture is RetroArch's own replay: the core's state at the first frame and
+the input of every frame after it, taken at the libretro boundary. It is
+filed as /storage/captures/SYSTEM/GAME-NNN/replay.bsv with metadata.json
+beside it, which names the ROM, core and RetroArch it was made with by hash.
+ROMs and BIOS files are not copied.
+
+The replay ends with a checkpoint, a full state of its last frames, and
+cores whose state is small get one every 30 s as well. verify starts the
+game the way the launcher does, plays the replay with the checkpoints
+compared instead of loaded (retroarch 0024), and marks the capture
+validated only if every one matched. One that does not is a core that
+cannot replay it, unsupported for benchmarking. RetroArch is reached on its
+command socket, @retroarch/cmd (retroarch 0023).
+"""
+
+import argparse
+import datetime
+import glob
+import hashlib
+import json
+import os
+import re
+import shutil
+import signal
+import socket
+import struct
+import subprocess
+import sys
+import time
+
+CAPTURES = "/storage/captures"
+STATE = "/run/gamecapture.json"
+ROM_HASHES = os.path.join(CAPTURES, ".romhashes.json")
+RA_MAIN = "/storage/.config/retroarch/retroarch.cfg"
+RA_LAUNCH = "/tmp/.retroarch.cfg"
+RA_OPTIONS = "/storage/.config/retroarch/retroarch-core-options.cfg"
+RA_CONFIGS = "/storage/.config/retroarch/config"
+CORES = "/tmp/cores"
+FORMAT = "gamecapture/1"
+# Checkpoints cost a serialize on RetroArch's main thread. Below this a
+# core's state takes well under a frame to save; above it, as with ARMSX2,
+# the capture gets the closing one only.
+PERIODIC_MAX_STATE = 4 << 20
+PERIODIC_SECONDS = 30
+MIN_FREE = 1 << 30
+# Saves a core keeps outside RetroArch's save directory: verify plays over
+# copies of them.
+PRIVATE_SAVES = {"armsx2": "/storage/roms/ps2/Mcd*.ps2"}
+REPLAY_MAGIC = 0x42535632
+HEADER = 40
+
+
+class Fail(Exception):
+    pass
+
+
+def ra(command, reply=True, timeout=2.0):
+    """One command over RetroArch's socket; its reply, if it gives one."""
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(timeout)
+    try:
+        s.connect("\0retroarch/cmd")
+    except OSError:
+        raise Fail("RetroArch has no command socket: it is not running, or it predates retroarch 0023.")
+    with s:
+        s.sendall(command.encode() + b"\n")
+        if not reply:
+            # Commands are read once a frame; stay until one has passed.
+            time.sleep(0.1)
+            return None
+        try:
+            return s.recv(4096).decode(errors="replace").strip()
+        except OSError:
+            return None
+
+
+def ra_status():
+    r = ra("GET_STATUS") or ""
+    m = re.match(r"GET_STATUS (\w+)(?: (.*))?", r)
+    return (m.group(1), m.group(2) or "") if m else ("UNKNOWN", r)
+
+
+def read_cfg(path):
+    out = {}
+    try:
+        for line in open(path, errors="replace"):
+            m = re.match(r'\s*([\w.-]+)\s*=\s*"(.*)"\s*$', line)
+            if m:
+                out[m.group(1)] = m.group(2)
+    except OSError:
+        pass
+    return out
+
+
+def ra_setting(key, default=None):
+    """A setting as this launch has it: the launch's overrides, then the main config."""
+    for path in (RA_LAUNCH, RA_MAIN):
+        v = read_cfg(path).get(key)
+        if v is not None:
+            return v
+    return default
+
+
+def sha256(path, nice=False):
+    if nice:
+        # The game may still be running: hash off its cores and its disk time.
+        out = subprocess.run(["taskset", "-c", "0-2", "ionice", "-c3", "nice", "-n19", "sha256sum", path],
+                             capture_output=True, text=True, check=True).stdout
+        return out.split()[0]
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def rom_files(rom):
+    """The ROM and, for a cue sheet or playlist, the files it names."""
+    files = [rom]
+    base = os.path.dirname(rom)
+    if rom.lower().endswith((".cue", ".m3u")):
+        for line in open(rom, errors="replace"):
+            m = re.match(r'\s*FILE\s+"(.+)"', line) if rom.lower().endswith(".cue") else re.match(r"\s*([^#\s].*?)\s*$", line)
+            if m:
+                path = os.path.join(base, m.group(1))
+                if os.path.isfile(path):
+                    files.append(path)
+    return files
+
+
+def rom_hashes(rom):
+    """sha256 of each ROM file, remembered by path, size and mtime: a disc image takes a while."""
+    try:
+        cache = json.load(open(ROM_HASHES))
+    except (OSError, ValueError):
+        cache = {}
+    out = {}
+    for path in rom_files(rom):
+        st = os.stat(path)
+        key = f"{path}|{st.st_size}|{st.st_mtime_ns}"
+        if key not in cache:
+            cache[key] = sha256(path, nice=True)
+        out[os.path.basename(path)] = {"size": st.st_size, "sha256": cache[key]}
+    write_json(ROM_HASHES, cache)
+    return out
+
+
+def core_info(core):
+    info = read_cfg(os.path.join(CORES, f"{core}_libretro.info"))
+    return {"corename": info.get("corename", core), "version": info.get("display_version", ""),
+            "savestate": info.get("savestate", "false") == "true",
+            "savestate_features": info.get("savestate_features", "")}
+
+
+def core_options(core, corename, game, content_dir):
+    """The core's options as RetroArch applies them: global, then content directory, then game."""
+    prefixes = tuple(p + s for p in {core, core.replace("_", "-")} for s in ("_", "-"))
+    opts = {k: v for k, v in read_cfg(RA_OPTIONS).items() if k.startswith(prefixes)}
+    for name in (content_dir, game):
+        opts.update(read_cfg(os.path.join(RA_CONFIGS, corename, f"{name}.opt")))
+    return opts
+
+
+def session():
+    """The running RetroArch: its pid, core and ROM, from its command line."""
+    pids = subprocess.run(["pidof", "retroarch"], capture_output=True, text=True).stdout.split()
+    if not pids:
+        raise Fail("RetroArch is not running.")
+    pid = int(pids[0])
+    argv = open(f"/proc/{pid}/cmdline", "rb").read().decode(errors="replace").split("\0")[:-1]
+    core_path = next((argv[i + 1] for i, a in enumerate(argv[:-1]) if a == "-L"), None)
+    core_path = core_path or next((a.split("=", 1)[1] for a in argv if a.startswith("--libretro=")), None)
+    rom = argv[-1] if argv and os.path.isfile(argv[-1]) else None
+    if not core_path or not rom:
+        raise Fail("RetroArch is running without a core and a game.")
+    core = os.path.basename(core_path).removesuffix("_libretro.so")
+    parts = rom.split("/")
+    system = parts[3] if rom.startswith("/storage/roms/") and len(parts) > 4 else None
+    game = os.path.splitext(os.path.basename(rom))[0]
+    return {"pid": pid, "core": core, "core_path": core_path, "rom": rom, "system": system, "game": game}
+
+
+def savestate_dir(system):
+    d = ra_setting("savestate_directory", "") or f"/storage/roms/savestates/{system}"
+    return os.path.expanduser(d.replace("~", "/storage", 1) if d.startswith("~") else d)
+
+
+def replays(directory, game):
+    out = {}
+    try:
+        for name in os.listdir(directory):
+            if name.startswith(game + ".replay"):
+                st = os.stat(os.path.join(directory, name))
+                out[os.path.join(directory, name)] = (st.st_size, st.st_mtime_ns)
+    except OSError:
+        pass
+    return out
+
+
+def open_replay(pid):
+    """The replay file RetroArch has open, if it is recording one."""
+    try:
+        for fd in os.listdir(f"/proc/{pid}/fd"):
+            try:
+                target = os.readlink(f"/proc/{pid}/fd/{fd}")
+            except OSError:
+                continue
+            if re.search(r"\.replay\d*$", target):
+                return target
+    except OSError:
+        pass
+    return None
+
+
+def header(path):
+    """The replay's header, or None if it is not one."""
+    try:
+        with open(path, "rb") as f:
+            raw = f.read(HEADER + 6)
+    except OSError:
+        return None
+    if len(raw) < HEADER:
+        return None
+    magic, version, crc, state_size, ident, frames = struct.unpack_from("<IIIIqI", raw)
+    if magic != REPLAY_MAGIC:
+        return None
+    # The first checkpoint opens with its compression and encoding bytes
+    # and then its size before both: the state as the core serialized it.
+    raw_size = struct.unpack_from("<I", raw, HEADER + 2)[0] if len(raw) >= HEADER + 6 else 0
+    return {"version": version, "crc32": f"{crc:08x}", "state_size": state_size, "identifier": ident,
+            "frames": frames, "state_raw_size": raw_size}
+
+
+def initial_state_sha256(path, state_size):
+    with open(path, "rb") as f:
+        f.seek(HEADER)
+        return hashlib.sha256(f.read(state_size)).hexdigest()
+
+
+def write_json(path, data):
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(data, f, indent=2, sort_keys=False)
+        f.write("\n")
+    os.replace(tmp, path)
+
+
+def load_state():
+    try:
+        return json.load(open(STATE))
+    except (OSError, ValueError):
+        return None
+
+
+def slug(name):
+    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "game"
+
+
+def reserve_dir(system, game):
+    base = os.path.join(CAPTURES, system or "unknown")
+    os.makedirs(base, exist_ok=True)
+    for n in range(1, 1000):
+        d = os.path.join(base, f"{slug(game)}-{n:03d}")
+        try:
+            os.mkdir(d)
+            return d
+        except FileExistsError:
+            continue
+    raise Fail(f"No free capture directory under {base}.")
+
+
+def timer(unit, args, **when):
+    subprocess.run(["systemctl", "stop", f"{unit}.timer", f"{unit}.service"], capture_output=True)
+    subprocess.run(["systemctl", "reset-failed", f"{unit}.timer", f"{unit}.service"], capture_output=True)
+    opts = [f"--on-{k.replace('_', '-')}={v}" for k, v in when.items()]
+    subprocess.run(["systemd-run", "--quiet", f"--unit={unit}", "--timer-property=AccuracySec=1s", *opts,
+                    sys.executable, os.path.realpath(__file__), *args], check=True)
+
+
+def stop_timers():
+    for unit in ("gamecapture-stop", "gamecapture-checkpoint"):
+        subprocess.run(["systemctl", "stop", f"{unit}.timer"], capture_output=True)
+
+
+def image():
+    os_rel = {}
+    for line in open("/etc/os-release"):
+        k, _, v = line.strip().partition("=")
+        os_rel[k] = v.strip('"')
+    return {"build_id": os_rel.get("BUILD_ID", ""), "version": os_rel.get("OS_VERSION", ""), "build": os_rel.get("OS_BUILD", "")}
+
+
+def retroarch_version():
+    out = subprocess.run(["/usr/bin/retroarch", "--version"], capture_output=True, text=True).stdout
+    m = re.search(r"Version:\s*(\S+)", out)
+    return m.group(1) if m else ""
+
+
+def fmt_time(secs):
+    secs = int(secs)
+    return f"{secs // 60}:{secs % 60:02d}"
+
+
+# ---------------------------------------------------------------- commands
+
+
+def recording(st):
+    """Whether the recording st describes is still being written."""
+    return st and os.path.isdir(f"/proc/{st['pid']}") and open_replay(st["pid"]) == st["replay"]
+
+
+def start(duration):
+    if duration is not None and not 0 < duration <= 24 * 60:
+        raise Fail("--duration is minutes, more than 0 and at most 1440.")
+    st = load_state()
+    if st and recording(st):
+        raise Fail(f"Already recording {st['dir']}; gamecapture stop first.")
+    if st:
+        print("The last recording ended without a stop; filing it first.")
+        stop()
+    s = session()
+    state, _ = ra_status()
+    if state != "PLAYING":
+        raise Fail(f"RetroArch is {state.lower()}, not playing: resume the game first.")
+    info = core_info(s["core"])
+    if not info["savestate"]:
+        raise Fail(f"{info['corename']} cannot save its state, so its games cannot be captured.")
+    if shutil.disk_usage("/storage").free < MIN_FREE:
+        raise Fail("Less than 1 GiB free on /storage.")
+    if not s["system"]:
+        raise Fail(f"{s['rom']} is not under /storage/roms/SYSTEM/.")
+
+    sdir = savestate_dir(s["system"])
+    before = replays(sdir, s["game"])
+    ra("RECORD_REPLAY", reply=False)
+    replay = None
+    for _ in range(150):
+        path = open_replay(s["pid"])
+        if path and before.get(path) != (os.stat(path).st_size, os.stat(path).st_mtime_ns):
+            replay = path
+            break
+        time.sleep(0.1)
+    if not replay:
+        ra("HALT_REPLAY", reply=False)
+        raise Fail("RetroArch did not start recording; its log says why.")
+    hdr = None
+    for _ in range(50):
+        hdr = header(replay)
+        if hdr and hdr["state_size"]:
+            break
+        time.sleep(0.1)
+    if not hdr or not hdr["state_size"]:
+        ra("HALT_REPLAY", reply=False)
+        raise Fail(f"{replay} has no initial state: the core could not serialize.")
+
+    d = reserve_dir(s["system"], s["game"])
+    periodic = 0 < hdr["state_raw_size"] <= PERIODIC_MAX_STATE
+    st = {**s, "replay": replay, "dir": d, "started": time.time(), "duration_min": duration,
+          "periodic": periodic, "checkpoints": 0, "core_info": info}
+    write_json(STATE, st)
+    write_json(os.path.join(d, "metadata.json"), {"format": FORMAT, "status": "recording", "system": s["system"],
+                                                  "game": {"name": s["game"], "path": s["rom"]}, "core": {"name": s["core"]}})
+    try:
+        if periodic:
+            timer("gamecapture-checkpoint", ["checkpoint"], active=f"{PERIODIC_SECONDS}s",
+                  unit_active=f"{PERIODIC_SECONDS}s")
+        if duration is not None:
+            timer("gamecapture-stop", ["stop"], active=f"{int(duration * 60)}s")
+    except subprocess.CalledProcessError:
+        stop_timers()
+        ra("HALT_REPLAY", reply=False)
+        os.remove(STATE)
+        shutil.rmtree(d, ignore_errors=True)
+        raise Fail("Could not set the timers; nothing was kept.")
+    print(f"Recording {s['game']} ({s['system']}, {s['core']}) to {d}"
+          + (f", stopping in {fmt_time(duration * 60)}." if duration is not None else "."))
+
+
+def checkpoint():
+    st = load_state()
+    if st and recording(st):
+        ra("SAVE_REPLAY_CHECKPOINT", reply=False)
+        st["checkpoints"] += 1
+        write_json(STATE, st)
+
+
+def stop():
+    st = load_state()
+    if not st:
+        print("Not recording.")
+        return 0
+    stop_timers()
+    final_checkpoint = False
+    if recording(st):
+        # The closing checkpoint and the halt go in different frames: a
+        # halt read in the same one ends the replay before it is written.
+        ra("SAVE_REPLAY_CHECKPOINT", reply=False)
+        final_checkpoint = True
+        time.sleep(1.5)
+        ra("HALT_REPLAY", reply=False)
+        for _ in range(150):
+            if not recording(st):
+                break
+            time.sleep(0.1)
+    ended = time.time()
+    # RetroArch writes the frame count when it closes a recording: a
+    # replay without one was cut off.
+    hdr = header(st["replay"])
+    complete = not recording(st) and bool(hdr and hdr["state_size"] and hdr["frames"])
+
+    d = st["dir"]
+    target = os.path.join(d, "replay.bsv")
+    if os.path.exists(st["replay"]):
+        # The savestates live on the ROM partition, the captures on /storage.
+        shutil.move(st["replay"], target)
+    meta = {"format": FORMAT, "status": "unvalidated" if complete else "incomplete",
+            "created": datetime.datetime.fromtimestamp(st["started"]).astimezone().isoformat(timespec="seconds"),
+            "system": st["system"]}
+    try:
+        meta["game"] = {"name": st["game"], "path": st["rom"], "files": rom_hashes(st["rom"])}
+    except (OSError, subprocess.CalledProcessError) as e:
+        meta["game"] = {"name": st["game"], "path": st["rom"], "error": str(e)}
+    info = st["core_info"]
+    meta["core"] = {"name": st["core"], "corename": info["corename"], "version": info["version"],
+                    "path": st["core_path"], "sha256": sha256(st["core_path"]),
+                    "savestate_features": info["savestate_features"]}
+    meta["retroarch"] = {"version": retroarch_version(), "sha256": sha256("/usr/bin/retroarch"), "image": image()}
+    if hdr:
+        meta["replay"] = {"file": "replay.bsv", "bsv_version": hdr["version"], "content_crc32": hdr["crc32"],
+                          "identifier": hdr["identifier"], "frames": hdr["frames"],
+                          "initial_state": {"bytes": hdr["state_size"], "serialized_bytes": hdr["state_raw_size"],
+                                            "sha256": initial_state_sha256(target, hdr["state_size"]) if os.path.exists(target) else None},
+                          "checkpoints": {"every_seconds": PERIODIC_SECONDS if st["periodic"] else None,
+                                          "periodic": st["checkpoints"], "closing": final_checkpoint}}
+    meta["duration_seconds"] = round(ended - st["started"], 1)
+    if hdr and hdr["frames"]:
+        meta["frames_per_second"] = round(hdr["frames"] / meta["duration_seconds"], 3)
+    users = int(ra_setting("input_max_users", "1") or 1)
+    meta["input"] = {"max_users": users, "ports": {
+        str(p): {"device": ra_setting(f"input_libretro_device_p{p}", "1"),
+                 "analog_dpad_mode": ra_setting(f"input_player{p}_analog_dpad_mode", "0")} for p in range(1, users + 1)}}
+    meta["core_options"] = core_options(st["core"], info["corename"], st["game"], os.path.basename(os.path.dirname(st["rom"])))
+    meta["launch_settings"] = read_cfg(RA_LAUNCH)
+    meta["validation"] = None
+    write_json(os.path.join(d, "metadata.json"), meta)
+    os.remove(STATE)
+
+    frames = hdr["frames"] if hdr else 0
+    size = os.path.getsize(target) / 1e6 if os.path.exists(target) else 0
+    print(f"{d}: {fmt_time(meta['duration_seconds'])}, {frames} frames, {size:.1f} MB, {meta['status']}.")
+    if not complete:
+        print("Incomplete: RetroArch quit or failed before the recording was closed.")
+        return 1
+    print(f"gamecapture verify {d} plays it back and checks it.")
+    return 0
+
+
+def status():
+    st = load_state()
+    if not st:
+        print("Not recording.")
+        return
+    elapsed = time.time() - st["started"]
+    print(f"Recording {st['game']} ({st['system']}, core {st['core']}) for {fmt_time(elapsed)}")
+    print(f"  to {st['dir']}")
+    if st["duration_min"] is not None:
+        print(f"  stops in {fmt_time(max(0, st['duration_min'] * 60 - elapsed))}")
+    if st["periodic"]:
+        print(f"  {st['checkpoints']} checkpoints so far, one every {PERIODIC_SECONDS} s")
+    if not recording(st):
+        print("  RetroArch is no longer writing it (it quit?): gamecapture stop files what there is.")
+
+
+def verify(d):
+    meta = json.load(open(os.path.join(d, "metadata.json")))
+    replay = os.path.join(d, "replay.bsv")
+    hdr = header(replay)
+    if meta.get("status") in ("recording", "incomplete") or not hdr or not hdr["frames"]:
+        raise Fail(f"{d} is not a complete capture.")
+    rom, core, system = meta["game"]["path"], meta["core"]["name"], meta["system"]
+    if not os.path.isfile(rom):
+        raise Fail(f"{rom} is not on this device.")
+    for name, f in meta["game"].get("files", {}).items():
+        if rom_hashes(rom).get(name, {}).get("sha256") != f["sha256"]:
+            raise Fail(f"{name} is not the file the capture was made with.")
+    core_path = os.path.join(CORES, f"{core}_libretro.so")
+    core_sha = sha256(core_path)
+    if subprocess.run(["pidof", "retroarch"], capture_output=True).stdout:
+        raise Fail("A game is running; quit it first.")
+
+    work = "/tmp/gamecapture-verify"
+    shutil.rmtree(work, ignore_errors=True)
+    os.makedirs(work)
+    game = os.path.splitext(os.path.basename(rom))[0]
+    shutil.copy(replay, os.path.join(work, f"{game}.replay1"))
+    cfg = os.path.join(work, "verify.cfg")
+    with open(cfg, "w") as f:
+        # The game's own saves go to the work directory: the replay loads its
+        # state anyway, and a save made during playback must not reach the
+        # player's.
+        for k, v in {"savestate_directory": work, "savestates_in_content_dir": "false",
+                     "savefile_directory": work, "savefiles_in_content_dir": "false",
+                     "sort_savefiles_enable": "false", "sort_savefiles_by_content_enable": "false",
+                     "sort_savestates_enable": "false", "sort_savestates_by_content_enable": "false",
+                     "savestate_auto_load": "false", "savestate_auto_save": "false",
+                     "replay_auto_index": "false", "replay_checkpoint_deserialize": "false",
+                     "log_to_file": "true", "log_dir": work, "log_to_file_timestamp": "false",
+                     "log_verbosity": "true", "frontend_log_level": "1"}.items():
+            f.write(f'{k} = "{v}"\n')
+
+    bound = []
+    for path in glob.glob(PRIVATE_SAVES.get(core, "")):
+        copy = os.path.join(work, os.path.basename(path))
+        shutil.copy(path, copy)
+        if subprocess.run(["mount", "--bind", copy, path]).returncode == 0:
+            bound.append(path)
+    subprocess.run(["systemctl", "stop", "portarelauncher"], capture_output=True)
+    time.sleep(1)
+    for p in subprocess.run(["pidof", "mpv"], capture_output=True, text=True).stdout.split():
+        os.kill(int(p), signal.SIGKILL)
+    runemu = subprocess.Popen(["/usr/bin/runemu.sh", rom, f"-P{system}", f"--core={core}", "--emulator=retroarch"],
+                              env={**os.environ, "RUNEMU_APPENDCONFIG": cfg}, stdin=subprocess.DEVNULL,
+                              stdout=open(os.path.join(work, "runemu.log"), "w"), stderr=subprocess.STDOUT,
+                              start_new_session=True)
+    result = {"date": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
+              "core_sha256": core_sha, "retroarch_sha256": sha256("/usr/bin/retroarch")}
+    ended = False
+    try:
+        state = "NONE"
+        for _ in range(240):
+            try:
+                state, _ = ra_status()
+            except Fail:
+                state = "NONE"
+            if state == "PLAYING":
+                break
+            time.sleep(0.5)
+        if state != "PLAYING":
+            raise Fail("The game did not start.")
+        # Give the core its first frames, as a player would, before the
+        # replay's state goes in.
+        time.sleep(8)
+        r = ra("PLAY_REPLAY_SLOT 1") or ""
+        if not re.match(r"PLAY_REPLAY_SLOT -?[1-9]", r):
+            raise Fail(f"RetroArch would not play the replay ({r or 'no reply'}).")
+        started = time.time()
+        limit = meta.get("duration_seconds", hdr["frames"] / 50) * 3 + 60
+        while time.time() - started < limit:
+            time.sleep(1)
+            try:
+                state, _ = ra_status()
+            except Fail:
+                break
+            if state == "PAUSED":
+                ended = True
+                break
+        result["playback_seconds"] = round(time.time() - started, 1)
+    finally:
+        try:
+            ra("QUIT", reply=False)
+        except Fail:
+            pass
+        for _ in range(100):
+            if not subprocess.run(["pidof", "retroarch"], capture_output=True).stdout:
+                break
+            time.sleep(0.2)
+        for p in subprocess.run(["pidof", "retroarch"], capture_output=True, text=True).stdout.split():
+            os.kill(int(p), signal.SIGKILL)
+        try:
+            runemu.wait(timeout=20)
+        except subprocess.TimeoutExpired:
+            pass
+        for path in bound:
+            subprocess.run(["umount", path])
+        subprocess.run(["systemctl", "start", "portarelauncher"], capture_output=True)
+
+    log = ""
+    for name in os.listdir(work):
+        if name.endswith(".log") and name != "runemu.log":
+            log += open(os.path.join(work, name), errors="replace").read()
+    matched = [int(m) for m in re.findall(r"\[Replay\] Checkpoint at frame (\d+) matches", log)]
+    diverged = [int(m) for m in re.findall(r"\[Replay\] Diverged by frame (\d+)", log)]
+    unverified = re.findall(r"\[Replay\] Checkpoint at frame \d+ not verified", log)
+    result.update({"reached_end": ended, "checkpoints_matched": len(matched),
+                   "diverged_by_frame": min(diverged) if diverged else None,
+                   "checkpoints_unverified": len(unverified)})
+    if diverged:
+        result["status"] = "diverged"
+    elif ended and matched and not unverified:
+        result["status"] = "validated"
+    else:
+        result["status"] = "failed"
+        result["reason"] = ("playback did not reach the end" if not ended else
+                            "no checkpoint was compared" if not matched else "a checkpoint could not be compared")
+    result["benchmark"] = "supported" if result["status"] == "validated" else "unsupported"
+    meta["validation"] = result
+    meta["status"] = result["status"]
+    write_json(os.path.join(d, "metadata.json"), meta)
+    if os.path.exists(os.path.join(work, "retroarch.log")):
+        shutil.copy(os.path.join(work, "retroarch.log"), os.path.join(d, "verify.log"))
+    print(json.dumps({"capture": d, **result}))
+    return 0 if result["status"] == "validated" else 1
+
+
+def list_captures():
+    for system in sorted(os.listdir(CAPTURES)) if os.path.isdir(CAPTURES) else []:
+        sd = os.path.join(CAPTURES, system)
+        if not os.path.isdir(sd) or system.startswith("."):
+            continue
+        for name in sorted(os.listdir(sd)):
+            try:
+                meta = json.load(open(os.path.join(sd, name, "metadata.json")))
+            except (OSError, ValueError):
+                continue
+            frames = (meta.get("replay") or {}).get("frames", 0)
+            print(f"{system}/{name:<28} {fmt_time(meta.get('duration_seconds', 0)):>6} {frames:>7} frames"
+                  f"  {meta.get('core', {}).get('name', '?'):<12} {meta.get('status', '?')}")
+
+
+def main():
+    ap = argparse.ArgumentParser(prog="gamecapture", description=__doc__.split("\n\n")[0])
+    ap.add_argument("--duration", type=float, metavar="N", help="record for N minutes, then stop")
+    ap.add_argument("command", nargs="?", choices=["start", "stop", "status", "verify", "list", "checkpoint"])
+    ap.add_argument("dir", nargs="?")
+    a = ap.parse_args()
+    try:
+        if a.duration is not None and a.command not in (None, "start"):
+            raise Fail("--duration goes with start, or alone.")
+        if a.command in (None, "start"):
+            if a.command is None and a.duration is None:
+                ap.print_help()
+                return 2
+            start(a.duration)
+        elif a.command == "stop":
+            return stop()
+        elif a.command == "status":
+            status()
+        elif a.command == "checkpoint":
+            checkpoint()
+        elif a.command == "list":
+            list_captures()
+        elif a.command == "verify":
+            if not a.dir:
+                raise Fail("verify needs a capture directory.")
+            return verify(a.dir.rstrip("/"))
+    except Fail as e:
+        print(f"gamecapture: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

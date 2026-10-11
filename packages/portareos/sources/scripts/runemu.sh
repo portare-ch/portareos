@@ -308,7 +308,10 @@ case ${EMULATOR} in
     ${VERBOSE} && log $0 "Variable refresh: ${MESA_VK_WSI_DISPLAY_VRR}"
 
 
-    RUNTHIS='${EMUPERF} /usr/bin/${RABIN} -L /tmp/cores/${CORE}_libretro.so --config ${RETROARCH_TEMP_CONFIG} --appendconfig ${RETROARCH_APPEND_CONFIG} "${ROMNAME}"'
+    ### RUNEMU_APPENDCONFIG names one more config, read last: gamecapture
+    ### verify starts a game exactly as the launcher does and adds its
+    ### replay settings on top.
+    RUNTHIS='${EMUPERF} /usr/bin/${RABIN} -L /tmp/cores/${CORE}_libretro.so --config ${RETROARCH_TEMP_CONFIG} --appendconfig "${RETROARCH_APPEND_CONFIG}${RUNEMU_APPENDCONFIG:+|${RUNEMU_APPENDCONFIG}}" "${ROMNAME}"'
 
     CONTROLLERCONFIG="${ARGUMENTS#*--controllers=*}"
 

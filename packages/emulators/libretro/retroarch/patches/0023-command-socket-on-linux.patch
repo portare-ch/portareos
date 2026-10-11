@@ -1,0 +1,52 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] command: the Unix socket interface on Linux, not only Lakka
+
+RetroArch takes commands from an abstract Unix socket, @retroarch/cmd,
+but only in Lakka builds. The other way in from outside, the network
+command interface, is a UDP port open to every interface, and off by
+default. gamecapture starts and stops a benchmark capture over ssh with
+RECORD_REPLAY and HALT_REPLAY and plays one back with PLAY_REPLAY_SLOT;
+the socket is a way in that exists on the device only and needs nothing
+switched on per game.
+
+Signed-off-by: PortareOS <hello@portare.org>
+---
+diff --git a/command.c b/command.c
+index 57688e4..29e5bf7 100644
+--- a/command.c
++++ b/command.c
+@@ -571,7 +571,7 @@ bool command_get_config_param(command_t *cmd, const char* arg)
+    return true;
+ }
+ 
+-#if defined(HAVE_LAKKA)
++#if defined(HAVE_LAKKA) || defined(__linux__)
+ #include <sys/un.h>
+ #define MAX_USER_CONNECTIONS  4
+ typedef struct
+diff --git a/command.h b/command.h
+index c569d8b..8f12d90 100644
+--- a/command.h
++++ b/command.h
+@@ -360,7 +360,7 @@ bool command_network_send(const char *cmd_);
+ #ifdef HAVE_STDIN_CMD
+ command_t* command_stdin_new(void);
+ #endif
+-#ifdef HAVE_LAKKA
++#if defined(HAVE_LAKKA) || defined(__linux__)
+ command_t* command_uds_new(void);
+ #endif
+ #ifdef __EMSCRIPTEN__
+diff --git a/input/input_driver.c b/input/input_driver.c
+index 091aff4..1683145 100644
+--- a/input/input_driver.c
++++ b/input/input_driver.c
+@@ -6498,7 +6498,7 @@ void input_driver_init_command(input_driver_state_t *input_st,
+    }
+ #endif
+ 
+-#if defined(HAVE_LAKKA)
++#if defined(HAVE_LAKKA) || defined(__linux__)
+    if (!(input_st->command[2] = command_uds_new()))
+       RARCH_ERR("Failed to initialize the UDS command interface.\n");
+ #elif defined(__EMSCRIPTEN__)

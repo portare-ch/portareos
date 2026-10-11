@@ -1,0 +1,32 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] replay: PLAY_REPLAY_SLOT plays from the frame it loads
+
+PLAY_REPLAY_SLOT waits for the movie task, so the replay's initial
+state is loaded while the command is handled, in the middle of an
+iteration, before that iteration runs the core. The replay itself only
+became the current one at the start of the next iteration. One frame
+therefore ran on the loaded state with live input instead of the
+replay's, and the playback followed the recording a frame late:
+recorded on snes9x, every checkpoint of a Super Mario World replay
+differed from the playback by a few hundred bytes of RAM, sound and
+timer state. Recording starts between iterations, as playback from the
+menu or a hotkey does, and has no such frame.
+
+Make the replay current as soon as it is loaded.
+
+Signed-off-by: PortareOS <hello@portare.org>
+---
+--- a/command.c
++++ b/command.c
+@@ -940,6 +940,11 @@
+             snprintf(reply, sizeof(reply) - 1, "PLAY_REPLAY_SLOT %lld", (long long)(input_st->bsv_movie_state_next_handle->identifier));
+          else
+             snprintf(reply, sizeof(reply) - 1, "PLAY_REPLAY_SLOT 0");
++         /* The replay's state is in now, before this iteration runs the
++          * core, but a new replay only takes over at the start of the
++          * next one: this frame would run on the loaded state without
++          * the replay's input, and every frame after it one late. */
++         bsv_movie_dequeue_next(input_st);
+          command_post_state_loaded();
+       }
+    }
