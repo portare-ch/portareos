@@ -1,0 +1,136 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] libretro: pace to the frame rate the core reports
+
+001 handed the GS the frontend's target refresh divided by the swap
+interval RetroArch would pick for 59.94 fps. PortareOS runs Sync to
+Exact Content Framerate on every path (#641), which calls retro_run at
+the frame rate the core reports instead; on the 120.198 Hz mode 001 gave
+60.099. An NTSC game still synced, at a target speed of 1.0027 that
+vsync pacing never let it reach. A PAL game could not sync at all:
+60.099 against 50 is outside PCSX2's 5% window, so the VM slept to its
+own clock while retro_run paced it too - the two clocks 001 set out to
+remove.
+
+The host refresh is now the frame rate the core reports: the announced
+59.94 at load, and the VM's own rate once the frontend has accepted it,
+written into the GS device's window info on the GS thread before the
+VM's target speed is worked out again: UpdateWindow() would destroy the
+surface and wait for the GPU to go idle for one number, and a setter in
+GSDevice.h would change the GS cache identity, which hashes the GS
+sources, and empty every game's precompile list. The rate last reported
+is reset at each load, since a frontend may keep the core across games
+and a second PAL game would otherwise go unreported.
+---
+diff --git a/pcsx2-libretro/Main.cpp b/pcsx2-libretro/Main.cpp
+index a60d75e..a2d8540 100644
+--- a/pcsx2-libretro/Main.cpp
++++ b/pcsx2-libretro/Main.cpp
+@@ -143,8 +143,16 @@ namespace LibretroCore
+ 	static constexpr float kAnnouncedFps = 59.94f;
+ 
+ 	// The rate retro_run is called at, handed to the GS as the host refresh
+-	// rate; 0 when the frontend does not say. See retro_load_game.
+-	static float s_host_refresh_rate = 0.0f;
++	// rate. With Sync to Exact Content Framerate, which PortareOS always runs,
++	// that is the frame rate the core reports: the announced one, then the
++	// VM's own once it differs (PAL). See retro_load_game and retro_run.
++	static std::atomic<float> s_host_refresh_rate{kAnnouncedFps};
++
++	// The frame rate the frontend last accepted, frontend thread only. Reset
++	// at each load: a frontend may keep the core across games, and a second
++	// PAL game would otherwise never be reported.
++	static float s_reported_fps = kAnnouncedFps;
++	static bool s_av_refusal_logged = false;
+ } // namespace LibretroCore
+ 
+ // Settings persistence (INI under the frontend's system directory).
+@@ -374,7 +382,7 @@ static std::optional<WindowInfo> BuildLibretroWindowInfo()
+ 	wi.surface_width = LibretroCore::kFrameWidth;
+ 	wi.surface_height = LibretroCore::kFrameHeight;
+ 	wi.surface_scale = 1.0f;
+-	wi.surface_refresh_rate = LibretroCore::s_host_refresh_rate;
++	wi.surface_refresh_rate = LibretroCore::s_host_refresh_rate.load();
+ 	return wi;
+ }
+ 
+@@ -1817,18 +1825,17 @@ RETRO_API bool retro_load_game(const struct retro_game_info* game)
+ 
+ 	CrashHandler::Install();
+ 
+-	// RetroArch holds each frame for round(refresh / fps) refreshes, the fps
+-	// being the one announced above, so retro_run runs at the refresh rate
+-	// divided by that: 59.94 on a 119.88 Hz panel, 60 on a 60 Hz one. Read
++	// Sync to Exact Content Framerate calls retro_run at the frame rate
++	// announced above, not at the panel's refresh divided by a swap interval:
++	// under variable refresh the panel follows, on a fixed mode RetroArch
++	// times the presents. Taken from the panel instead, a 120.198 Hz mode
++	// gave 60.099: an NTSC game synced at a target speed of 1.0027 that vsync
++	// pacing never let it reach, and a PAL game could not sync at all. Set
+ 	// here, before the negotiation opens the GS and asks for the window.
+-	float target_refresh = 0.0f;
+-	if (environ_cb(RETRO_ENVIRONMENT_GET_TARGET_REFRESH_RATE, &target_refresh) && target_refresh > 0.0f)
+-	{
+-		const float interval = std::max(1.0f, std::round(target_refresh / LibretroCore::kAnnouncedFps));
+-		LibretroCore::s_host_refresh_rate = target_refresh / interval;
+-		log_cb(RETRO_LOG_INFO, "Pacing to the frontend: %.3f Hz refresh, %.3f Hz frames.\n",
+-			target_refresh, LibretroCore::s_host_refresh_rate);
+-	}
++	LibretroCore::s_host_refresh_rate = LibretroCore::kAnnouncedFps;
++	LibretroCore::s_reported_fps = LibretroCore::kAnnouncedFps;
++	LibretroCore::s_av_refusal_logged = false;
++	log_cb(RETRO_LOG_INFO, "Pacing to the frontend: %.3f Hz frames.\n", LibretroCore::kAnnouncedFps);
+ 
+ 	if (!LibretroCore::InitializeConfig())
+ 	{
+@@ -2360,15 +2367,47 @@ RETRO_API void retro_run(void)
+ 	// frequency (PAL 50Hz, progressive modes), update the frontend.
+ 	if (VMManager::HasValidVM())
+ 	{
+-		static float reported_fps = 59.94f;
+ 		const float fps = VMManager::GetFrameRate();
+-		if (fps > 1.0f && std::abs(fps - reported_fps) > 0.25f)
++		if (fps > 1.0f && std::abs(fps - LibretroCore::s_reported_fps) > 0.25f)
+ 		{
+-			reported_fps = fps;
+ 			struct retro_system_av_info av;
+ 			retro_get_system_av_info(&av);
+ 			av.timing.fps = fps;
+-			environ_cb(RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO, &av);
++			if (environ_cb(RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO, &av))
++			{
++				LibretroCore::s_reported_fps = fps;
++
++				// retro_run now comes at this rate, so it is the host refresh
++				// the VM syncs to: set on the GS device, then the VM's speed is
++				// worked out against it once the GS has run that. Left at
++				// 59.94, a PAL game could not sync (50 is outside the 5%
++				// window) and slept to its own clock while retro_run paced it
++				// as well. Written through the window info rather than by a GS
++				// setter: the GS sources are hashed into the shader and
++				// pipeline cache identity, and one more line there would empty
++				// every game's precompile list. UpdateWindow() would do it too,
++				// but destroys the surface and waits for the GPU to go idle.
++				LibretroCore::s_host_refresh_rate = fps;
++				Host::RunOnCPUThread([fps]() {
++					if (!MTGS::IsOpen())
++						return;
++					MTGS::RunOnGSThread([fps]() {
++						if (g_gs_device)
++							const_cast<WindowInfo&>(g_gs_device->GetWindowInfo()).surface_refresh_rate = fps;
++					});
++					MTGS::WaitGS(false);
++					VMManager::UpdateTargetSpeed();
++					log_cb(RETRO_LOG_INFO, "Pacing to the frontend: %.3f Hz frames.\n", fps);
++				});
++			}
++			else if (!LibretroCore::s_av_refusal_logged)
++			{
++				// The frontend keeps calling at the old rate, so the host
++				// refresh stays with it; asked again every frame.
++				LibretroCore::s_av_refusal_logged = true;
++				log_cb(RETRO_LOG_WARN, "The frontend refused %.3f Hz frames; pacing stays at %.3f Hz.\n", fps,
++					LibretroCore::s_reported_fps);
++			}
+ 		}
+ 	}
+ 
