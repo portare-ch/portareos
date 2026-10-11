@@ -4,11 +4,12 @@ Subject: [PATCH] libretro: pace to the frame rate the core reports
 001 handed the GS the frontend's target refresh divided by the swap
 interval RetroArch would pick for 59.94 fps. PortareOS runs Sync to
 Exact Content Framerate on every path (#641), which calls retro_run at
-the frame rate the core reports instead: on the 120.198 Hz mode 001 gave
-60.099, so the VM synced 0.27% fast against a 59.94 Hz retro_run and
-resampled its audio to match. A PAL game was worse off: 60.099 against
-50 is outside PCSX2's 5% window, so the VM slept to its own clock while
-retro_run paced it too - the two clocks 001 set out to remove.
+the frame rate the core reports instead; on the 120.198 Hz mode 001 gave
+60.099. An NTSC game still synced, at a target speed of 1.0027 that
+vsync pacing never let it reach. A PAL game could not sync at all:
+60.099 against 50 is outside PCSX2's 5% window, so the VM slept to its
+own clock while retro_run paced it too - the two clocks 001 set out to
+remove.
 
 The host refresh is now the frame rate the core reports: the announced
 59.94 at load, and the VM's own rate when retro_run tells the frontend
@@ -16,7 +17,7 @@ about a new one, after which the GS re-reads its window (surfaceless,
 so nothing else changes) and the VM's target speed is worked out again.
 ---
 diff --git a/pcsx2-libretro/Main.cpp b/pcsx2-libretro/Main.cpp
-index a60d75e..77faceb 100644
+index a60d75e..7c255ba 100644
 --- a/pcsx2-libretro/Main.cpp
 +++ b/pcsx2-libretro/Main.cpp
 @@ -143,8 +143,10 @@ namespace LibretroCore
@@ -48,7 +49,13 @@ index a60d75e..77faceb 100644
 -	// RetroArch holds each frame for round(refresh / fps) refreshes, the fps
 -	// being the one announced above, so retro_run runs at the refresh rate
 -	// divided by that: 59.94 on a 119.88 Hz panel, 60 on a 60 Hz one. Read
--	// here, before the negotiation opens the GS and asks for the window.
++	// Sync to Exact Content Framerate calls retro_run at the frame rate
++	// announced above, not at the panel's refresh divided by a swap interval:
++	// under variable refresh the panel follows, on a fixed mode RetroArch
++	// times the presents. Taken from the panel instead, a 120.198 Hz mode
++	// gave 60.099: an NTSC game synced at a target speed of 1.0027 that vsync
++	// pacing never let it reach, and a PAL game could not sync at all. Set
+ 	// here, before the negotiation opens the GS and asks for the window.
 -	float target_refresh = 0.0f;
 -	if (environ_cb(RETRO_ENVIRONMENT_GET_TARGET_REFRESH_RATE, &target_refresh) && target_refresh > 0.0f)
 -	{
@@ -57,13 +64,6 @@ index a60d75e..77faceb 100644
 -		log_cb(RETRO_LOG_INFO, "Pacing to the frontend: %.3f Hz refresh, %.3f Hz frames.\n",
 -			target_refresh, LibretroCore::s_host_refresh_rate);
 -	}
-+	// Sync to Exact Content Framerate calls retro_run at the frame rate
-+	// announced above, not at the panel's refresh divided by a swap interval:
-+	// under variable refresh the panel follows, on a fixed mode RetroArch
-+	// times the presents. Taken from the panel instead, a 120.198 Hz mode
-+	// gave 60.099, and the VM ran 0.27% fast against a 59.94 Hz retro_run,
-+	// its audio resampled to match. Set here, before the negotiation opens
-+	// the GS and asks for the window.
 +	LibretroCore::s_host_refresh_rate = LibretroCore::kAnnouncedFps;
 +	log_cb(RETRO_LOG_INFO, "Pacing to the frontend: %.3f Hz frames.\n", LibretroCore::kAnnouncedFps);
  
