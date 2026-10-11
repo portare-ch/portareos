@@ -40,6 +40,7 @@ gdb does not provide source-level symbols for every emulator or library.
 | `pcm-flags` | Nova, debug package | What audio capabilities and period sizes does the driver advertise? |
 | `pcm-floor` | Nova, debug package | Which audio periods sustain playback without underruns? |
 | `perf-probe` | Nova, ordinary image | What clocks, temperature, charge and frame times accompanied a game run? |
+| `gamecapture` | Nova, ordinary image | Can this stretch of play be recorded and replayed as a benchmark workload? |
 | `idle-probe` | Nova, ordinary image | What consumes power and wakes threads while idle? |
 | `coremap-check` | Nova, ordinary image | Do PS2 threads and background services use their assigned CPUs? |
 | PortScope | Nova, launcher | What do the buttons, sticks, triggers and report stream actually produce? |
@@ -146,6 +147,61 @@ The probe copies the newest non-summary CSV from `/storage/mangologs`; confirm
 that it belongs to this run. It does not start MangoHud logging. Without gawk,
 some percentile summaries are unavailable; retain the raw CSV. See the
 [performance notes](../docs/performance-plan.md) for comparison procedures.
+
+### gamecapture: benchmark workloads
+
+While a RetroArch game is running, from a root SSH session (or as
+`ssh nova gamecapture ...` from the host):
+
+```sh
+gamecapture --duration 5     # record five minutes, then stop
+gamecapture start            # record until stopped, ten minutes at most
+gamecapture status
+gamecapture stop
+gamecapture verify /storage/captures/snes/super-mario-world-usa-001
+gamecapture list
+```
+
+A capture is RetroArch's own replay: the core's state at the first frame
+and the input of every frame after it, taken at the libretro boundary, so
+it does not depend on the controller. Nothing is pressed or shown on the
+device and the game is not restarted. Each one is a directory,
+`/storage/captures/SYSTEM/GAME-NNN/`, holding `replay.bsv` (state
+included, no ROM or BIOS) and `metadata.json`: the ROM files, core and
+RetroArch with their sha256, the image build, frames and duration, input
+ports, the core's options, the launch's RetroArch settings, and
+`validation`. Every capture stops after ten minutes at most, the length
+of the longest benchmark run. A second `start` is refused; `stop` with
+nothing recording does nothing.
+
+The replay ends with a checkpoint, a full state of its last frames; cores
+whose state is under 4 MiB also get one every 30 s. `verify` stops the
+launcher, starts the game through `runemu.sh` with its own config added
+through `RUNEMU_APPENDCONFIG`, plays the replay with `PLAY_REPLAY_SLOT 1`
+on RetroArch's command socket, `@retroarch/cmd`, and compares each
+checkpoint with the core's state instead of loading it. The capture is
+`validated` only if playback reached its end - RetroArch pauses there -
+and every checkpoint matched; otherwise `diverged` or `failed`, and
+unsupported for benchmarking. The game's saves, and ARMSX2's memory
+cards, are copies during the run; `verify.log` keeps RetroArch's log. A
+benchmark runner plays a capture the same way. This needs retroarch 0023
+(the socket), 0024 (compared checkpoints) and 0025 (playback starting on
+the frame it loads).
+
+Measured on 2026-10-11 with 50 s of scripted input from boot, against the
+same run without a capture:
+
+| Core, game | Replay | RetroArch main thread | Start | Stop |
+| --- | --- | --- | --- | --- |
+| snes9x, Super Mario World | validated, every checkpoint | 8.0 -> 8.5% of a core | one 29 ms frame | - |
+| SwanStation, Skullmonkeys (4x, preemptive frames) | validated | 11.6 -> 11.7% | 79 ms | 42 ms |
+| ARMSX2, Need for Speed Underground | diverged | 1.2 -> 1.7% (all threads 77 -> 79%) | 258 ms | 294 ms |
+
+Recording itself costs next to nothing; the hitches are the checkpoint
+saved on RetroArch's main thread, and grow with the state. ARMSX2 is
+unsupported: after 51 s of driving, 2.6 MB of the EE's 32 MB differed,
+because input reaches its threaded machine on a frame that varies from
+run to run.
 
 ### coremap-check: PS2 thread layout
 

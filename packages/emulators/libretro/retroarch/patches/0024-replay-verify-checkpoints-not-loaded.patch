@@ -1,0 +1,113 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] replay: compare the checkpoints it does not load
+
+A replay's checkpoints are full states saved while recording. Played
+back with replay_checkpoint_deserialize on, each is loaded, which pulls
+a playback that has drifted back onto the recording and hides that it
+drifted. Off, they were skipped. Now, off, each is decoded and compared
+with the core's own state at the frame it would have been loaded on,
+and the log says whether it matched: "Checkpoint at frame N matches" or
+"Diverged by frame N". gamecapture verify reads these to decide whether
+a capture plays back as recorded.
+
+A checkpoint's buffer is cleared before the core writes into it. A core
+may serialize less than the size it reports - SwanStation fills 4.4 MB
+of its 11.5 MB - and the rest was left as the previous checkpoint had
+it: noise to compare against, and to compress.
+
+Signed-off-by: PortareOS <hello@portare.org>
+---
+diff --git a/input/bsv/bsvmovie.c b/input/bsv/bsvmovie.c
+index 85d2940..52f202f 100644
+--- a/input/bsv/bsvmovie.c
++++ b/input/bsv/bsvmovie.c
+@@ -650,6 +650,8 @@ bool bsv_movie_load_checkpoint(bsv_movie_t *handle, uint8_t compression,
+          ret = false;
+          goto exit;
+    }
++   if (checkpoint_behavior == REPLAY_CPBEHAVIOR_VERIFY)
++      handle->checkpoint_verify = true;
+    if (checkpoint_behavior != REPLAY_CPBEHAVIOR_DESERIALIZE)
+       goto exit;
+    handle->checkpoint_ready = true;
+@@ -686,6 +688,9 @@ int64_t bsv_movie_write_checkpoint(bsv_movie_t *handle, uint8_t compression, uin
+       handle->cur_save_valid = false;
+    }
+    serial_info.data = handle->cur_save;
++   /* A core may serialize less than the size it reports; what it leaves
++    * of the buffer would be whatever the last checkpoint left there. */
++   memset(handle->cur_save, 0, serial_info.size);
+    core_serialize(&serial_info);
+    switch (encoding)
+    {
+@@ -800,6 +805,37 @@ bool bsv_movie_read_next_events(bsv_movie_t *handle,
+       replay_checkpoint_behavior checkpoint_behavior, bool end_movie)
+ {
+    input_driver_state_t *input_st  = input_state_get_ptr();
++   if (handle->checkpoint_verify)
++   {
++      /* Where a checkpoint would have been loaded, the core's state
++       * has to be the one recorded: anything else is a playback that
++       * no longer follows the recording. */
++      size_t size = core_serialize_size();
++      uint8_t *state = size ? (uint8_t*)calloc(1, size) : NULL;
++      retro_ctx_serialize_info_t serial_info;
++      handle->checkpoint_verify = false;
++      serial_info.data = state;
++      serial_info.size = size;
++      if (!state || !core_serialize(&serial_info))
++         RARCH_WARN("[Replay] Checkpoint at frame %lld not verified: the core did not serialize.\n",
++               (long long)handle->frame_counter);
++      else if (size != handle->cur_save_size)
++         RARCH_WARN("[Replay] Diverged by frame %lld: the state is %zu bytes, the checkpoint %zu.\n",
++               (long long)handle->frame_counter, size, (size_t)handle->cur_save_size);
++      else
++      {
++         size_t i = 0;
++         while (i < size && state[i] == handle->cur_save[i])
++            i++;
++         if (i < size)
++            RARCH_WARN("[Replay] Diverged by frame %lld: the state differs from the checkpoint from byte %zu of %zu.\n",
++                  (long long)handle->frame_counter, i, size);
++         else
++            RARCH_LOG("[Replay] Checkpoint at frame %lld matches.\n",
++                  (long long)handle->frame_counter);
++      }
++      free(state);
++   }
+    if (handle->checkpoint_ready)
+    {
+       retro_ctx_serialize_info_t serial_info;
+@@ -1091,7 +1127,7 @@ void bsv_movie_next_frame(input_driver_state_t *input_st)
+    }
+    else /* either playback or seeking while recording */
+    {
+-      bsv_movie_read_next_events(handle, checkpoint_deserialize ? REPLAY_CPBEHAVIOR_DESERIALIZE : REPLAY_CPBEHAVIOR_UPDATE, true);
++      bsv_movie_read_next_events(handle, checkpoint_deserialize ? REPLAY_CPBEHAVIOR_DESERIALIZE : REPLAY_CPBEHAVIOR_VERIFY, true);
+       /* clear seeking flag since we did read one frame */
+       input_st->bsv_movie_state.flags &= ~BSV_FLAG_MOVIE_SEEKING;
+    }
+diff --git a/input/input_driver.h b/input/input_driver.h
+index 63c4ae6..af6d9fa 100644
+--- a/input/input_driver.h
++++ b/input/input_driver.h
+@@ -277,6 +277,7 @@ struct bsv_movie
+    bool first_rewind;
+    bool did_rewind;
+    bool checkpoint_ready;
++   bool checkpoint_verify;
+ 
+ #ifdef HAVE_STATESTREAM
+    /* Block index and superblock index for incremental checkpoints */
+@@ -299,7 +300,10 @@ typedef struct bsv_movie bsv_movie_t;
+ enum replay_checkpoint_behavior_ {
+    REPLAY_CPBEHAVIOR_SKIP,
+    REPLAY_CPBEHAVIOR_UPDATE,
+-   REPLAY_CPBEHAVIOR_DESERIALIZE
++   REPLAY_CPBEHAVIOR_DESERIALIZE,
++   /* Decode the checkpoint and compare it with the core's own state
++    * instead of loading it. */
++   REPLAY_CPBEHAVIOR_VERIFY
+ };
+ 
+ typedef enum replay_checkpoint_behavior_ replay_checkpoint_behavior;
