@@ -155,7 +155,7 @@ While a RetroArch game is running, from a root SSH session (or as
 
 ```sh
 gamecapture --duration 5     # record five minutes, then stop
-gamecapture start            # record until stopped
+gamecapture start            # record until stopped, ten minutes at most
 gamecapture status
 gamecapture stop
 gamecapture verify /storage/captures/snes/super-mario-world-usa-001
@@ -170,8 +170,9 @@ device and the game is not restarted. Each one is a directory,
 included, no ROM or BIOS) and `metadata.json`: the ROM files, core and
 RetroArch with their sha256, the image build, frames and duration, input
 ports, the core's options, the launch's RetroArch settings, and
-`validation`. A second `start` is refused; `stop` with nothing recording
-does nothing.
+`validation`. Every capture stops after ten minutes at most, the length
+of the longest benchmark run. A second `start` is refused; `stop` with
+nothing recording does nothing.
 
 The replay ends with a checkpoint, a full state of its last frames; cores
 whose state is under 4 MiB also get one every 30 s. `verify` stops the

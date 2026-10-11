@@ -3,8 +3,8 @@
 # Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
 """Record the game being played as a benchmark workload.
 
-  gamecapture start            record until stopped
-  gamecapture --duration N     record for N minutes, then stop
+  gamecapture start            record until stopped, ten minutes at most
+  gamecapture --duration N     record for N minutes (at most ten), then stop
   gamecapture stop             stop and file the capture; nothing to stop is fine
   gamecapture status           what is being recorded, for how long, where to
   gamecapture verify DIR       play a capture back and check it follows the recording
@@ -56,6 +56,8 @@ FORMAT = "gamecapture/1"
 PERIODIC_MAX_STATE = 4 << 20
 PERIODIC_SECONDS = 30
 MIN_FREE = 1 << 30
+# A benchmark run is never longer; a capture left running stops here.
+MAX_MINUTES = 10
 # Saves a core keeps outside RetroArch's save directory: verify plays over
 # copies of them.
 PRIVATE_SAVES = {"armsx2": "/storage/roms/ps2/Mcd*.ps2"}
@@ -323,8 +325,9 @@ def recording(st):
 
 
 def start(duration):
-    if duration is not None and not 0 < duration <= 24 * 60:
-        raise Fail("--duration is minutes, more than 0 and at most 1440.")
+    if duration is not None and not 0 < duration <= MAX_MINUTES:
+        raise Fail(f"--duration is minutes, more than 0 and at most {MAX_MINUTES}.")
+    duration = duration or MAX_MINUTES
     st = load_state()
     if st and recording(st):
         raise Fail(f"Already recording {st['dir']}; gamecapture stop first.")
@@ -377,16 +380,14 @@ def start(duration):
         if periodic:
             timer("gamecapture-checkpoint", ["checkpoint"], active=f"{PERIODIC_SECONDS}s",
                   unit_active=f"{PERIODIC_SECONDS}s")
-        if duration is not None:
-            timer("gamecapture-stop", ["stop"], active=f"{int(duration * 60)}s")
+        timer("gamecapture-stop", ["stop"], active=f"{int(duration * 60)}s")
     except subprocess.CalledProcessError:
         stop_timers()
         ra("HALT_REPLAY", reply=False)
         os.remove(STATE)
         shutil.rmtree(d, ignore_errors=True)
         raise Fail("Could not set the timers; nothing was kept.")
-    print(f"Recording {s['game']} ({s['system']}, {s['core']}) to {d}"
-          + (f", stopping in {fmt_time(duration * 60)}." if duration is not None else "."))
+    print(f"Recording {s['game']} ({s['system']}, {s['core']}) to {d}, stopping in {fmt_time(duration * 60)}.")
 
 
 def checkpoint():
@@ -476,8 +477,7 @@ def status():
     elapsed = time.time() - st["started"]
     print(f"Recording {st['game']} ({st['system']}, core {st['core']}) for {fmt_time(elapsed)}")
     print(f"  to {st['dir']}")
-    if st["duration_min"] is not None:
-        print(f"  stops in {fmt_time(max(0, st['duration_min'] * 60 - elapsed))}")
+    print(f"  stops in {fmt_time(max(0, st['duration_min'] * 60 - elapsed))}")
     if st["periodic"]:
         print(f"  {st['checkpoints']} checkpoints so far, one every {PERIODIC_SECONDS} s")
     if not recording(st):
@@ -632,7 +632,7 @@ def list_captures():
 
 def main():
     ap = argparse.ArgumentParser(prog="gamecapture", description=__doc__.split("\n\n")[0])
-    ap.add_argument("--duration", type=float, metavar="N", help="record for N minutes, then stop")
+    ap.add_argument("--duration", type=float, metavar="N", help=f"record for N minutes (at most {MAX_MINUTES}), then stop")
     ap.add_argument("command", nargs="?", choices=["start", "stop", "status", "verify", "list", "checkpoint"])
     ap.add_argument("dir", nargs="?")
     a = ap.parse_args()
