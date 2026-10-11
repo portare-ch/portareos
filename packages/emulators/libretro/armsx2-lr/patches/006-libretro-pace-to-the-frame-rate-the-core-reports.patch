@@ -13,14 +13,16 @@ remove.
 
 The host refresh is now the frame rate the core reports: the announced
 59.94 at load, and the VM's own rate once the frontend has accepted it,
-set on the GS device on the GS thread before the VM's target speed is
-worked out again. Only the rate changes: UpdateWindow() would destroy
-the surface and wait for the GPU to go idle for one number. The rate
-last reported is reset at each load, since a frontend may keep the core
-across games and a second PAL game would otherwise go unreported.
+written into the GS device's window info on the GS thread before the
+VM's target speed is worked out again: UpdateWindow() would destroy the
+surface and wait for the GPU to go idle for one number, and a setter in
+GSDevice.h would change the GS cache identity, which hashes the GS
+sources, and empty every game's precompile list. The rate last reported
+is reset at each load, since a frontend may keep the core across games
+and a second PAL game would otherwise go unreported.
 ---
 diff --git a/pcsx2-libretro/Main.cpp b/pcsx2-libretro/Main.cpp
-index a60d75e..3c22a10 100644
+index a60d75e..a2d8540 100644
 --- a/pcsx2-libretro/Main.cpp
 +++ b/pcsx2-libretro/Main.cpp
 @@ -143,8 +143,16 @@ namespace LibretroCore
@@ -80,7 +82,7 @@ index a60d75e..3c22a10 100644
  
  	if (!LibretroCore::InitializeConfig())
  	{
-@@ -2360,15 +2367,43 @@ RETRO_API void retro_run(void)
+@@ -2360,15 +2367,47 @@ RETRO_API void retro_run(void)
  	// frequency (PAL 50Hz, progressive modes), update the frontend.
  	if (VMManager::HasValidVM())
  	{
@@ -103,14 +105,18 @@ index a60d75e..3c22a10 100644
 +				// worked out against it once the GS has run that. Left at
 +				// 59.94, a PAL game could not sync (50 is outside the 5%
 +				// window) and slept to its own clock while retro_run paced it
-+				// as well.
++				// as well. Written through the window info rather than by a GS
++				// setter: the GS sources are hashed into the shader and
++				// pipeline cache identity, and one more line there would empty
++				// every game's precompile list. UpdateWindow() would do it too,
++				// but destroys the surface and waits for the GPU to go idle.
 +				LibretroCore::s_host_refresh_rate = fps;
 +				Host::RunOnCPUThread([fps]() {
 +					if (!MTGS::IsOpen())
 +						return;
 +					MTGS::RunOnGSThread([fps]() {
 +						if (g_gs_device)
-+							g_gs_device->SetWindowRefreshRate(fps);
++							const_cast<WindowInfo&>(g_gs_device->GetWindowInfo()).surface_refresh_rate = fps;
 +					});
 +					MTGS::WaitGS(false);
 +					VMManager::UpdateTargetSpeed();
@@ -128,16 +134,3 @@ index a60d75e..3c22a10 100644
  		}
  	}
  
-diff --git a/pcsx2/GS/Renderers/Common/GSDevice.h b/pcsx2/GS/Renderers/Common/GSDevice.h
-index 1a71da4..83d027a 100644
---- a/pcsx2/GS/Renderers/Common/GSDevice.h
-+++ b/pcsx2/GS/Renderers/Common/GSDevice.h
-@@ -1952,6 +1952,8 @@ public:
- 	__fi bool IsPowerVRGPUProfile() const { return (m_runtime_gpu_profile == RuntimeGpuProfile::PowerVR); }
- 
- 	__fi const WindowInfo& GetWindowInfo() const { return m_window_info; }
-+	/// For a frontend whose frame rate changes while its window does not. GS thread only.
-+	__fi void SetWindowRefreshRate(float rate) { m_window_info.surface_refresh_rate = rate; }
- 	__fi s32 GetWindowWidth() const { return static_cast<s32>(m_window_info.surface_width); }
- 	__fi s32 GetWindowHeight() const { return static_cast<s32>(m_window_info.surface_height); }
- 	__fi GSVector2i GetWindowSize() const { return GSVector2i(static_cast<s32>(m_window_info.surface_width), static_cast<s32>(m_window_info.surface_height)); }
