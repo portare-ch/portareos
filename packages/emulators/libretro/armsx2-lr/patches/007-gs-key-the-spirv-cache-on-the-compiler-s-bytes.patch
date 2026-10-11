@@ -1,0 +1,90 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] gs: key the SPIR-V cache on the compiler's bytes
+
+The SPIR-V cache's stamp names the compiler by libshaderc_shared's path,
+size and modification time. The image stamps every file with the time
+it was built, so each nightly started ARMSX2 with an empty SPIR-V cache:
+nightlies 268 and 269 carried byte-identical shaderc, glslang,
+SPIRV-Tools and core, and the stamp still changed. Every pipeline the
+per-game key list precompiles at boot then compiled its shaders again,
+and the first race after an update stuttered as on a fresh install.
+
+On Linux the compiler is now named by the content hash of shaderc and
+of the glslang and SPIRV-Tools libraries loaded with it: about 10 MB
+read once when the GS opens, and a change of any of them still starts
+a new cache. Windows keeps the modification time.
+---
+diff --git a/pcsx2/GS/Renderers/Vulkan/VKShaderCache.cpp b/pcsx2/GS/Renderers/Vulkan/VKShaderCache.cpp
+index 0dea28b..6171ae9 100644
+--- a/pcsx2/GS/Renderers/Vulkan/VKShaderCache.cpp
++++ b/pcsx2/GS/Renderers/Vulkan/VKShaderCache.cpp
+@@ -30,6 +30,8 @@
+ #include "common/StringUtil.h"
+ #elif !defined(__ANDROID__) && !defined(ARMSX2_LINK_SHADERC)
+ #include <dlfcn.h>
++#include <link.h>
++#include <algorithm>
+ #endif
+ 
+ std::unique_ptr<VKShaderCache> g_vulkan_shader_cache;
+@@ -266,10 +268,10 @@ static std::string GetShaderCompilerIdentity()
+ 	if (!OpenShaderCompiler())
+ 		return "none";
+ 
+-	// The library that was loaded. Its path, size and modification time change with any update to it.
+-	std::string path;
++	// The library that was loaded.
+ 	const void* const fn = reinterpret_cast<const void*>(dyn_shaderc::shaderc_compile_into_spv);
+ #ifdef _WIN32
++	std::string path;
+ 	HMODULE module = nullptr;
+ 	wchar_t wpath[MAX_PATH] = {};
+ 	if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+@@ -278,15 +280,42 @@ static std::string GetShaderCompilerIdentity()
+ 	{
+ 		path = StringUtil::WideStringToUTF8String(wpath);
+ 	}
+-#else
+-	Dl_info info = {};
+-	if (dladdr(fn, &info) != 0 && info.dli_fname)
+-		path = info.dli_fname;
+-#endif
++	// Its path, size and modification time change with any update to it.
+ 	FILESYSTEM_STAT_DATA sd = {};
+ 	if (path.empty() || !FileSystem::StatFile(path.c_str(), &sd))
+ 		return fmt::format("shared {} unknown", path);
+ 	return fmt::format("shared {} {} {}", path, sd.Size, sd.ModificationTime);
++#else
++	Dl_info info = {};
++	if (dladdr(fn, &info) == 0 || !info.dli_fname)
++		return "shared unknown";
++
++	// The compiler is shaderc and the glslang and SPIRV-Tools libraries it was loaded with, so its
++	// identity is their bytes. A modification time says when a file was installed, which an image
++	// based distribution sets anew with every update even when the library is the same build, and
++	// every such update threw the SPIR-V away.
++	std::vector<std::string> paths;
++	dl_iterate_phdr(
++		[](dl_phdr_info* pi, size_t, void* user) -> int {
++			const std::string_view name = Path::GetFileName(pi->dlpi_name ? pi->dlpi_name : "");
++			if (name.starts_with("libglslang") || name.starts_with("libSPIRV"))
++				static_cast<std::vector<std::string>*>(user)->emplace_back(pi->dlpi_name);
++			return 0;
++		},
++		&paths);
++	std::sort(paths.begin(), paths.end());
++	paths.insert(paths.begin(), info.dli_fname);
++
++	std::string id = "shared";
++	for (const std::string& p : paths)
++	{
++		const std::optional<std::vector<u8>> data = FileSystem::ReadBinaryFile(p.c_str());
++		if (!data.has_value())
++			return fmt::format("shared {} unreadable", p);
++		id += fmt::format(" {}:{}", Path::GetFileName(p), GSCacheFile::Hash128(data->data(), data->size()).ToHex());
++	}
++	return id;
++#endif
+ #endif
+ }
+ 
