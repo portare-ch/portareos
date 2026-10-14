@@ -1,0 +1,330 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] libretro: capture with PCSX2's input recording
+
+gamecapture records a game as a benchmark workload. A RetroArch replay
+keys input to retro_run, but the EE runs a varying frame or two ahead,
+so a replayed press reaches the game on another frame and the replay
+drifts: driving the same 50 s of Need for Speed Underground three times
+moved the EE, GS and VU threads' load by 4 to 10%. PCSX2's own input
+recording keys input to the emulated frame instead.
+
+gamecapture drives it through a command file, /run/armsx2-capture, and
+reads /run/armsx2-capture.status. While recording, retro_run's input is
+applied at the next vsync rather than at once, so the pad holds the
+value the recording takes for the whole frame; outside a capture the
+input path is unchanged. While replaying, the live pad is ignored.
+The recording carries on from its first state saved and loaded back,
+as every replay does: recorded from the running machine, all replays of
+a race left the road where the recording had not, a loaded PCSX2 state
+not carrying on exactly as the machine it was taken from. Recording and
+replay each save a closing state at the vsync after the last recorded
+frame, for gamecapture verify to compare. The recording
+replays its last frame and no longer pauses there, so the core can stop
+it a frame later, where the recording stopped.
+---
+diff --git a/pcsx2-libretro/Main.cpp b/pcsx2-libretro/Main.cpp
+index a2d8540..514600f 100644
+--- a/pcsx2-libretro/Main.cpp
++++ b/pcsx2-libretro/Main.cpp
+@@ -18,6 +18,7 @@
+ //  M4: save states over retro_serialize, disk control, memcard-per-content.
+ 
+ #include <algorithm>
++#include <array>
+ #include <atomic>
+ #include <cmath>
+ #include <chrono>
+@@ -34,6 +35,8 @@
+ #include <thread>
+ #include <vector>
+ 
++#include <sys/stat.h>
++
+ #include "libretro.h"
+ 
+ // libretro_vulkan.h pulls in vulkan.h, which only declares a platform's surface
+@@ -86,6 +89,7 @@
+ #include "pcsx2/Input/InputManager.h"
+ #include "pcsx2/MTGS.h"
+ #include "pcsx2/PerformanceMetrics.h"
++#include "pcsx2/Recording/InputRecording.h"
+ #include "pcsx2/SaveState.h"
+ #include "pcsx2/Memory.h"
+ #include "pcsx2/SIO/Pad/Pad.h"
+@@ -169,6 +173,190 @@ static std::deque<std::function<void()>> s_cpu_queue;
+ static std::condition_variable s_cpu_queue_cv;
+ static std::atomic<std::thread::id> s_cpu_thread_id{};
+ 
++// gamecapture records a PS2 game with PCSX2's own input recording, which
++// keys input to the emulated frame. A RetroArch replay keys it to
++// retro_run, and the EE runs a varying frame or two ahead of that, so a
++// replayed press lands on another frame and the game drifts. gamecapture
++// writes one command to kCommand, its words a line each, and reads the
++// outcome from kStatus:
++//   record PATH          record from the current state: PATH, and the state
++//                        it starts from beside it
++//   stop CLOSING         stop, saving the state the recording ends on
++//   play PATH CLOSING    replay PATH, then save the state it ends on
++// Both closing states are taken at the vsync after the last recorded
++// frame, so a replay that followed the recording leaves the same one.
++namespace CaptureControl
++{
++	static constexpr const char* kCommand = "/run/armsx2-capture";
++	static constexpr const char* kStatus = "/run/armsx2-capture.status";
++
++	enum class Mode
++	{
++		Idle,
++		Recording,
++		Replaying,
++	};
++
++	// Taken by retro_run around its pad writes and by the CPU thread around
++	// a change of mode, so no write straddles one.
++	static std::mutex s_lock;
++	static Mode s_mode = Mode::Idle;
++	// While recording, retro_run's input waits here for the next vsync: the
++	// pad then holds one value through each emulated frame, the value the
++	// recording takes at that vsync.
++	static std::array<float, PadDualshock2::Inputs::LENGTH> s_pending{};
++	static bool s_pending_set = false;
++	static std::atomic<bool> s_stop_requested{false};
++	static std::string s_closing;
++	static std::mutex s_status_lock;
++	static u32 s_poll = 0;
++	// The first look only notes the command already there: one left by an
++	// earlier session is not this one's to carry out.
++	static bool s_primed = false;
++	static struct timespec s_command_mtime = {};
++
++	static void WriteStatus(const std::string& text)
++	{
++		std::lock_guard<std::mutex> lock(s_status_lock);
++		const std::string tmp = std::string(kStatus) + ".tmp";
++		if (FileSystem::WriteStringToFile(tmp.c_str(), text + "\n"))
++			FileSystem::RenamePath(tmp.c_str(), kStatus);
++	}
++
++	static void SetMode(Mode mode)
++	{
++		std::lock_guard<std::mutex> lock(s_lock);
++		s_mode = mode;
++		s_pending_set = false;
++	}
++
++	// On the CPU thread, at the vsync after the last frame: the closing
++	// state, then the recording closed before the next frame begins.
++	static void Finish(const char* outcome)
++	{
++		const u32 frames = g_InputRecording.getFrameCounter();
++		VMManager::SaveState(s_closing.c_str(), false, false, [](const std::string& error) {
++			WriteStatus("error " + error);
++		});
++		g_InputRecording.stop();
++		SetMode(Mode::Idle);
++		WriteStatus(fmt::format("{} {}", outcome, frames));
++	}
++
++	// Host::PumpMessagesOnCPUThread, every vsync, before the recording
++	// takes or replaces this frame's pad state.
++	static void OnVSync()
++	{
++		Mode mode;
++		{
++			std::lock_guard<std::mutex> lock(s_lock);
++			mode = s_mode;
++			if (mode == Mode::Recording && !s_stop_requested.load() && s_pending_set)
++			{
++				if (PadBase* pad = Pad::GetPad(0))
++					for (u32 i = 0; i < s_pending.size(); i++)
++						if (i != PadDualshock2::Inputs::PAD_ANALOG)
++							pad->Set(i, s_pending[i]);
++			}
++		}
++		if (mode == Mode::Recording && s_stop_requested.exchange(false))
++			Finish("stopped");
++		else if (mode == Mode::Replaying && !g_InputRecording.isActive())
++		{
++			SetMode(Mode::Idle);
++			WriteStatus("error the replay stopped by itself");
++		}
++		else if (mode == Mode::Replaying &&
++				 g_InputRecording.getFrameCounter() >= g_InputRecording.getData().getTotalFrames())
++			Finish("ended");
++	}
++
++	// retro_run, every 30th call: a new command, and progress.
++	static void Poll()
++	{
++		if (++s_poll % 30)
++			return;
++		Mode mode;
++		{
++			std::lock_guard<std::mutex> lock(s_lock);
++			mode = s_mode;
++		}
++		if (mode == Mode::Recording)
++			WriteStatus(fmt::format("recording {}", g_InputRecording.getFrameCounter()));
++		else if (mode == Mode::Replaying)
++			WriteStatus(fmt::format("replaying {} {}", g_InputRecording.getFrameCounter(),
++				g_InputRecording.getData().getTotalFrames()));
++
++		struct stat st;
++		const bool seen = stat(kCommand, &st) == 0;
++		if (!std::exchange(s_primed, true))
++		{
++			if (seen)
++				s_command_mtime = st.st_mtim;
++			return;
++		}
++		if (!seen || (st.st_mtim.tv_sec == s_command_mtime.tv_sec && st.st_mtim.tv_nsec == s_command_mtime.tv_nsec))
++			return;
++		s_command_mtime = st.st_mtim;
++		const std::optional<std::string> text = FileSystem::ReadFileToString(kCommand);
++		if (!text)
++			return;
++		std::vector<std::string> words;
++		for (const std::string_view w : StringUtil::SplitString(*text, '\n'))
++			words.emplace_back(w);
++		if (words.size() == 2 && words[0] == "record" && mode == Mode::Idle)
++		{
++			Host::RunOnCPUThread([path = words[1]]() {
++				// A replay starts by loading the recording's first state, and a
++				// loaded state does not carry on exactly as the machine it was
++				// taken from: recorded from the running machine, every replay
++				// of a race left the road where the recording did not. So the
++				// recording too carries on from that state, loaded.
++				const std::string state = path + ".start.p2s";
++				VMManager::SaveState(state.c_str(), false, false, [](const std::string& error) {
++					WriteStatus("error " + error);
++				});
++				const bool loaded = VMManager::LoadState(state.c_str());
++				FileSystem::DeleteFilePath(state.c_str());
++				if (!loaded)
++				{
++					WriteStatus("error could not load " + state);
++					return;
++				}
++				if (!g_InputRecording.create(path, true, "gamecapture"))
++				{
++					WriteStatus("error could not create " + path);
++					return;
++				}
++				SetMode(Mode::Recording);
++				WriteStatus("recording 0");
++			});
++		}
++		else if (words.size() == 2 && words[0] == "stop" && mode == Mode::Recording)
++		{
++			Host::RunOnCPUThread([closing = words[1]]() {
++				s_closing = closing;
++				s_stop_requested = true;
++			});
++		}
++		else if (words.size() == 3 && words[0] == "play" && mode == Mode::Idle)
++		{
++			Host::RunOnCPUThread([path = words[1], closing = words[2]]() {
++				s_closing = closing;
++				if (!g_InputRecording.play(path))
++				{
++					WriteStatus("error could not replay " + path);
++					return;
++				}
++				SetMode(Mode::Replaying);
++				WriteStatus("replaying 0 " + std::to_string(g_InputRecording.getData().getTotalFrames()));
++			});
++		}
++		else
++			WriteStatus("error not now: " + (words.empty() ? std::string() : words.front()));
++	}
++} // namespace CaptureControl
++
+ static void FallbackLog(enum retro_log_level level, const char* fmt, ...)
+ {
+ 	va_list va;
+@@ -520,6 +708,7 @@ void Host::PumpMessagesOnCPUThread()
+ 		VMManager::SetState(VMState::Stopping);
+ 
+ 	LibretroCore::DrainCPUThreadQueue();
++	CaptureControl::OnVSync();
+ }
+ 
+ void Host::RunOnCPUThread(std::function<void()> function, bool block)
+@@ -2218,8 +2407,17 @@ RETRO_API void retro_run(void)
+ 				{RETRO_DEVICE_ID_JOYPAD_L3, PadDualshock2::Inputs::PAD_L3},
+ 				{RETRO_DEVICE_ID_JOYPAD_R3, PadDualshock2::Inputs::PAD_R3},
+ 			};
++			// While a capture records, the input waits for the next vsync; while
++			// one replays, the recording drives the pad (CaptureControl).
++			std::lock_guard<std::mutex> capture_lock(CaptureControl::s_lock);
++			const auto set = [pad](u32 id, float value) {
++				if (CaptureControl::s_mode == CaptureControl::Mode::Idle)
++					pad->Set(id, value);
++				else if (CaptureControl::s_mode == CaptureControl::Mode::Recording)
++					CaptureControl::s_pending[id] = value;
++			};
+ 			for (const auto& m : bmap)
+-				pad->Set(m.ds2, input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, m.retro) ? 1.0f : 0.0f);
++				set(m.ds2, input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, m.retro) ? 1.0f : 0.0f);
+ 
+ 			// Analog sticks: split each axis into the two directional slots.
+ 			const auto axis = [](s16 v, bool positive) {
+@@ -2230,15 +2428,17 @@ RETRO_API void retro_run(void)
+ 			const s16 ly = input_state_cb(0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y);
+ 			const s16 rx = input_state_cb(0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_X);
+ 			const s16 ry = input_state_cb(0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_Y);
+-			pad->Set(PadDualshock2::Inputs::PAD_L_RIGHT, axis(lx, true));
+-			pad->Set(PadDualshock2::Inputs::PAD_L_LEFT, axis(lx, false));
+-			pad->Set(PadDualshock2::Inputs::PAD_L_DOWN, axis(ly, true));
+-			pad->Set(PadDualshock2::Inputs::PAD_L_UP, axis(ly, false));
+-			pad->Set(PadDualshock2::Inputs::PAD_R_RIGHT, axis(rx, true));
+-			pad->Set(PadDualshock2::Inputs::PAD_R_LEFT, axis(rx, false));
+-			pad->Set(PadDualshock2::Inputs::PAD_R_DOWN, axis(ry, true));
+-			pad->Set(PadDualshock2::Inputs::PAD_R_UP, axis(ry, false));
++			set(PadDualshock2::Inputs::PAD_L_RIGHT, axis(lx, true));
++			set(PadDualshock2::Inputs::PAD_L_LEFT, axis(lx, false));
++			set(PadDualshock2::Inputs::PAD_L_DOWN, axis(ly, true));
++			set(PadDualshock2::Inputs::PAD_L_UP, axis(ly, false));
++			set(PadDualshock2::Inputs::PAD_R_RIGHT, axis(rx, true));
++			set(PadDualshock2::Inputs::PAD_R_LEFT, axis(rx, false));
++			set(PadDualshock2::Inputs::PAD_R_DOWN, axis(ry, true));
++			set(PadDualshock2::Inputs::PAD_R_UP, axis(ry, false));
++			CaptureControl::s_pending_set = CaptureControl::s_mode == CaptureControl::Mode::Recording;
+ 		}
++		CaptureControl::Poll();
+ 	}
+ 
+ #ifdef ENABLE_VULKAN
+diff --git a/pcsx2/Recording/InputRecording.cpp b/pcsx2/Recording/InputRecording.cpp
+index 62b1340..0ca2c73 100644
+--- a/pcsx2/Recording/InputRecording.cpp
++++ b/pcsx2/Recording/InputRecording.cpp
+@@ -240,13 +240,11 @@ void InputRecording::incFrameCounter()
+ 	if (m_controls.isReplaying())
+ 	{
+ 		InformGSThread();
+-		// If we've reached the end of the recording while replaying, pause
++		// At the end of the recording the libretro core stops the replay
++		// itself, a frame later, where the recording was stopped: a pause
++		// here would hold the VM before that frame.
+ 		if (m_frame_counter == m_file.getTotalFrames())
+-		{
+-			VMManager::SetPaused(true);
+-			// Can also stop watching for re-records, they've watched to the end of the recording
+ 			m_watching_for_rerecords = false;
+-		}
+ 	}
+ 	if (m_controls.isRecording())
+ 	{
+@@ -280,8 +278,9 @@ bool InputRecording::isActive() const
+ 
+ void InputRecording::handleExceededFrameCounter()
+ {
+-	// if we go past the end, switch to recording mode so nothing is lost
+-	if (m_frame_counter >= m_file.getTotalFrames() && m_controls.isReplaying())
++	// if we go past the end, switch to recording mode so nothing is lost; the
++	// last recorded frame is still replayed
++	if (m_frame_counter > m_file.getTotalFrames() && m_controls.isReplaying())
+ 	{
+ 		m_controls.setRecordMode(false);
+ 	}
