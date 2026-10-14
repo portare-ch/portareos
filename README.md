@@ -85,8 +85,8 @@ measurements and configuration decisions, and
 along with their untuned settings.
 
 [Known issues](BUGS.md) tracks observed problems and changes awaiting device
-testing. The [roadmap](ROADMAP.md) covers black frame insertion, suspend
-power, the SNES core choice and further footprint reductions.
+testing. The [roadmap](ROADMAP.md) covers suspend power, the SNES core
+choice and further footprint reductions.
 
 ## What it looks like
 
@@ -115,26 +115,26 @@ all open to change. Measurements guide the work.
 
 RetroArch enables variable refresh automatically on the built-in panel
 when it is the only connected display and no display mode is pinned.
-The panel follows timed frames within a 90–120.198 Hz range, using the
+The panel follows timed frames within an 80–120.198 Hz range, using the
 display controller's AVR, the hardware behind Qualcomm's Qsync.
 
-RetroArch paces the game at the core's reported frame rate. Our Mesa Vulkan
-WSI patches schedule integer-multiple scanout: each game frame is scanned
-an integer number of times, evenly spaced, to keep the panel within its
-refresh range. This requires support in both Mesa and the kernel's display
-driver. For the usual NTSC rates, Mesa schedules two scans without rendering
-the frame again:
-2 × 59.8261 Hz for the PlayStation, 2 × 60.0988 Hz for the SNES. All systems
-use the fastest panel mode as the base for variable refresh, with no
-periodic frame drops or extra repeats to fit 60 Hz. RetroArch's vsync
-setting is off, but presentation remains timed. Rates too high to fit
-twice, such as arcade boards near 61 Hz, fall back to vsync at half the
-display's rate, with audio resampled.
+RetroArch paces the game at the core's reported frame rate, and our Mesa
+Vulkan WSI patches time its presentation. The kernel's display driver
+handles integer-multiple scanout: it repeats each frame at evenly spaced
+intervals to keep the panel within its refresh range, without rendering
+or submitting the frame again. For the usual NTSC rates, that means two
+scans: 2 × 59.8261 Hz for the PlayStation, 2 × 60.0988 Hz for the SNES.
+Lower rates use more repeats, such as four scans at 30 fps. All systems
+use the fastest panel mode as the base for variable refresh.
 
-In a 30-second Super Mario World run, flip traces recorded 3607 refreshes
-for 1804 frames, none longer than 8.51 ms. Late frames can still disrupt
-the cadence: Tekken 3 had five panel self-refreshes during loading in a
-60-second run. See
+RetroArch always keeps vsync off and Sync to Exact Content Framerate on,
+including at fixed refresh. Rates too high to fit twice, such as arcade
+boards near 61 Hz, are refused on the variable-refresh path: “This game is
+not supported” appears, then RetroArch returns to the launcher.
+
+In 10-minute runs on 9 October 2026 with kernel repeats, Super Mario World
+showed 35,963 of 35,967 frames twice, and Tekken 3 showed 35,781 of 35,793
+twice. Late frames and startup can still disrupt the cadence. See
 [variable refresh](documentation/VARIABLE_REFRESH.md) for the hardware,
 measurements and design.
 
@@ -143,12 +143,12 @@ variable refresh is disabled. To compare, set `global.vrr=0` in
 `/storage/.config/system/configs/system.cfg`; use `snes.vrr=0` for one
 system or `snes["Super Mario World.sfc"].vrr=0` for one ROM filename.
 With fixed refresh, RetroArch selects a mode from the table below and
-presents each frame once, at the vblank two refreshes after the last.
+still times frames at the core's rate; each is shown at the next refresh.
 
 | Panel mode | Console | Frame rate |
 | --- | --- | --- |
 | 119.880 Hz | Dreamcast, PS2, PSP, GameCube, Xbox; default mode | 59.94 |
-| 119.652 Hz | PlayStation, Nintendo 64, Saturn | 59.8261 |
+| 119.653 Hz | PlayStation, Nintendo 64, Saturn | 59.8261 |
 | 119.455 Hz | Game Boy, Game Boy Color, Game Boy Advance | 59.7275 |
 | 120.198 Hz | Super Nintendo, NES | 60.0988 |
 | 119.846 Hz | Master System, Game Gear, Mega Drive, Mega CD | 59.9227 |
@@ -156,17 +156,17 @@ presents each frame once, at the vblank two refreshes after the last.
 | 119.200 Hz | Neo Geo CD | 59.5999 |
 | 120.000 Hz | Steam: PC games capped at 60 or 120 by a timer | 60 |
 
-Panel timing was measured to better than one part per million against the
-SoC clock. The SNES/NES mode, the fastest, is the base for variable
-refresh; its wider vertical blanking began as a BFI experiment. SwanStation
-does not yet follow real PlayStation mid-game rate changes. See
+Every mode now uses the panel's own 1302 × 998 timing, changing only the
+pixel clock. The wider blanking used previously let the panel lose lock
+and tear under variable refresh. Modes are within 3.2 parts per million
+of their target rates, except the fastest, SNES/NES, which is rounded
+slightly up (+4.4 ppm) so doubled SNES frames fit. SwanStation does not yet follow
+real PlayStation mid-game rate changes. See
 [refresh rates](documentation/PER_DEVICE_DOCUMENTATION/SM8550/REFRESH_RATES.md)
 for implementation and measurements.
 
-**Black frame insertion is experimental and off by default.** It aims for
-CRT-like motion clarity by inserting black refreshes; rolling bands and
-cadence stability remain unresolved, and it is untested with variable
-refresh.
+**Black frame insertion has been removed**, along with the vsync settings
+it depended on. Previously saved values are cleared automatically.
 
 ### Audio stack
 
