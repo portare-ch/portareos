@@ -273,12 +273,12 @@ flowchart TD
     MPV["mpv<br/>Decode, scale and shaders<br/>Fixed refresh"] --> VK
     XEMU["xemu<br/>Vulkan renderer by default; fixed refresh"] --> SDL["SDL3 KMSDRM<br/>Vulkan display surface"]
     SDL --> VK
-    VK["Mesa Turnip / Vulkan<br/>Adreno GPU rendering"] --> WSI["Mesa Vulkan WSI / VK_KHR_display<br/>PortareOS patches: timed presents,<br/>integer-multiple repeats and VRR control"]
-    WSI -->|Page flips; timed repeats with VRR| KMS
+    VK["Mesa Turnip / Vulkan<br/>Adreno GPU rendering"] --> WSI["Mesa Vulkan WSI / VK_KHR_display<br/>PortareOS patches: timed presents<br/>and VRR control"]
+    WSI -->|Timed page flips| KMS
     STEAM["Steam / PC games"] --> GS["gamescope compositor<br/>Mesa / GPU rendering; DRM backend"]
     GS --> KMS
     LAUNCHER["portarelauncher<br/>CPU-written dumb buffer"] --> KMS
-    KMS["Linux DRM/KMS<br/>Patched msm driver: DSI VRR / AVR control"] --> DPU["Qualcomm display controller<br/>Scanout, optional color correction and AVR"]
+    KMS["Linux DRM/KMS<br/>Patched msm driver: DSI VRR / AVR control<br/>and integer-multiple repeats"] --> DPU["Qualcomm display controller<br/>Scanout, optional color correction and AVR"]
     DPU -->|MIPI DSI| PANEL["Nova AMOLED panel<br/>1280 × 960; up to 120.198 Hz"]
 ```
 
@@ -289,14 +289,15 @@ display surface. Steam uses gamescope for composition.
 
 **Integer-multiple VRR spans RetroArch, Mesa and the kernel.** RetroArch
 submits each frame once with a presentation target. Our Mesa Vulkan WSI
-patches time the page flips, repeat the same buffer at evenly spaced
-intervals without rendering it again, and enable `VRR_ENABLED`. The patched
-msm driver exposes DSI variable refresh through the display controller's
-AVR, keeping scanout within 90–120.198 Hz. For example, 59.8261 fps becomes
-119.6522 Hz (2×), and 30 fps can become 120 Hz (4×). This repeat scheduling
-is specific to timed direct-display presents; mpv, xemu and Steam currently
-use fixed refresh. See [variable refresh](documentation/VARIABLE_REFRESH.md)
-for the Mesa patches and measured behavior.
+patches time the page flips and enable `VRR_ENABLED`. The patched msm
+driver schedules integer-multiple repeats through the display controller's
+AVR, scanning the same buffer at evenly spaced intervals without another
+render, submission or page flip, within an 80–120.198 Hz range. For example,
+59.8261 fps becomes 119.6522 Hz (2×), and 30 fps can become 120 Hz (4×).
+Kernel repeat scheduling applies to any commit with `VRR_ENABLED` set,
+whether timed or not; mpv, xemu and Steam currently use fixed refresh.
+See [variable refresh](documentation/VARIABLE_REFRESH.md) for the Mesa and
+kernel patches and measured behavior.
 
 Small services handle the rest:
 
