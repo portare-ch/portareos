@@ -34,14 +34,21 @@
 //
 // "fast" sets modes above the fastest one, 121 and 122 Hz (phases 15 to 17,
 // the first being the fastest mode itself): its pixel clock and front porch,
-// with a shorter back porch. Its front porch is 12 lines and its back porch
-// 142, against 27 on the preferred mode, so the back porch has room.
+// with a shorter back porch.
 //
 // "vrr-on" and "vrr-off" only set the CRTC's VRR_ENABLED and leave it, for
 // a program started afterwards, such as a Vulkan client of the KHR display
 // path, which reads it when it takes the display.
 //
+// "custom CLOCK,HFP,HSYNC,HBP,VFP,VSYNC,VBP RATE" sets that 1280x960 mode,
+// pixel clock in kHz, porches and syncs in pixels and lines, and commits a
+// frame every 1/RATE s for SECONDS, VRR_ENABLED with "vrr". "bar=PX" draws
+// a full-height bar, 64 px wide, moving PX a frame, for watching a panel
+// tear (tools/tear-tap); without it the usual 8 px strip moves. The timing
+// the panel is given, not only the ones the kernel lists (#623).
+//
 // usage: vrr-probe [OUT.csv] [SECONDS] [static|dynamic|all|reset|idle|fast|vrr-on|vrr-off] [vrr]
+//        vrr-probe OUT.csv SECONDS custom CLOCK,HFP,HSYNC,HBP,VFP,VSYNC,VBP RATE [vrr] [bar=PX]
 
 #define _GNU_SOURCE
 #include <errno.h>
@@ -69,7 +76,7 @@ static volatile sig_atomic_t stop;
 static int drm_fd = -1;
 static uint32_t crtc_id, conn_id;
 static struct buf bufs[2];
-static int cur, barx;
+static int cur, barx, bar_step;
 static struct rec *recs;
 static size_t nrecs;
 static const size_t maxrecs = 600000;
@@ -83,10 +90,16 @@ static uint64_t now_ns(void)
 	return (uint64_t)ts.tv_sec * 1000000000ull + ts.tv_nsec;
 }
 
+// Sleeps to 1.5 ms before t and spins the rest: waking from deep idle
+// takes about 0.7 ms here, and under variable refresh a commit's lateness
+// is on the panel as it is.
 static void sleep_until(uint64_t t)
 {
-	struct timespec ts = { (time_t)(t / 1000000000ull), (long)(t % 1000000000ull) };
+	uint64_t wake = t > 1500000 ? t - 1500000 : 0;
+	struct timespec ts = { (time_t)(wake / 1000000000ull), (long)(wake % 1000000000ull) };
 	while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, NULL) == EINTR && !stop)
+		;
+	while (!stop && now_ns() < t)
 		;
 }
 
@@ -308,9 +321,15 @@ static int wait_flips(uint8_t phase, int timeout_ms)
 static int flip(uint8_t phase)
 {
 	struct buf *b = &bufs[cur ^ 1];
-	rect(b, 0, 860, W, 60, grey(40));
-	rect(b, barx, 860, 24, 60, grey(255));
-	barx = (barx + 8) % (W - 24);
+	if (bar_step) {
+		rect(b, 0, 0, W, H, grey(40));
+		rect(b, barx, 0, 64, H, grey(255));
+		barx = (barx + bar_step) % (W - 64);
+	} else {
+		rect(b, 0, 860, W, 60, grey(40));
+		rect(b, barx, 860, 24, 60, grey(255));
+		barx = (barx + 8) % (W - 24);
+	}
 	struct drm_mode_crtc_page_flip pf = { .crtc_id = crtc_id, .fb_id = b->fb,
 		.flags = DRM_MODE_PAGE_FLIP_EVENT, .user_data = phase };
 	if (xioctl(drm_fd, DRM_IOCTL_MODE_PAGE_FLIP, &pf))
@@ -391,6 +410,36 @@ static int run_scheduled(uint8_t phase, int k, double secs)
 	return flips;
 }
 
+// A frame every 1/rate s on the mode just set, as a game would commit.
+static int run_rate(uint8_t phase, double rate, double secs)
+{
+	uint64_t period = (uint64_t)(1e9 / rate + 0.5);
+	uint64_t t = now_ns() + 50000000ull, end = t + (uint64_t)(secs * 1e9);
+	int pending = 0, flips = 0, late = 0;
+	while (!stop && t < end) {
+		while (pending && now_ns() + 1000000 < t) {
+			int ms = (int)((t - now_ns()) / 1000000) - 1;
+			pending -= wait_flips(phase, ms > 0 ? ms : 0);
+		}
+		sleep_until(t);
+		if (pending) {
+			late++;
+			while (!stop && pending)
+				pending -= wait_flips(phase, 100);
+		}
+		add(phase, 'S', t);
+		if (flip(phase)) { perror("page flip"); return -1; }
+		pending = 1;
+		flips++;
+		t += period;
+	}
+	while (!stop && pending)
+		pending -= wait_flips(phase, 100);
+	if (late)
+		printf("    %d commits waited for the previous frame\n", late);
+	return flips;
+}
+
 int main(int argc, char **argv)
 {
 	const char *out = argc > 1 ? argv[1] : "/storage/vrr-probe.csv";
@@ -429,6 +478,47 @@ int main(int argc, char **argv)
 		find_prop(crtc_id, DRM_MODE_OBJECT_CRTC, "VRR_ENABLED", &v);
 		printf("VRR_ENABLED %llu\n", (unsigned long long)v);
 		return 0;
+	}
+	if (!strcmp(which, "custom")) {
+		struct drm_mode_modeinfo m = base;
+		unsigned clock, hfp, hsw, hbp, vfp, vsw, vbp;
+		double rate = argc > 5 ? atof(argv[5]) : 0;
+		int cvrr = 0;
+		for (int i = 6; i < argc; i++) {
+			if (!strcmp(argv[i], "vrr")) cvrr = 1;
+			else if (!strncmp(argv[i], "bar=", 4)) bar_step = atoi(argv[i] + 4);
+		}
+		if (argc < 6 || rate <= 0 || sscanf(argv[4], "%u,%u,%u,%u,%u,%u,%u",
+				&clock, &hfp, &hsw, &hbp, &vfp, &vsw, &vbp) != 7) {
+			fprintf(stderr, "custom CLOCK,HFP,HSYNC,HBP,VFP,VSYNC,VBP RATE [vrr] [bar=PX]\n");
+			return 2;
+		}
+		m.clock = clock;
+		m.hsync_start = W + hfp; m.hsync_end = m.hsync_start + hsw; m.htotal = m.hsync_end + hbp;
+		m.vsync_start = H + vfp; m.vsync_end = m.vsync_start + vsw; m.vtotal = m.vsync_end + vbp;
+		m.vrefresh = (uint32_t)(mode_hz(&m) + 0.5);
+		m.type = DRM_MODE_TYPE_USERDEF;
+		snprintf(m.name, sizeof m.name, "%ux%u-%u-%u", m.hdisplay, m.vdisplay, m.htotal, m.vtotal);
+		set_vrr(0);
+		paint(&bufs[0], 20, (int)(rate + 0.5));
+		paint(&bufs[1], 20, (int)(rate + 0.5));
+		add(20, 'M', now_ns());
+		if (set_mode(&bufs[cur], &m)) {
+			printf("custom: %.4f Hz, %ux%u: mode set FAILED: %s\n", mode_hz(&m), m.htotal, m.vtotal, strerror(errno));
+			return 1;
+		}
+		add(20, 'm', now_ns());
+		if (cvrr && set_vrr(1) == 0)
+			printf("VRR_ENABLED 1\n");
+		printf("custom: %.4f Hz, clock %u, htotal %u, vtotal %u (vfp %u vsync %u vbp %u), frames at %.4f Hz%s\n",
+		       mode_hz(&m), m.clock, m.htotal, m.vtotal, vfp, vsw, vbp, rate, cvrr ? ", variable refresh" : "");
+		fflush(stdout);
+		usleep(300000);
+		int n = run_rate(20, rate, secs);
+		printf("custom: %d frames in %.1f s\n", n, secs);
+		do_static = do_dynamic = do_fast = 0;
+		vrr = cvrr;
+		do_idle = do_reset = 0;
 	}
 	if (!vrr || do_reset)
 		set_vrr(0);
