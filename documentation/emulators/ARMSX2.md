@@ -59,10 +59,9 @@ Its other patches touch Adreno 6xx or 610 only, or Wayland, and it is built
 on Mesa main at `e3a986f0`.
 
 **How the image carries it:**
-- Mesa is 26.3.0-devel, main of 2026-10-09 (`fdbc48df`), and `mesa-009`
-  adds the flush, on only for the engine named `ARMSX2`, which the core passes
-  RetroArch through libretro's Vulkan context negotiation. Every other
-  application keeps stock behaviour.
+- Mesa is 26.3.0-rc1, and `mesa-009` adds the flush, on only for the
+  engine named `ARMSX2`, which the core passes RetroArch through libretro's
+  Vulkan context negotiation. Every other application keeps stock behaviour.
 - ARMSX2 trusts a driver to order a declared loop only when `driverInfo`
   carries its packs' `git-axfl2-` tag. armsx2-lr patch 005 takes Turnip as
   fix generation 2 without the tag. The core's GS messages in the RetroArch
