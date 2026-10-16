@@ -2,8 +2,8 @@
 # Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="swanstation-lr"
-PKG_VERSION="dd4805619bbbfc6e0d1776372cb16377088b448e"
-PKG_SHA256="ab6b31b6bf490268d479451ac253f20651c8d99da62df02dae387db2ae10934e"
+PKG_VERSION="e436e9b85374def58d211df7f78880f0f4a917b4"
+PKG_SHA256="bff59f88ed83dbc9f597ccd52b29dc82eae2c724f5158095ef075cccb430131a"
 PKG_LICENSE="GPL-3.0-or-later"
 PKG_SITE="https://github.com/libretro/swanstation"
 PKG_URL="${PKG_SITE}/archive/${PKG_VERSION}.tar.gz"
