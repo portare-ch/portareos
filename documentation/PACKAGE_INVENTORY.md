@@ -8,7 +8,7 @@ The rule this applies is the README's: if it is not needed for a smooth game, it
 
 | Package | Why |
 |---|---|
-| linux 7.2.9, linux-firmware, busybox, systemd, util-linux, coreutils, bash, kmod, udev | The base. |
+| linux 7.2.11, linux-firmware, busybox, systemd, util-linux, coreutils, bash, kmod, udev | The base. |
 | mesa (turnip, freedreno; `libgallium` 21 MB), vulkan-loader, libdrm, libglvnd | The display. |
 | pipewire, wireplumber, alsa-lib, alsa-ucm-conf, alsa-topology-conf | Audio; the 32 / 44.1 / 48 kHz link runs through it. |
 | iwd, portnet, wireless-regdb, openssh, rsync, bluez | Wi-Fi, SSH, controllers. iwd does the 802.11 and the addressing; portnet is the command that drives it. |
