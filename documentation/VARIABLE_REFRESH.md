@@ -31,11 +31,13 @@ variable-refresh properties.
     `display_info.monitor_range` and sets `vrr_capable`, which DSI
     connectors now carry.
   - At mode set the DPU writes the longest frame, from the range's
-    minimum.
+    minimum. Patch 1113 writes it again whenever VRR goes on, from
+    `msm.dpu_vrr_min_hz` when a client asked for another floor.
   - The CRTC's `VRR_ENABLED` switches AVR on and off in a commit, without
     a mode set, with the INTF in that commit's flush and the DSI host's bit
     29 alongside, in continuous mode.
-  - The kernel logs `intf1: variable refresh on` and `off`. From DPU 8.1,
+  - The kernel logs `intf1: variable refresh on, floor 80 Hz` and `off`
+    (before 1113, without the floor). From DPU 8.1,
     bit 31 of `AVR_CONTROL` reads 1 while AVR is active.
 
 ## Measured, 2026-10-07
@@ -727,6 +729,47 @@ Measured 2026-10-08 through runemu, flip traces:
 |---|---|---|---|
 | Super Mario World, 30 s | 3606, every frame twice | 8.42 ms | `VRR_ENABLED` 0 before, 1 while running, 0 after exit |
 | Tekken 3 with `global.vrr=0` | - | - | a `VRR_ENABLED` left on was turned off; 119.652 Hz mode |
+
+## Steam
+
+Steam's gamescope runs with `--adaptive-sync`: it sets `VRR_ENABLED` and
+flips each frame as the game delivers it, one flip in flight. The kernel
+does the rest:
+
+| The game's rate | Shown |
+|---|---|
+| up to 60.1 fps | two or more refreshes a frame (LFC): as many as fit at the mode's rate |
+| 60.1 to 120 fps | once, as each frame comes |
+
+Its floor is 50 Hz, not the panel's 80. A frame shown once has to be
+committed about 1.8 ms before the floor runs out ("On an 80 Hz floor"
+above), so on 80 Hz that works only from about 93 fps, and a PC game
+between 60.7 and 93 fps would wait on refreshes the panel made on its own.
+On 50 Hz a frame just over 60.1 fps has 3.4 ms. Nothing steady runs
+between the floor and 60.1 Hz, since LFC repeats it: the floor is margin
+for frames shown once, and what a still screen idles at.
+
+`msm.dpu_vrr_min_hz` (patch 1113) is the floor as a rate, read when VRR
+goes on; 0 is the panel's. start_steam sets 50 while gamescope runs and 0
+after, and runemu sets 0 for every RetroArch game.
+
+1113 also changes LFC's count: as many of the mode's refreshes as fit in
+the frame, so the panel is never behind on the next one. The R/50 slack
+stays where a refresh would come too close to the floor. On 80 Hz that is
+everywhere it made a difference, so the emulators' counts are the same
+from 25 Hz up (24.1 Hz now gets 4 refreshes, not 5 with one short). A
+running count keeps the slack: a 60.000 fps game on Steam's 120.000 Hz
+mode, two refreshes exactly, stays doubled through the noise in its
+period, and a doubled source from 60.1 to 60.7 fps misses a refresh now
+and then rather than switching.
+
+Not measured yet: whether the panel follows a 20 ms frame without tearing
+(#630 covers the 80 Hz floor), Steam's own VRR setting, a game at 45 to 55
+fps, one around 60.
+
+Open: Steam's mode. gamescope's `-r` takes whole hertz and gets 120.000,
+which gives a doubled 60.000 fps game no room; the fastest mode, 120.198,
+would.
 
 ## The panel's porches
 
