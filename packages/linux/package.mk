@@ -32,8 +32,8 @@ case ${DEVICE} in
     # at a time, so the WCN7850's RID never reached the BDF-to-SID table,
     # its firmware DMA faulted and the MHI BHI load failed with -5 (#194).
     # Kernel patches 1087 and 1088 fix both parsers.
-    PKG_VERSION="7.2.9"
-    PKG_SHA256="b4c5dfbe51a364a6c7f03869200f88c8e1f77403539005f14b7fc6bc91b8d8ba"
+    PKG_VERSION="7.2.11"
+    PKG_SHA256="fd0fc479f983a8c05313f13e9c36330fe6651cf725396748c40d5cd93fa1e6a4"
     PKG_URL="https://www.kernel.org/pub/linux/kernel/v${PKG_VERSION/.*/}.x/${PKG_NAME}-${PKG_VERSION}.tar.xz"
     # PKG_VERSION no longer matches the 7.2 patch dir, so it is no longer
     # added automatically - list it explicitly or those patches are silently
