@@ -26,18 +26,16 @@ variable-refresh properties.
   (`DSI_VIDEO_MODE_CTRL`, mainline's `REG_DSI_VID_CFG0` plus the 6G
   shift, 0xae94010 on the Nova), when it switches Qsync on.
 - **Kernel patch 1097** adds it as DRM's standard interface:
-  - The panel driver declares its range, 80 Hz up to its fastest mode,
+  - The panel driver declares its range, 60 Hz up to its fastest mode,
     120.198 Hz rounded up to 121, in the connector's
     `display_info.monitor_range` and sets `vrr_capable`, which DSI
     connectors now carry.
   - At mode set the DPU writes the longest frame, from the range's
-    minimum. Patch 1113 writes it again whenever VRR goes on, from
-    `msm.dpu_vrr_min_hz` when a client asked for another floor.
+    minimum.
   - The CRTC's `VRR_ENABLED` switches AVR on and off in a commit, without
     a mode set, with the INTF in that commit's flush and the DSI host's bit
     29 alongside, in continuous mode.
-  - The kernel logs `intf1: variable refresh on, floor 80 Hz` and `off`
-    (before 1113, without the floor). From DPU 8.1,
+  - The kernel logs `intf1: variable refresh on` and `off`. From DPU 8.1,
     bit 31 of `AVR_CONTROL` reads 1 while AVR is active.
 
 ## Measured, 2026-10-07
@@ -178,7 +176,7 @@ vrr-probe /dev/null 6 idle vrr &
 sleep 2
 devmem 0xae36270 32          # 0x80000001: AVR active
 F=0xae360ac; a=$(devmem $F 32); sleep 2; b=$(devmem $F 32)
-echo $(( (b - a) / 2 )) frames/s   # about 80, not 120
+echo $(( (b - a) / 2 )) frames/s   # about 60, not 120
 wait
 ```
 
@@ -221,10 +219,10 @@ to be the fastest one, 120.198 Hz, twice the SNES. On the 119.652 Hz
 mode, the PlayStation's, doubled SNES would not fit.
 
 The multiple for a game is the largest k with k times its rate at most
-120.198 Hz and at least the 80 Hz floor: 2 for 40 to 60.1 Hz, 3 for 26.7
-to 40.07 Hz, 4 for 20 to 30.05 Hz. The floor is just under two thirds of
-the fastest refresh, so every rate between has one; at 90 Hz, 40.07 to
-45 Hz had none. DRM keeps `monitor_range` inside the kernel
+120.198 Hz and at least the 60 Hz floor: 2 for 40.07 to 60.1 Hz, 3 for
+30.05 to 40.07 Hz, 4 for 24.04 to 30.05 Hz, and so on. The floor is just
+under half the fastest refresh, so every rate below 60.1 Hz has one; at
+90 Hz, 40.07 to 45 Hz had none. DRM keeps `monitor_range` inside the kernel
 for a panel without EDID; the repeat below needs only the mode's refresh.
 
 Rates between 60.1 and 63 Hz, a few arcade boards, have no multiple in
@@ -424,11 +422,59 @@ low backlight yet. Refreshes the panel made on its own:
   would help only 30.05 to 30.20 Hz, where nothing runs, and the SNES needs
   more than 62.5 us of it.
 
-`tools/display-check` takes the floor as `--floor-hz` (80 by default; 90
-for the runs before), and counts a phase jump back towards the usual
+`tools/display-check` takes the floor as `--floor-hz` (60 by default; 80
+and 90 for the runs before; the window that pairs a kernel repeat with
+its refresh follows it), and counts a phase jump back towards the usual
 phase as the panel catching up, k x (P/k - R) a frame: 3.4 ms at 50 Hz,
 over the 2 ms jump. Of the 149 jumps at 50 Hz on the 90 Hz floor, 125
 were that.
+
+### On a 60 Hz floor
+
+Patch 1097 declares 60 Hz since #651, for Steam ("Steam" below). On 80 Hz
+the longest frame was 12.5 ms, so a PC game between 60.7 and about 86 fps
+fit neither way: too fast to show twice, too slow to reach the hardware
+before the panel refreshed on its own. At 65 fps, 959 of 1917 frames
+waited on such a refresh.
+
+What a frame shown once needs, from the previous refresh's vblank
+timestamp: to reach the plane (`dpu_plane_set_scanout`) about 0.3 to 0.4
+ms before the floor runs out. Nearer than that a frame waits on a refresh
+of the panel's own, or lands with it and starts one more refresh after
+it, which the next frame waits on (once at 63 fps, a frame 0.40 ms from
+the floor). Frames 0.29 ms from it still made it, and ones 0.31 ms from it
+waited. Mesa's commit gets to the plane 0.07 ms after it typically, 0.28
+ms at p99, and the waits are mostly frames that took longer. Measured
+2026-10-17 on a test kernel with the floor as a parameter, present-probe
+shown once, 30 s each:
+
+| Rate | Nominal time to the floor | Frames that waited on a refresh of the panel's own |
+|---|---|---|
+| 61 fps on 60 Hz | 0.27 ms | 86 of 1802 |
+| 62 fps | 0.54 ms | 10 of 1829 |
+| 63 fps | 0.79 ms | 2 of 1861 |
+| 64, 65, 67 fps | 1.04 to 1.6 ms | 1 to 3, at the start or at a late frame |
+| 65 fps on 61 Hz | 1.01 ms | 2 of 1787 |
+| 61 to 90 fps on 50 Hz | 3.6 ms or more | none |
+
+So a frame shown once fits from about 63 fps on 60 Hz. The 1.6 to 1.8 ms
+of "On an 80 Hz floor" above count a late commit against another
+reference and are conservative for it.
+
+The floor went lower first. 50 Hz fit every frame shown once from 60.7
+fps, but the panel tore there, inside itself, with every frame leaving
+the DPU whole and on time: 3 taps in 60 s at 61 fps, each frame held 8.1
+ms past the fastest refresh, and some with frames held to 20 ms; none
+with frames shown twice, and none in one run at 70 fps (6.0 ms). 60 Hz
+holds a frame at most 8.35 ms. Its own tear and flicker tests are open
+(#651).
+
+For the emulators the counts are the same as on 80 Hz at every rate. The
+floor only matters to a late frame, which it gives more room: counted as
+above, a doubled 60 Hz game's late frame still starts its refresh up to
+about 6.5 ms after its target, against about 3 ms on 80 Hz. At 59.826 Hz
+with every 600th frame 4 ms late, 1764 frames were doubled and the late
+ones waited on no refresh of the panel's own, against 4 on 80 Hz.
 
 ## Repeats in the kernel (LFC)
 
@@ -734,38 +780,22 @@ Measured 2026-10-08 through runemu, flip traces:
 
 Steam's gamescope runs with `--adaptive-sync`: it sets `VRR_ENABLED` and
 flips each frame as the game delivers it, one flip in flight. The kernel
-does the rest:
+treats it as every other client, on the 60 Hz floor:
 
 | The game's rate | Shown |
 |---|---|
-| up to 60.1 fps | two or more refreshes a frame (LFC): as many as fit at the mode's rate |
-| 60.1 to 120 fps | once, as each frame comes |
+| up to 60.1 fps | two or more refreshes a frame (LFC) |
+| 60.1 to 60.7 fps | twice, which is faster than the panel goes: a refresh short now and then, up to the game held to 60.1 fps |
+| 60.7 to about 63 fps | once, but close to the floor: up to 5% of frames wait on a refresh of the panel's own |
+| about 63 to 120.2 fps | once, as each frame comes |
 
-Its floor is 50 Hz, not the panel's 80. A frame shown once has to be
-committed about 1.8 ms before the floor runs out ("On an 80 Hz floor"
-above), so on 80 Hz that works only from about 93 fps, and a PC game
-between 60.7 and 93 fps would wait on refreshes the panel made on its own.
-On 50 Hz a frame just over 60.1 fps has 3.4 ms. Nothing steady runs
-between the floor and 60.1 Hz, since LFC repeats it: the floor is margin
-for frames shown once, and what a still screen idles at.
+On Steam's 120.000 Hz mode the edges are 60.0 and 60.6 fps. The same
+R/50 slack takes a count that needs more than the fastest refresh just
+above 40.07, 30.05, 24.04 and 20.03 fps too, for every client: 40.2 fps
+is shown three times with a refresh short 24 times a minute (#651).
 
-`msm.dpu_vrr_min_hz` (patch 1113) is the floor as a rate, read when VRR
-goes on; 0 is the panel's. start_steam sets 50 while gamescope runs and 0
-after, and runemu sets 0 for every RetroArch game.
-
-1113 also changes LFC's count: as many of the mode's refreshes as fit in
-the frame, so the panel is never behind on the next one. The R/50 slack
-stays where a refresh would come too close to the floor. On 80 Hz that is
-everywhere it made a difference, so the emulators' counts are the same
-from 25 Hz up (24.1 Hz now gets 4 refreshes, not 5 with one short). A
-running count keeps the slack: a 60.000 fps game on Steam's 120.000 Hz
-mode, two refreshes exactly, stays doubled through the noise in its
-period, and a doubled source from 60.1 to 60.7 fps misses a refresh now
-and then rather than switching.
-
-Not measured yet: whether the panel follows a 20 ms frame without tearing
-(#630 covers the 80 Hz floor), Steam's own VRR setting, a game at 45 to 55
-fps, one around 60.
+Not measured yet: Steam's own VRR setting, and a real game at 45 to 55
+fps, around 60, and 61 to 90.
 
 Open: Steam's mode. gamescope's `-r` takes whole hertz and gets 120.000,
 which gives a doubled 60.000 fps game no room; the fastest mode, 120.198,

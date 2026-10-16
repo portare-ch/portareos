@@ -392,7 +392,7 @@ For integer-multiple VRR with deliberate late frames:
 tools/display-trace root@nova vrr-test 60 --crc -- \
   env MESA_VK_WSI_DISPLAY_VRR=1 \
   sh -c 'exec present-probe "$RUN" 70 observe rate:59.826 late=600:4'
-python3 tools/display-check vrr-test --rate 59.826 --floor-hz 80
+python3 tools/display-check vrr-test --rate 59.826
 ```
 
 The files are `.trace` (kernel events and Mesa markers), `.out` (command
@@ -407,8 +407,9 @@ Read the count of untraced vblanks and unmatched events before trusting the
 result. PASS/FAIL lines cover repeat buffers, cadence or rate, available
 presentation records, MangoHud data and CRCs. Optional data that is absent
 cannot be checked. Exit status is 1 when checks fail or no frames are found;
-0 means the checks that ran passed. `--floor-hz 90` is for older 90 Hz-floor
-captures; `--refresh-ms` sets the shortest refresh when the base mode differs.
+0 means the checks that ran passed. `--floor-hz 80` or `90` is for captures
+on the older floors; `--refresh-ms` sets the shortest refresh when the base
+mode differs.
 
 If capture aborts before cleanup, stop the remaining probe, disable the three
 events it enabled and restart the launcher on the Nova before another measurement:
@@ -438,11 +439,12 @@ order, as `tear-1` and `tear-2`, and only says which was which at the end.
 `vrr` or `fixed` runs one of them; `rate=HZ` sets the content rate (default
 59.94, fixed refresh then uses the mode nearest twice it), `bar=PX` the
 bar's step a frame and `mode=HZ` the mode variable refresh runs on (default
-the fastest). Each run leaves display-trace's files and `NAME.taps`,
-the tap times in `CLOCK_MONOTONIC` seconds, the trace's clock, and prints
-the gaps between taps. A reaction lags a tear by a few hundred
-milliseconds, so set taps against the trace with that margin; a steady gap
-between taps is a beat between two clocks.
+the fastest), and `late=E:MS` presents every Eth frame MS ms late, a stall
+for the panel to hold and resume from. Each run leaves display-trace's
+files and `NAME.taps`, the tap times in `CLOCK_MONOTONIC` seconds, the
+trace's clock, and prints the gaps between taps. A reaction lags a tear by
+a few hundred milliseconds, so set taps against the trace with that margin;
+a steady gap between taps is a beat between two clocks.
 
 Measured this way on 2026-10-10 (#623): the il97680a tore about every 4 s
 with variable refresh at 59.94 and not at all at fixed refresh, while the

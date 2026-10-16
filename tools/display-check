@@ -131,14 +131,15 @@ class Run:
             si += 1
         return lost
 
-    def pair_kicks(self, landed, limit=13000000):
+    def pair_kicks(self, landed, limit):
         """Each kick of the kernel's LFC with the refresh it started: the
         first vblank traced after it, one kick to a vblank. A kick during the
-        refresh before is kept for its end, and the vblank is traced from the
+        refresh before is kept for its end, a lost one is followed by the
+        panel's own refresh at the floor, and the vblank is traced from the
         vsync interrupt, which ran up to 0.7 ms late on the Nova, so the
-        limit is the floor's frame. A kick whose vblank a commit landed on,
-        or none came within the limit, started nothing; one whose vblank an
-        earlier kick already has is a duplicate."""
+        limit, in ns, is the floor's frame and 1 ms. A kick whose vblank a
+        commit landed on, or none came within the limit, started nothing;
+        one whose vblank an earlier kick already has is a duplicate."""
         taken, by_kick = set(landed), set()
         for k in self.kicks:
             k['vblank'], k['duplicate'] = None, False
@@ -189,8 +190,8 @@ def main():
     ap.add_argument('--rate', type=float, help='frame rate the content was timed at (VRR)')
     ap.add_argument('--refresh-ms', type=float, default=1000 / 120.198,
                     help='the shortest refresh, default the 120.198 Hz mode')
-    ap.add_argument('--floor-hz', type=float, default=80,
-                    help="the panel's variable refresh floor (patch 1097; 90 before #595's follow-up)")
+    ap.add_argument('--floor-hz', type=float, default=60,
+                    help="the panel's variable refresh floor (patch 1097; 80 and 90 on older captures)")
     ap.add_argument('--bound-ms', type=float, default=0.46,
                     help="vrr-probe's p95 frame-length error for the rate (VARIABLE_REFRESH.md)")
     ap.add_argument('--jump-ms', type=float, default=2.0,
@@ -221,7 +222,7 @@ def main():
     landed = {}
     for c in frames + repeats:
         landed[c['vblank'][1]] = c
-    run.pair_kicks(landed)
+    run.pair_kicks(landed, int(1e9 / a.floor_hz) + 1000000)
     kicks = [k for k in run.kicks if k['vblank']]
     for k in kicks:
         landed[k['vblank'][1]] = dict(repeat=True, kernel=True)

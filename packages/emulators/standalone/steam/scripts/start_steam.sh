@@ -142,9 +142,10 @@ steam_debug_print() {
 # closest to what -r asks for, which is the panel's 120.000 Hz mode, there
 # for Steam: timer-paced PC games make 60.000 frames a second, and at the
 # preferred 119.88 gamescope would drop one of them about every 17 seconds.
-# With variable refresh 120.000 shows a 60.000 game twice a frame with no
-# room to spare; the fastest mode, 120.198, would have some, but -r takes
-# whole hertz.
+# gamescope runs with --adaptive-sync, variable refresh as for every game
+# (documentation/VARIABLE_REFRESH.md), and 120.000 then shows a 60.000 game
+# twice a frame with no room to spare; the fastest mode, 120.198, would
+# have some, but -r takes whole hertz.
 steam_read_panel_geometry() {
   eval "$(/usr/bin/modetest -M msm -c 2>/dev/null | awk '
     /^[[:space:]]*#[0-9]+[[:space:]]/ && /preferred/ {
@@ -169,32 +170,6 @@ steam_read_panel_geometry() {
   # inches and 1.13 at 10 (steam_seed_ui_scale is).
   FAKE_MM=$(awk -v w="${W}" -v h="${H}" -v d="${STEAM_FAKE_DIAGONAL}" \
     'BEGIN { s = d * 25.4 / sqrt(w * w + h * h); printf "%dx%d", w * s + 0.5, h * s + 0.5 }')
-}
-
-# Variable refresh (documentation/VARIABLE_REFRESH.md): gamescope turns
-# it on with --adaptive-sync, the display driver shows a game of up to
-# 60.1 frames a second two or more times a frame and a faster one as each
-# frame comes. The floor, the longest the panel waits for a frame, is read
-# when VRR goes on. The panel's own 80 Hz is for the emulators. A frame
-# shown once has to be committed about 2 ms before the floor runs out, so
-# on 80 Hz a PC game between 60.7 and 93 frames a second would wait on
-# refreshes the panel makes on its own; on 50 Hz one just over 60.1 has
-# 3.4 ms.
-STEAM_VRR_FLOOR_HZ=50
-STEAM_VRR_FLOOR=/sys/module/msm/parameters/dpu_vrr_min_hz
-
-steam_vrr_floor_begin() {
-  if [ -w "${STEAM_VRR_FLOOR}" ]; then
-    echo "${STEAM_VRR_FLOOR_HZ}" >"${STEAM_VRR_FLOOR}"
-  fi
-}
-
-# 0 is the panel's own floor. runemu sets it as well, for a run that
-# ended without this.
-steam_vrr_floor_end() {
-  if [ -w "${STEAM_VRR_FLOOR}" ]; then
-    echo 0 >"${STEAM_VRR_FLOOR}"
-  fi
 }
 
 steam_setup_environment() {
@@ -378,8 +353,7 @@ steam_launch_bigpicture() {
     # this, and gamescope takes it. Nothing to start afterwards either -
     # the front-end never left.
     steam_touch_calibration_begin "${force_orientation}"
-    steam_vrr_floor_begin
-    trap 'steam_touch_calibration_end; steam_vrr_floor_end' EXIT
+    trap steam_touch_calibration_end EXIT
     while true; do
       rm -f "${steam_exit_code_file}"
       GAMESCOPE_MODE_SAVE_FILE="${gamescope_mode_file}" GAMESCOPE_FAKE_OUTPUT_MM="${FAKE_MM}" \
@@ -402,7 +376,6 @@ steam_launch_bigpicture() {
     done
     rm -f "${steam_exit_code_file}"
     steam_touch_calibration_end
-    steam_vrr_floor_end
     trap - EXIT
     exit 0
   else
@@ -411,13 +384,11 @@ steam_launch_bigpicture() {
     # this, and gamescope takes it. Nothing to start afterwards either -
     # the front-end never left.
     steam_touch_calibration_begin "${force_orientation}"
-    steam_vrr_floor_begin
-    trap 'steam_touch_calibration_end; steam_vrr_floor_end' EXIT
+    trap steam_touch_calibration_end EXIT
     GAMESCOPE_MODE_SAVE_FILE="${gamescope_mode_file}" GAMESCOPE_FAKE_OUTPUT_MM="${FAKE_MM}" env -u WAYLAND_DISPLAY ${EMUPERF} \
       gamescope $PREFER_OUTPUT -W "$W" -H "$H" -r "$REFRESH_HZ" --xwayland-count 2 --adaptive-sync --backend drm --force-orientation "${force_orientation}" -- \
       FEX /usr/bin/steam -nobigpicture -noverifyfiles -nobootstrapupdate -skipinitialbootstrap -norepairfiles -noshaders ${game_uri:+"$game_uri"}
     steam_touch_calibration_end
-    steam_vrr_floor_end
     trap - EXIT
     exit 0
   fi

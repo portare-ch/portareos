@@ -303,11 +303,6 @@ case ${EMULATOR} in
        vrr_panel
     then
       MESA_VK_WSI_DISPLAY_VRR=1
-      ### The panel's own floor, 80 Hz: Steam asks the display driver for a
-      ### lower one while it runs, and a run that ended badly can leave it.
-      if [ -w /sys/module/msm/parameters/dpu_vrr_min_hz ]; then
-        echo 0 >/sys/module/msm/parameters/dpu_vrr_min_hz
-      fi
     fi
     export MESA_VK_WSI_DISPLAY_VRR
     ${VERBOSE} && log $0 "Variable refresh: ${MESA_VK_WSI_DISPLAY_VRR}"
