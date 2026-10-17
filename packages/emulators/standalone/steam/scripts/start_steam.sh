@@ -144,7 +144,7 @@ steam_debug_print() {
 # and --framerate-limit 60, a ceiling Steam's own setting cannot lift
 # (gamescope patch 0008): a game never runs faster than 60 fps, so the
 # kernel shows every frame twice or more (documentation/VARIABLE_REFRESH.md)
-# and no game lands between 60.7 and 70 fps, where a frame is too fast to
+# and no game lands between 60.7 and 65 fps, where a frame is too fast to
 # show twice and too slow to reach the panel before it refreshes on its
 # own. Two refreshes of 120.198 are 27 us short of a 60.000 fps game's
 # frame, so the panel waits for every commit and scans 0.46 ms after it;

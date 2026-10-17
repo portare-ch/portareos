@@ -16,7 +16,7 @@ ceiling, rather than to nothing. Without --framerate-limit the only
 change is that the property's value survives a recompute.
 
 The Retroid Pocket Nova runs Steam under adaptive sync with the panel
-showing every frame twice or more; a game between 60.7 and 70 fps fits
+showing every frame twice or more; a game between 60.7 and 65 fps fits
 neither way there, and the ceiling of 60 keeps every game out of it.
 ---
  src/steamcompmgr.cpp | 25 +++++++++++++++++++++----

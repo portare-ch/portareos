@@ -219,13 +219,13 @@ to be the fastest one, 120.198 Hz, twice the SNES. On the 119.652 Hz
 mode, the PlayStation's, doubled SNES would not fit.
 
 The multiple for a game is the largest k with k times its rate at most
-120.198 Hz and at least the 70 Hz floor: 2 for 40.07 to 60.1 Hz, 3 for
+120.198 Hz and at least the 65 Hz floor: 2 for 40.07 to 60.1 Hz, 3 for
 30.05 to 40.07 Hz, 4 for 24.04 to 30.05 Hz, and so on. The floor is well
 under half the fastest refresh, so every rate below 60.1 Hz has one; at
 90 Hz, 40.07 to 45 Hz had none. DRM keeps `monitor_range` inside the kernel
 for a panel without EDID; the repeat below needs only the mode's refresh.
 
-Rates between 60.1 and 70 Hz, a few arcade boards, have no multiple in
+Rates between 60.1 and 65 Hz, a few arcade boards, have no multiple in
 range and are below the floor shown once, so a frame there is shown once
 and waits on a refresh of the panel's own; the range cannot grow upward.
 `vrr-probe fast`, 2026-10-08:
@@ -424,8 +424,8 @@ low backlight yet. Refreshes the panel made on its own:
   would help only 30.05 to 30.20 Hz, where nothing runs, and the SNES needs
   more than 62.5 us of it.
 
-`tools/display-check` takes the floor as `--floor-hz` (70 by default; 60,
-80 and 90 for the runs before; the window that pairs a kernel repeat with
+`tools/display-check` takes the floor as `--floor-hz` (65 by default; 60,
+70, 80 and 90 for the runs before; the window that pairs a kernel repeat with
 its refresh follows it), and counts a phase jump back towards the usual
 phase as the panel catching up, k x (P/k - R) a frame: 3.4 ms at 50 Hz,
 over the 2 ms jump. Of the 149 jumps at 50 Hz on the 90 Hz floor, 125
@@ -433,10 +433,11 @@ were that.
 
 ### Choosing the floor
 
-Patch 1097 declares 70 Hz since #651, measured 2026-10-17 on a test
-kernel with the floor as a parameter. What separates the floors is the
-longest hold each allows a frame shown once, and whether the panel shows
-such a hold without tearing. Present-probe at the floor's own rate plus
+Patch 1097 declares 65 Hz since #651, chosen on 2026-10-17 between what
+the panel showed clean and what tore, measured on a test kernel with the
+floor as a parameter. What separates the floors is the longest hold each
+allows a frame shown once, and whether the panel shows such a hold without
+tearing. Present-probe at the floor's own rate plus
 one, shown once with a few percent of frames waiting on a refresh of the
 panel's own, a person watching for tears (`tools/tear-tap`):
 
@@ -449,7 +450,10 @@ panel's own, a person watching for tears (`tools/tear-tap`):
 
 Every frame left the DPU whole and on time in all of them: the tears are
 the panel's. 60 Hz tore less than 50 at the same hold, so the floor's
-period counts as well as the hold, but not enough. 70 Hz also showed 35
+period counts as well as the hold, but not enough. 65 Hz holds a frame
+7.1 ms at most, between the clean 5.8 and the 8.1 that tore now and then,
+and was taken with the chance of an occasional tear, for the lower range
+shown once. 70 Hz also showed 35
 fps three times, 70 fps once for 30 s, frames 4 and 40 ms late at 59.94
 fps, and switches between 60, 61, 75 and 90 fps without a tear; 80 Hz the
 same plus 30 s of 3 s moving and 2 s still at 5% backlight, without a
@@ -459,7 +463,7 @@ Content at exactly the floor's rate judders on any floor: each frame
 races the refresh the panel starts on its own, and the loser waits a
 whole floor period. At 70 fps on 70 Hz, 20% of frames waited in one run,
 at 80 on 80, 33%. Nothing of ours runs there: Steam is held to 60 fps
-("Steam" below) and no emulated system is near 70 Hz.
+("Steam" below) and no emulated system is near 65 Hz.
 
 What a frame shown once needs, from the previous refresh's vblank
 timestamp: to reach the plane (`dpu_plane_set_scanout`) about 0.3 to 0.4
@@ -480,14 +484,15 @@ before the choice:
 | 65 fps on 61 Hz | 1.01 ms | 2 of 1787 |
 | 61 to 90 fps on 50 Hz | 3.6 ms or more | none |
 
-So on 70 Hz a frame shown once fits from about 73 fps. The 1.6 to 1.8 ms
+So on 65 Hz a frame shown once fits from about 68 fps, on 70 from about
+73. The 1.6 to 1.8 ms
 of "On an 80 Hz floor" above count a late commit against another
 reference and are conservative for it.
 
 For the emulators the counts are the same as on 80 Hz at every rate. The
 floor only matters to a late frame, which it gives room: after a doubled
-frame's repeat the panel waits a floor period, 14.3 ms, before refreshing
-on its own, so a 60 Hz game's frame up to about 5.5 ms late still starts
+frame's repeat the panel waits a floor period, 15.4 ms, before refreshing
+on its own, so a 60 Hz game's frame up to about 6.5 ms late still starts
 its own refresh, against about 4 ms on 80 Hz. At 59.94 fps with every
 60th frame 40 ms late, doubling was back within 4 to 6 frames on every
 floor, with no drift.
@@ -798,7 +803,7 @@ Steam's gamescope runs with `--adaptive-sync --framerate-limit 60`: it
 sets `VRR_ENABLED`, flips each frame as the game delivers it, one flip in
 flight, and holds the game to 60 fps. The kernel treats it as every other
 client, so every frame is shown twice or more, and no game runs in the
-band that fits neither way, 60.7 to 70 fps:
+band that fits neither way, 60.7 to 65 fps:
 
 | The game's rate | Shown |
 |---|---|
