@@ -26,7 +26,7 @@ variable-refresh properties.
   (`DSI_VIDEO_MODE_CTRL`, mainline's `REG_DSI_VID_CFG0` plus the 6G
   shift, 0xae94010 on the Nova), when it switches Qsync on.
 - **Kernel patch 1097** adds it as DRM's standard interface:
-  - The panel driver declares its range, 80 Hz up to its fastest mode,
+  - The panel driver declares its range, 60 Hz up to its fastest mode,
     120.198 Hz rounded up to 121, in the connector's
     `display_info.monitor_range` and sets `vrr_capable`, which DSI
     connectors now carry.
@@ -176,7 +176,7 @@ vrr-probe /dev/null 6 idle vrr &
 sleep 2
 devmem 0xae36270 32          # 0x80000001: AVR active
 F=0xae360ac; a=$(devmem $F 32); sleep 2; b=$(devmem $F 32)
-echo $(( (b - a) / 2 )) frames/s   # about 80, not 120
+echo $(( (b - a) / 2 )) frames/s   # about 60, not 120
 wait
 ```
 
@@ -219,14 +219,16 @@ to be the fastest one, 120.198 Hz, twice the SNES. On the 119.652 Hz
 mode, the PlayStation's, doubled SNES would not fit.
 
 The multiple for a game is the largest k with k times its rate at most
-120.198 Hz and at least the 80 Hz floor: 2 for 40 to 60.1 Hz, 3 for 26.7
-to 40.07 Hz, 4 for 20 to 30.05 Hz. The floor is just under two thirds of
-the fastest refresh, so every rate between has one; at 90 Hz, 40.07 to
-45 Hz had none. DRM keeps `monitor_range` inside the kernel
+120.198 Hz and at least the 65 Hz floor: 2 for 40.07 to 60.1 Hz, 3 for
+30.05 to 40.07 Hz, 4 for 24.04 to 30.05 Hz, and so on. The floor is well
+under half the fastest refresh, so every rate below 60.1 Hz has one; at
+90 Hz, 40.07 to 45 Hz had none. DRM keeps `monitor_range` inside the kernel
 for a panel without EDID; the repeat below needs only the mode's refresh.
 
-Rates between 60.1 and 63 Hz, a few arcade boards, have no multiple in
-range, and the range cannot grow upward. `vrr-probe fast`, 2026-10-08:
+Rates between 60.1 and 65 Hz, a few arcade boards, have no multiple in
+range and are below the floor shown once, so a frame there is shown once
+and waits on a refresh of the panel's own; the range cannot grow upward.
+`vrr-probe fast`, 2026-10-08:
 the fastest mode's 174.651 MHz clock and 12-line front porch, with the
 back porch cut from 142 lines to 135 (120.956 Hz) and 126 (121.946 Hz).
 The SoC delivered every frame exactly one period apart, within 10 us, at
@@ -422,11 +424,78 @@ low backlight yet. Refreshes the panel made on its own:
   would help only 30.05 to 30.20 Hz, where nothing runs, and the SNES needs
   more than 62.5 us of it.
 
-`tools/display-check` takes the floor as `--floor-hz` (80 by default; 90
-for the runs before), and counts a phase jump back towards the usual
+`tools/display-check` takes the floor as `--floor-hz` (65 by default; 60,
+70, 80 and 90 for the runs before; the window that pairs a kernel repeat with
+its refresh follows it), and counts a phase jump back towards the usual
 phase as the panel catching up, k x (P/k - R) a frame: 3.4 ms at 50 Hz,
 over the 2 ms jump. Of the 149 jumps at 50 Hz on the 90 Hz floor, 125
 were that.
+
+### Choosing the floor
+
+Patch 1097 declares 65 Hz since #651, chosen on 2026-10-17 between what
+the panel showed clean and what tore, measured on a test kernel with the
+floor as a parameter. What separates the floors is the longest hold each
+allows a frame shown once, and whether the panel shows such a hold without
+tearing. Present-probe at the floor's own rate plus
+one, shown once with a few percent of frames waiting on a refresh of the
+panel's own, a person watching for tears (`tools/tear-tap`):
+
+| Floor | Content | Held past the fastest refresh | Run | Tears |
+|---|---|---|---|---|
+| 50 Hz | 61 fps | 8.1 ms | 60 s | 3, and more with frames held to 20 ms |
+| 60 Hz | 61 fps | 8.1 ms | 120 s | a few, small |
+| 70 Hz | 71 fps | 5.8 ms | 120 s | none |
+| 80 Hz | 81 fps | 4.0 ms | 120 s | none |
+
+Every frame left the DPU whole and on time in all of them: the tears are
+the panel's. 60 Hz tore less than 50 at the same hold, so the floor's
+period counts as well as the hold, but not enough. 65 Hz holds a frame
+7.1 ms at most, between the clean 5.8 and the 8.1 that tore now and then,
+and was taken with the chance of an occasional tear, for the lower range
+shown once. 70 Hz also showed 35
+fps three times, 70 fps once for 30 s, frames 4 and 40 ms late at 59.94
+fps, and switches between 60, 61, 75 and 90 fps without a tear; 80 Hz the
+same plus 30 s of 3 s moving and 2 s still at 5% backlight, without a
+flicker.
+
+Content at exactly the floor's rate judders on any floor: each frame
+races the refresh the panel starts on its own, and the loser waits a
+whole floor period. At 70 fps on 70 Hz, 20% of frames waited in one run,
+at 80 on 80, 33%. Nothing of ours runs there: Steam is held to 60 fps
+("Steam" below) and no emulated system is near 65 Hz.
+
+What a frame shown once needs, from the previous refresh's vblank
+timestamp: to reach the plane (`dpu_plane_set_scanout`) about 0.3 to 0.4
+ms before the floor runs out. Nearer than that a frame waits on a refresh
+of the panel's own, or lands with it and starts one more refresh after
+it, which the next frame waits on. Frames 0.29 ms from it still made it,
+and ones 0.31 ms from it waited. Mesa's commit gets to the plane 0.07 ms
+after it typically, 0.28 ms at p99, and the waits are mostly frames that
+took longer. Present-probe shown once, 30 s each, on the floors measured
+before the choice:
+
+| Rate | Nominal time to the floor | Frames that waited on a refresh of the panel's own |
+|---|---|---|
+| 61 fps on 60 Hz | 0.27 ms | 86 of 1802 |
+| 62 fps | 0.54 ms | 10 of 1829 |
+| 63 fps | 0.79 ms | 2 of 1861 |
+| 64, 65, 67 fps | 1.04 to 1.6 ms | 1 to 3, at the start or at a late frame |
+| 65 fps on 61 Hz | 1.01 ms | 2 of 1787 |
+| 61 to 90 fps on 50 Hz | 3.6 ms or more | none |
+
+So on 65 Hz a frame shown once fits from about 68 fps, on 70 from about
+73. The 1.6 to 1.8 ms
+of "On an 80 Hz floor" above count a late commit against another
+reference and are conservative for it.
+
+For the emulators the counts are the same as on 80 Hz at every rate. The
+floor only matters to a late frame, which it gives room: after a doubled
+frame's repeat the panel waits a floor period, 15.4 ms, before refreshing
+on its own, so a 60 Hz game's frame up to about 6.5 ms late still starts
+its own refresh, against about 4 ms on 80 Hz. At 59.94 fps with every
+60th frame 40 ms late, doubling was back within 4 to 6 frames on every
+floor, with no drift.
 
 ## Repeats in the kernel (LFC)
 
@@ -727,6 +796,57 @@ Measured 2026-10-08 through runemu, flip traces:
 |---|---|---|---|
 | Super Mario World, 30 s | 3606, every frame twice | 8.42 ms | `VRR_ENABLED` 0 before, 1 while running, 0 after exit |
 | Tekken 3 with `global.vrr=0` | - | - | a `VRR_ENABLED` left on was turned off; 119.652 Hz mode |
+
+## The launcher
+
+portarelauncher runs variable refresh too, on the fastest mode, and flips
+its one buffer 60 times a second whenever the panel is on and its own: each
+flip is a frame for the kernel, which shows it twice, and nothing new for
+the panel. Without the flips a variable refresh panel with nothing coming
+falls to its floor, and a static screen at 65 Hz is the one case the
+flicker tests above did not cover. Measured 2026-10-17 with a build from
+the launcher's tree: 119.9 Hz, refreshes 8.320 ms apart, 60 flips a second
+every one doubled, 1% of a core, and the mode set at start (111 ms) the
+only gap.
+
+## Steam
+
+Steam's gamescope runs with `--adaptive-sync --framerate-limit 60`: it
+sets `VRR_ENABLED`, flips each frame as the game delivers it, one flip in
+flight, and holds the game to 60 fps. The kernel treats it as every other
+client, so every frame is shown twice or more, and no game runs in the
+band that fits neither way, 60.7 to 65 fps:
+
+| The game's rate | Shown |
+|---|---|
+| 60 fps, the limit | twice: 120 Hz, the frame's late room about 5.5 ms |
+| 40.07 to 60 fps | twice |
+| 30.05 to 40.07 fps | three times |
+| below | four times and more |
+
+Steam's gamescope asks for `-r 120` and its patch 0007 takes the fastest
+mode that rounds to it, 120.198 Hz, the mode every game runs variable
+refresh on. The exact rate matters to a 60.000 fps game shown twice,
+measured with present-probe on both modes, 2026-10-17: two refreshes of
+120.198 are 27 us short of its frame, so the panel waits for every
+commit and starts the scan 0.46 ms after it (median; min 0.20), every
+frame, without a hitch when the slack runs out. On 120.000 two refreshes
+are the frame exactly: the panel locks to the game at whatever offset
+the first frame set, 5.4 ms in one run, and an 8 ms late frame moves it
+to wherever it lands, 1.8, 7.6, 1.5, 7.3 ms in turn, latency that
+nothing drains. A late frame itself scans about 3 ms after its commit on
+either mode, against 0.46 for one on time; the kernel's part in that is
+not understood. The same R/50 slack takes a count
+that needs more than the fastest refresh just above 40.07, 30.05, 24.04
+and 20.03 fps, for every client: 40.2 fps is shown three times with a
+refresh short 24 times a minute (#651).
+
+The limit is gamescope's, the one of master (#650) whose variable refresh
+limiter keeps its schedule, and its patch 0008 makes the command line's
+limit a ceiling: Steam's own frame rate setting and the refresh cycle
+override lower it, never lift it, where before the first focus change
+replaced it with the override, 0 without one. Not measured yet: a real game
+on the final kernel and gamescope.
 
 ## The panel's porches
 

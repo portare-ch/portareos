@@ -1,0 +1,80 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: portare-ch <hello@portare.org>
+Date: Sat, 18 Oct 2026 09:00:00 +0000
+Subject: [PATCH] steamcompmgr: keep --framerate-limit as a ceiling
+
+_update_app_target_refresh_cycle() overwrote --framerate-limit and
+GAMESCOPE_FPS_LIMIT on every paint, clearing the limit without an override.
+
+Store both values separately. Cap the override or property at the command
+line limit, and restore the property when no override applies. Without
+--framerate-limit, only the property's persistence changes.
+
+The Nova uses a 60 fps ceiling to avoid the 60.7 to 65 fps gap between
+integer-multiple refresh and the panel's VRR floor.
+---
+ src/steamcompmgr.cpp | 22 ++++++++++++++++++----
+ 1 file changed, 18 insertions(+), 4 deletions(-)
+
+diff --git a/src/steamcompmgr.cpp b/src/steamcompmgr.cpp
+--- a/src/steamcompmgr.cpp
++++ b/src/steamcompmgr.cpp
+@@ -953,6 +953,18 @@
+ bool g_bCurrentBasePlaneIsFifo = false;
+ 
+ static int g_nSteamCompMgrTargetFPS = 0;
++// Keep the command line ceiling and Steam property across refresh recomputes.
++static int g_nSteamCompMgrFPSLimitCeiling = 0;
++static int g_nSteamCompMgrFPSLimitProperty = 0;
++
++static int steamcompmgr_capped_fps_limit( int fps )
++{
++	if ( !g_nSteamCompMgrFPSLimitCeiling )
++		return fps;
++	if ( !fps || fps > g_nSteamCompMgrFPSLimitCeiling )
++		return g_nSteamCompMgrFPSLimitCeiling;
++	return fps;
++}
+ static uint64_t g_uDynamicRefreshEqualityTime = 0;
+ static int g_nDynamicRefreshRate[gamescope::GAMESCOPE_SCREEN_TYPE_COUNT] = { 0, 0 };
+ // Delay to stop modes flickering back and forth.
+@@ -972,7 +984,7 @@
+ 	int target_fps = g_nCombinedAppRefreshCycleOverride[type];
+ 
+ 	g_nDynamicRefreshRate[ type ] = 0;
+-	g_nSteamCompMgrTargetFPS = 0;
++	g_nSteamCompMgrTargetFPS = steamcompmgr_capped_fps_limit( g_nSteamCompMgrFPSLimitProperty );
+ 
+ 	if ( !target_fps )
+ 	{
+@@ -981,7 +993,7 @@
+ 
+ 	if ( g_nCombinedAppRefreshCycleChangeFPS[ type ] )
+ 	{
+-		g_nSteamCompMgrTargetFPS = target_fps;
++		g_nSteamCompMgrTargetFPS = steamcompmgr_capped_fps_limit( target_fps );
+ 	}
+ 
+ 	if ( g_nCombinedAppRefreshCycleChangeRefresh[ type ] )
+@@ -6520,7 +6532,8 @@
+ 	}
+ 	if ( ev->atom == ctx->atoms.gamescopeFPSLimit )
+ 	{
+-		g_nSteamCompMgrTargetFPS = get_prop( ctx, ctx->root, ctx->atoms.gamescopeFPSLimit, 0 );
++		g_nSteamCompMgrFPSLimitProperty = get_prop( ctx, ctx->root, ctx->atoms.gamescopeFPSLimit, 0 );
++		g_nSteamCompMgrTargetFPS = steamcompmgr_capped_fps_limit( g_nSteamCompMgrFPSLimitProperty );
+ 		update_runtime_info();
+ 	}
+ 	for (int i = 0; i < gamescope::GAMESCOPE_SCREEN_TYPE_COUNT; i++)
+@@ -8640,7 +8653,8 @@
+ 				} else if (strcmp(opt_name, "hdr-itm-target-nits") == 0) {
+ 					g_flHDRItmTargetNits = atof(optarg);
+ 				} else if (strcmp(opt_name, "framerate-limit") == 0) {
+-					g_nSteamCompMgrTargetFPS = atoi(optarg);
++					g_nSteamCompMgrFPSLimitCeiling = atoi(optarg);
++					g_nSteamCompMgrTargetFPS = g_nSteamCompMgrFPSLimitCeiling;
+ 				} else if (strcmp(opt_name, "reshade-effect") == 0) {
+ 					g_reshade_effect = optarg;
+ 				} else if (strcmp(opt_name, "reshade-technique-idx") == 0) {
+-- 
+2.47.3

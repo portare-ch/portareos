@@ -1,0 +1,50 @@
+From 3c4ff3c11a0dacbff2728c010c14f853c3c85c05 Mon Sep 17 00:00:00 2001
+From: portare-ch <hello@portare.org>
+Date: Sun, 27 Sep 2026 15:17:20 +0000
+Subject: [PATCH] DRMBackend: among modes of the asked rate, take the fastest
+
+drmModeModeInfo::vrefresh is rounded. Choose the fastest matching mode
+instead of the first listed; leave selection without a requested rate alone.
+
+On the Nova this selects 120.198 Hz for -r 120. Under adaptive sync its
+headroom lets doubled 60 fps frames recover from delays; at exactly
+120 Hz a late frame's latency persists. Measurements are in
+documentation/VARIABLE_REFRESH.md.
+---
+ src/Backends/DRMBackend.cpp | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/src/Backends/DRMBackend.cpp b/src/Backends/DRMBackend.cpp
+--- a/src/Backends/DRMBackend.cpp
++++ b/src/Backends/DRMBackend.cpp
+@@ -975,8 +975,11 @@
+ 	{ 4096, 2160, 0 },
+ };
+ 
++// vrefresh is rounded; the fastest match gives VRR repeats the most headroom.
+ static const drmModeModeInfo *find_mode( const drmModeConnector *connector, int hdisplay, int vdisplay, uint32_t vrefresh )
+ {
++	const drmModeModeInfo *best = nullptr;
++
+ 	for (int i = 0; i < connector->count_modes; i++) {
+ 		const drmModeModeInfo *mode = &connector->modes[i];
+ 
+@@ -997,10 +1000,14 @@
+ 		if (vrefresh != 0 && vrefresh != mode->vrefresh)
+ 			continue;
+ 
+-		return mode;
++		if (vrefresh == 0)
++			return mode;
++
++		if (!best || gamescope::GetModeRefresh( mode ) > gamescope::GetModeRefresh( best ))
++			best = mode;
+ 	}
+ 
+-	return NULL;
++	return best;
+ }
+ 
+ static std::unordered_map<std::string, int> parse_connector_priorities(const char *str)
+-- 
+2.47.3

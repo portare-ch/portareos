@@ -131,14 +131,12 @@ class Run:
             si += 1
         return lost
 
-    def pair_kicks(self, landed, limit=13000000):
-        """Each kick of the kernel's LFC with the refresh it started: the
-        first vblank traced after it, one kick to a vblank. A kick during the
-        refresh before is kept for its end, and the vblank is traced from the
-        vsync interrupt, which ran up to 0.7 ms late on the Nova, so the
-        limit is the floor's frame. A kick whose vblank a commit landed on,
-        or none came within the limit, started nothing; one whose vblank an
-        earlier kick already has is a duplicate."""
+    def pair_kicks(self, landed, limit):
+        """Pair each LFC kick with the next vblank, unless already claimed.
+
+        Hardware queues a kick until scanout ends; allow a floor period
+        plus 1 ms for interrupt delay. limit is in ns.
+        """
         taken, by_kick = set(landed), set()
         for k in self.kicks:
             k['vblank'], k['duplicate'] = None, False
@@ -189,8 +187,8 @@ def main():
     ap.add_argument('--rate', type=float, help='frame rate the content was timed at (VRR)')
     ap.add_argument('--refresh-ms', type=float, default=1000 / 120.198,
                     help='the shortest refresh, default the 120.198 Hz mode')
-    ap.add_argument('--floor-hz', type=float, default=80,
-                    help="the panel's variable refresh floor (patch 1097; 90 before #595's follow-up)")
+    ap.add_argument('--floor-hz', type=float, default=65,
+                    help="the panel's variable refresh floor (patch 1097; 60, 70, 80 and 90 on older captures)")
     ap.add_argument('--bound-ms', type=float, default=0.46,
                     help="vrr-probe's p95 frame-length error for the rate (VARIABLE_REFRESH.md)")
     ap.add_argument('--jump-ms', type=float, default=2.0,
@@ -221,7 +219,7 @@ def main():
     landed = {}
     for c in frames + repeats:
         landed[c['vblank'][1]] = c
-    run.pair_kicks(landed)
+    run.pair_kicks(landed, int(1e9 / a.floor_hz) + 1000000)
     kicks = [k for k in run.kicks if k['vblank']]
     for k in kicks:
         landed[k['vblank'][1]] = dict(repeat=True, kernel=True)
@@ -302,17 +300,22 @@ def main():
     if a.cadence:
         cad = [int(x) for x in a.cadence.split(',')]
         late_ids = {int(p['id']) for p in presents or [] if p['late'] == '1'}
-        # Frames are counted by Mesa's serial, the present's place on its
-        # swapchain, which present-probe's IDs follow; an untagged present
-        # has no ID. Frames before the first timed one (observe) or the
-        # first three (own: the mode set) are startup, not the schedule.
+        # Older captures lack hold and add one refresh for each late frame.
+        holds = {int(p['id']): int(p['hold']) for p in presents or [] if p.get('hold')}
+        # Mesa serials match probe IDs even for untagged presents.
+        # Skip startup: before the first target, or the first three in own mode.
         timed = [int(p['id']) for p in presents or [] if p['target_ns'] != '0']
         start = timed[0] if timed else 4
-        wrong = []
+        # Untimed own-mode presents have serial 0; count them in order.
+        if frames and all(c['serial'] == 0 for c in frames):
+            for i, c in enumerate(frames):
+                c['serial'] = i + 1
+        wrong, checked = [], 0
         for c, n in zip(frames, frames[1:]):
             if c['serial'] < start:
                 continue
-            want = cad[(c['serial'] - 1) % len(cad)] + (c['serial'] in late_ids)
+            checked += 1
+            want = holds.get(c['serial']) or cad[(c['serial'] - 1) % len(cad)] + (c['serial'] in late_ids)
             if n['vblank'][1] - c['vblank'][1] != want:
                 wrong.append(c)
         for c in wrong[:5]:
@@ -320,7 +323,7 @@ def main():
                   % (c['serial'], (c['vblank'][2] - frames[0]['vblank'][2]) / 1e9,
                      (frames[frames.index(c) + 1]['commit'] - c['vblank'][2]) / 1e6))
         wrong = len(wrong)
-        check(wrong == 0, 'every frame shown for its scripted refreshes (%d of %d not)' % (wrong, len(frames) - 1))
+        check(wrong == 0 and checked, 'every frame shown for its scripted refreshes (%d of %d not)' % (wrong, checked))
 
     # Integer multiple on a variable refresh panel.
     if a.rate:
