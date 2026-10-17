@@ -6,12 +6,14 @@ readback waits for the GPU to finish everything queued, the frame's upscaled
 rendering included; at 4x on Vulkan that stall missed vblanks in Tekken 3
 (portareos#495). For RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE, copy
 VRAM to a texture per frontend buffer instead, the way the core's own
-memory states do. Normal savestates are unchanged.
+memory states do. Normal savestates are unchanged. Since e436e9b
+retro_unserialize validates the save state header first, so the frontend
+state is recognised before that header is read.
 diff --git a/src/core/system.cpp b/src/core/system.cpp
-index 10d0df5..47ed9ab 100644
+index 5adc67f..b4286f5 100644
 --- a/src/core/system.cpp
 +++ b/src/core/system.cpp
-@@ -108,6 +108,18 @@ static float s_vertical_frequency = 60.0f;
+@@ -109,6 +109,18 @@ static float s_vertical_frequency = 60.0f;
  static std::unique_ptr<CheatList> s_cheat_list;
  
  static std::deque<MemorySaveState> s_runahead_states;
@@ -30,7 +32,7 @@ index 10d0df5..47ed9ab 100644
  static bool s_runahead_replay_pending = false;
  static uint32_t s_runahead_frames = 0;
  
-@@ -1768,6 +1780,83 @@ void SetCheatList(std::unique_ptr<CheatList> cheats)
+@@ -1788,6 +1800,83 @@ void SetCheatList(std::unique_ptr<CheatList> cheats)
  void ClearMemorySaveStates()
  {
    s_runahead_states.clear();
@@ -115,10 +117,10 @@ index 10d0df5..47ed9ab 100644
  
  void UpdateMemorySaveStateSettings()
 diff --git a/src/core/system.h b/src/core/system.h
-index ca7bf95..1a22687 100644
+index dca5e57..f634919 100644
 --- a/src/core/system.h
 +++ b/src/core/system.h
-@@ -150,4 +150,11 @@ void ClearMemorySaveStates();
+@@ -155,4 +155,11 @@ void ClearMemorySaveStates();
  void UpdateMemorySaveStateSettings();
  void SetRunaheadReplayFlag();
  
@@ -131,10 +133,10 @@ index ca7bf95..1a22687 100644
 +
  } // namespace System
 diff --git a/src/libretro/libretro_host_interface.cpp b/src/libretro/libretro_host_interface.cpp
-index fc39fe0..c4770c4 100644
+index 6f97a84..94362ec 100644
 --- a/src/libretro/libretro_host_interface.cpp
 +++ b/src/libretro/libretro_host_interface.cpp
-@@ -927,9 +927,29 @@ size_t HostInterface::retro_serialize_size()
+@@ -993,11 +993,31 @@ size_t HostInterface::retro_serialize_size()
    return System::MAX_SAVE_STATE_SIZE;
  }
  
@@ -148,6 +150,8 @@ index fc39fe0..c4770c4 100644
 +
  bool HostInterface::retro_serialize(void* data, size_t size)
  {
+   if (!data || size > UINT32_MAX)
+     return false;
    std::unique_ptr<ByteStream> stream = ByteStream_CreateMemoryStream(data, static_cast<uint32_t>(size));
 +
 +  // Run-ahead and preemptive frames save a state every frame and load it
@@ -161,16 +165,38 @@ index fc39fe0..c4770c4 100644
 +    stream->SeekAbsolute(0);
 +  }
 +
-   return System::SaveState(stream.get());
- }
+   if (!System::SaveState(stream.get()))
+     return false;
  
-@@ -956,6 +976,9 @@ bool HostInterface::retro_unserialize(const void* data, size_t size)
-   const bool restore_on_failure = !is_memory_state && ctx != RETRO_SAVESTATE_CONTEXT_ROLLBACK_NETPLAY;
+@@ -1016,6 +1036,15 @@ bool HostInterface::retro_unserialize(const void* data, size_t size)
+   if (!data || size < sizeof(SAVE_STATE_HEADER) || size > UINT32_MAX)
+     return false;
  
-   std::unique_ptr<ByteStream> stream = ByteStream_CreateReadOnlyMemoryStream(data, static_cast<uint32_t>(size));
++  // A frontend run-ahead state has its own header, so it is recognised
++  // before the save state header below is read.
++  const retro_savestate_context ctx = GetSavestateContext();
 +  if (ctx == RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE && System::IsFrontendRunaheadState(data, size))
++  {
++    std::unique_ptr<ByteStream> stream = ByteStream_CreateReadOnlyMemoryStream(data, static_cast<uint32_t>(size));
 +    return System::LoadFrontendRunaheadState(stream.get());
++  }
 +
-   return System::LoadState(stream.get(), is_memory_state, restore_on_failure);
- }
+   SAVE_STATE_HEADER state_header;
+   std::memcpy(&state_header, data, sizeof(state_header));
+   if (state_header.magic != SAVE_STATE_MAGIC || state_header.data_compression_type != 0)
+@@ -1116,13 +1145,8 @@ bool HostInterface::retro_unserialize(const void* data, size_t size)
+   // recompiling the dispatcher from scratch (System::DoState's
+   // is_memory_state argument). The cache stays warm across the runahead
+   // window, which is what makes per-frame state reload affordable.
+-  retro_savestate_context ctx = RETRO_SAVESTATE_CONTEXT_NORMAL;
+-  bool is_memory_state = false;
+-  if (g_retro_environment_callback(RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT, &ctx))
+-  {
+-    is_memory_state = (ctx == RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE ||
+-                       ctx == RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_BINARY);
+-  }
++  const bool is_memory_state = (ctx == RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE ||
++                                ctx == RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_BINARY);
  
+   /* Normal state loads preserve the running state on failure. Runahead and netplay skip the per-load backup
+    * because they can happen every frame; LoadState resets the system if one of those states is rejected. */
