@@ -485,8 +485,11 @@ CPU_GOVERNOR=$(get_setting "cpugovernor" "${PLATFORM}" "${ROMNAME##*/}")
 ${VERBOSE} && log $0 "Set emulation performance mode to (${CPU_GOVERNOR})"
 ${CPU_GOVERNOR}
 
-### Check whether MangoHud is supported and enabled
-if [ "${DEVICE_MANGOHUD_SUPPORT}" == "true" ]; then
+### Check whether MangoHud is supported and enabled. Not for the players:
+### mpv on VK_KHR_display segfaults in its vo thread under MangoHud, and a
+### film or an album has no frame rate to show.
+if [ "${DEVICE_MANGOHUD_SUPPORT}" == "true" ] &&
+   [ "${EMULATOR}" != "mpv" ] && [ "${EMULATOR}" != "portamp" ]; then
   MANGOHUD_ENABLED=$(get_setting "portareos.mangohud.enabled"  "${PLATFORM}" "${ROMNAME##*/}")
   if [ "${MANGOHUD_ENABLED}" = "1" ]; then
     # Enable GPU profiling and MangoHud
