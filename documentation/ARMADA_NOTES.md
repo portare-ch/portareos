@@ -21,6 +21,101 @@ mpv or panel refresh modes; its display work is gamescope and HDR.
 | GMU HFI interrupt clearing the reply and OOB ack bits it does not own, unbounded devcoredump wait, HFI interrupt unmasked before GMU boot | `0620`, `0621` (from Kettle), `0622` | patches 1099-1101; `096-cpuidle` and its hooks removed (#602) |
 | UFS lane clock helpers enabling every clock, geni UART kept active across sleep (upstream backports) | `0533`, `0534` | patches 1102, 1103 (#603) |
 | ath12k scan priority never sent, scan timeout deadlock | `1020`, `1021` | patches 1104, 1105; 1106 and the timezone's country are ours |
+| GPU submitqueue priorities mapped onto HIGH through LOW, keeping KERNEL for VM_BIND | kernel `0619` | kernel patch 1113; imported, device verification pending |
+| libliftoff stacking across multiple primary planes | gamescope `0020` | gamescope patch 0009, including its nine regression cases; imported, device verification pending |
+
+## Steam: checked again on 18 October 2026
+
+Checked [armada at `4c945ec5`](https://github.com/armada-os/armada/tree/4c945ec5b28176c8580059a1c5ab6176ac5f3104)
+against our Gamescope `2b5cf191`, its libliftoff `8b08dc1c`, kernel 7.2.11,
+Steam launcher and installer. Kernel `0619` and Gamescope `0020` are now
+imported as recorded above; neither has been measured on the Nova. The
+remaining changes below are an import assessment.
+
+The kernel fix applies to both affected 7.2.11 files and corrects an
+inversion that can give an ordinary Turnip queue kernel priority above
+Xwayland's GL queue. Armada reports compositor starvation under GPU load.
+It changes scheduling for every GPU client, so compare Steam and Vulkan
+emulators before calling the device behavior verified. Both affected kernel
+objects, `msm_submitqueue.o` and `msm_gpu.o`, compile in Linux with the Nova
+config on 7.2.11. A check using the actual conversion helper and entity-index
+expression passes 42 priority and range cases; the original mapping fails,
+and omitting the entity-index correction fails separately.
+
+The libliftoff fix keeps Steam and external overlays above an opaque game
+when the DPU scans layers out on separate primary planes. It applies to
+our exact submodule: five of its nine new cases fail before the fix, and
+a clean Linux build with the fix passes all 67 tests, including the
+existing suite. Overlay order and direct scanout still need a Nova test.
+
+### Candidates
+
+| Change there | Value here | Assessment |
+|---|---|---|
+| Gamescope `0024`, report native Wayland windows to Steam | A game with an xdg-shell window can remain behind Steam's launch spinner because only Xwayland windows are reported as focusable. Publishes the Wayland window's app ID and PID too. | Applies after our current patches. Useful when adding native Wayland games or Proton's Wayland driver; verify launch, focus, overlay and return to Steam. Our launcher would also need to expose Gamescope's Wayland socket deliberately. |
+| Gamescope `0025`, native Wayland touch passthrough | Lets an xdg-shell application receive touch rather than Steam's emulated mouse clicks, retaining passthrough for that touch until it ends. | Applies with `0024`. Conditional on supporting native Wayland applications; test touch across focus changes and keep X11 mouse emulation working. |
+| Gamescope `0018`, ARM64 virtual white | Recovers the missing white-point component from the ARM Steam client's packed property, making its color-temperature slider effective. | Applies directly. Needs the Steam color-management capability flags and on-device verification, including direct scanout. It does not supply the DPU color pipeline by itself. |
+| `launch-steam`, preserve `SYSTEM_PATH` and `SYSTEM_LD_LIBRARY_PATH` | Steam restores these when starting compatibility tools. Armada sets them explicitly to keep the tools' command and library search paths available. | Small launcher change worth testing. Our direct ARM client launch sets neither; use our own runtime paths rather than copying Armada's paths. |
+| Proton-CachyOS DXVK probe | Requires `storageBuffer8BitAccess` as well as `descriptorIndexing` before choosing modern DXVK; otherwise allows the bundled fallback. | Low priority on the Nova: our Mesa enables 8-bit storage for A7xx, so this should not change its choice. The guarded patcher works on the real `11.0-20261005-slr` Proton script; its missing/duplicate-probe tests pass. Our installer downloads changing Proton releases, so any adoption must detect the installed script rather than assume that release's shape forever. |
+
+Sources: [GPU priorities](https://github.com/armada-os/armada/blob/4c945ec5b28176c8580059a1c5ab6176ac5f3104/packages/kernel/patches/0619-drm-msm-map-submitqueue-priority-onto-high-low.patch),
+[Gamescope patch ledger](https://github.com/armada-os/armada/blob/4c945ec5b28176c8580059a1c5ab6176ac5f3104/packages/gamescope/PATCHES.md),
+[Steam launcher](https://github.com/armada-os/armada/blob/4c945ec5b28176c8580059a1c5ab6176ac5f3104/system_files/usr/libexec/armada/launch-steam),
+[DXVK probe patcher](https://github.com/armada-os/armada/blob/4c945ec5b28176c8580059a1c5ab6176ac5f3104/packages/proton-cachyos/patch-proton-cachyos-dxvk-probe.py).
+
+### Useful designs requiring adaptation
+
+- **Per-game FEX profiles.** `armada-game-launch` writes `FEX_APP_CONFIG`
+  into the user's cache, which pressure-vessel shares with the game. It
+  omits `RootFS`, `ThunkHostLibs` and `ThunkGuestLibs`, allowing each
+  compatibility tool's FEX to use its own paths. Our system FEX settings
+  alone cannot be assumed to configure a bundled FEX. Worth adapting for
+  per-game compatibility, with an actual game launch confirming consumption.
+- **Controller recovery.** The same wrapper injects missing x86 Wayland
+  and xkbcommon libraries into applicable x86 Proton tools, and repairs
+  stale Valve-controller registry entries left when changing Proton
+  architectures. These are specific workarounds, involving installed tools
+  and prefixes: reproduce the missing-library or stale-registry failure
+  before adopting either. They do not calibrate the Nova's physical sticks.
+- **Steam repair.** `armada_steam.py` stages and verifies replacement client
+  files while preserving games, account data and compatibility tools. Its
+  Linux tests pass (13 passed, two integration cases skipped). Our installer
+  instead removes a real Steam directory when replacing it with the library
+  symlink. Adapting preservation and staging is worthwhile; Armada's factory
+  payload/OSTree exporter cannot be copied into PortareOS unchanged.
+
+### Leave out for now
+
+- Gamescope `0028` is the three-commit frame-pacing series from
+  [Valve PR 2417](https://github.com/ValveSoftware/gamescope/pull/2417),
+  merged on 11 October. Our 14 October Gamescope pin already has the
+  scheduling helpers, independent nested refresh clocks and Wayland wakeup.
+- `0027` changes the **fixed-refresh** limiter. Our normal Steam launch
+  uses VRR and its separate limiter; our newer fixed-refresh branch also
+  differs from the one Armada patches. Revisit for a measured fixed-refresh
+  problem, including external displays.
+- `0026` makes Steam's **FSR** selection run **SGSR** on supported SDR
+  inputs. Our Gamescope already offers SGSR explicitly. It is a selection
+  policy change, with no Nova quality or performance comparison yet.
+- The synthetic EDID, nominal Nova HDR profile and hardware color-management
+  stack (`0002` through `0006`, `0017`, `0019`, `0021`) are a separate display
+  project. Armada's Nova profile explicitly uses unmeasured nominal P3
+  primaries; the LUT patches require its kernel's 3D LUT/colorop interfaces,
+  which ours does not expose. Do not treat these as a small Steam fix.
+- DRM leases, companion-screen MangoApp fixes and the generic fallback
+  splash app ID serve Armada's multi-screen/session design. We have one
+  screen and already carry a targeted Steam-bootstrap focus fix.
+- Gamescope already requests realtime Vulkan queues when it has
+  `CAP_SYS_NICE`. Check that capability on our root-run Steam path before
+  considering Armada's bypass; it is separate from the kernel's submitqueue
+  mapping fix.
+
+The applicability checks used a fresh archive of our exact Gamescope pin
+with all five of our patches applied first. `0018`, `0024` and `0025` were
+then applied together and reverse-checked in that temporary tree. The
+libliftoff tests ran in an ARM64 Debian container against the pinned
+dependency, using a fresh build after applying the allocator fix. These
+checks establish applicability and regression behavior, not game performance.
 
 ## Suspend and sleep power
 
