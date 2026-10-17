@@ -134,22 +134,9 @@ steam_debug_print() {
   echo "LSFG FPS LIMIT set to: ${FPS_LIMIT}"
 }
 
-# Asks DRM directly rather than asking a compositor. modetest is a query and
-# needs no DRM master, so this works with the panel already handed over.
-#
-# The preferred mode's size and rounded rate, 1280x960 and 120. Several modes
-# round to 120; gamescope (its patch 0007) takes the fastest of them, the
-# panel's 120.198 Hz mode, the one every game runs variable refresh on.
-# gamescope runs with --adaptive-sync, variable refresh as for every game,
-# and --framerate-limit 60, a ceiling Steam's own setting cannot lift
-# (gamescope patch 0008): a game never runs faster than 60 fps, so the
-# kernel shows every frame twice or more (documentation/VARIABLE_REFRESH.md)
-# and no game lands between 60.7 and 65 fps, where a frame is too fast to
-# show twice and too slow to reach the panel before it refreshes on its
-# own. Two refreshes of 120.198 are 27 us short of a 60.000 fps game's
-# frame, so the panel waits for every commit and scans 0.46 ms after it;
-# on 120.000 they are the frame exactly, and the panel stays wherever the
-# last late frame left it, up to a refresh of latency.
+# modetest needs no DRM master, so it works after the panel handoff.
+# gamescope patch 0007 resolves the rounded 120 Hz to the fastest mode,
+# 120.198 Hz; see documentation/VARIABLE_REFRESH.md for the timing rationale.
 steam_read_panel_geometry() {
   eval "$(/usr/bin/modetest -M msm -c 2>/dev/null | awk '
     /^[[:space:]]*#[0-9]+[[:space:]]/ && /preferred/ {
@@ -327,6 +314,7 @@ steam_arm64_binfmt_and_proton_prep() {
   rm -f "/storage/.local/share/Steam/compatibilitytools.d/compatibilitytool.vdf"
 }
 
+# The 60 fps ceiling keeps games below the 60.7 to 65 fps gap in the VRR range.
 steam_launch_bigpicture() {
   local game_uri=""
   local force_orientation="normal"

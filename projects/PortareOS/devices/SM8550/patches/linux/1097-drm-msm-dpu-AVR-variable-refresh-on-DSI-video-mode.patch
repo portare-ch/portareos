@@ -365,23 +365,19 @@ frame, without flicker at 5% backlight.
  };
  
  static const struct regulator_bulk_data panel_supplies[] = {
-@@ -421,6 +427,15 @@
+@@ -421,6 +427,11 @@
  static struct panel_desc il97680a_rpnova_desc = {
  	.modes = il97680a_rpnova_modes,
  	.num_modes = ARRAY_SIZE(il97680a_rpnova_modes),
 +	/*
-+	 * Chosen between what the panel showed clean and what tore, by eye,
-+	 * 120 s of frames shown once at the floor's rate plus one: on 70 Hz
-+	 * (71 fps, each frame 5.8 ms past the fastest refresh) no tear, on 60
-+	 * (61 fps, 8.1 ms) a few small ones, on 50 three a minute. 65 holds a
-+	 * frame 7.1 ms at most, accepted with the chance of an occasional one.
-+	 * LFC repeats every frame up to 60.7 Hz; 60.7 to 65 fits neither way.
++	 * 65 Hz allows 7.1 ms of stretch. Lower floors tore in visual tests;
++	 * occasional tears remain possible (documentation/VARIABLE_REFRESH.md).
 +	 */
 +	.vrr_min_hz = 65,
  	.width_mm = 91,
  	.height_mm = 68,
  	.bpc = 8,
-@@ -553,6 +567,23 @@
+@@ -553,6 +563,23 @@
  	connector->display_info.width_mm = pinfo->desc->width_mm;
  	connector->display_info.height_mm = pinfo->desc->height_mm;
  	connector->display_info.bpc = pinfo->desc->bpc;

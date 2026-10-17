@@ -23,8 +23,8 @@
 //   read=N      read records with an array of N (default 64); "count" asks
 //               for the count first and reads that many; "none" never reads
 //   late=E:MS   every Eth frame is presented MS ms after its target (rate);
-//               in cadence mode the frame before it is held MS ms more,
-//               in whole refreshes rounded up, one at least
+//               cadence holds the preceding frame longer, rounded up to
+//               whole refreshes (at least one extra)
 //   mode=HZ     the display mode nearest HZ (default: the fastest)
 //   recreate=S  replace the swapchain every S seconds (oldSwapchain)
 //   switch=S    with several rates, how long each lasts (default 5)
@@ -34,12 +34,9 @@
 // Every frame draws its number as a barcode, so each frame's pixels, and the
 // DPU's CRC of them, differ from the last.
 //
-// Output: OUT.presents.csv, one line per present (id, image, whether it was
-// tagged, its target, when it was presented, whether it was scripted late,
-// the refreshes it was held on a cadence),
-// and OUT.records.csv, one line per record read, or per read that returned
-// none (read, asked, got, result, then the record's fields). Times are
-// CLOCK_MONOTONIC in ns.
+// Output: OUT.presents.csv records each present's ID, image, timing, late flag
+// and cadence hold in refreshes. OUT.records.csv records each timing read,
+// including empty reads. Times are CLOCK_MONOTONIC in ns.
 //
 // usage: present-probe OUT SECONDS own|observe|partial cadence:N,N,..|rate:HZ[,HZ..] [read=..] [late=E:MS] [mode=HZ] [recreate=S] [switch=S] [bar=PX]
 
@@ -714,9 +711,8 @@ int main(int argc, char **argv)
 	uint32_t slot = 0;
 
 	if (mode == MODE_OWN) {
-		// Each frame is presented right after the vblank before the one it
-		// should start on, and lands on that one. Frame k is held
-		// cadence[k] refreshes, late_ms more when scripted late.
+		// Present just after vblank to land on the next one, then count
+		// refreshes until the next frame is due.
 		wait_vblank();
 		for (uint32_t k = 0; !stop && now_ns() < end; k++) {
 			if (recreate_ns && now_ns() >= next_recreate) {
@@ -729,8 +725,7 @@ int main(int argc, char **argv)
 			slot = (slot + 1) % (nimages + 1);
 			int late = late_every && k % late_every == late_every - 1;
 			present(img, k + 1, 0, 0, late);
-			// The stall of a late frame in refreshes: what late_ms is on
-			// a variable refresh, rounded up, one at least.
+			// Match rate mode's stall, rounded up to whole refreshes.
 			unsigned hold = cadence[k % ncadence];
 			if (late)
 				hold += late_ms > 0 ? (unsigned)((late_ms * 1e6 + refresh - 1) / refresh) : 1;

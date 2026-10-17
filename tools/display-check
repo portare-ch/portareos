@@ -132,14 +132,11 @@ class Run:
         return lost
 
     def pair_kicks(self, landed, limit):
-        """Each kick of the kernel's LFC with the refresh it started: the
-        first vblank traced after it, one kick to a vblank. A kick during the
-        refresh before is kept for its end, a lost one is followed by the
-        panel's own refresh at the floor, and the vblank is traced from the
-        vsync interrupt, which ran up to 0.7 ms late on the Nova, so the
-        limit, in ns, is the floor's frame and 1 ms. A kick whose vblank a
-        commit landed on, or none came within the limit, started nothing;
-        one whose vblank an earlier kick already has is a duplicate."""
+        """Pair each LFC kick with the next vblank, unless already claimed.
+
+        Hardware queues a kick until scanout ends; allow a floor period
+        plus 1 ms for interrupt delay. limit is in ns.
+        """
         taken, by_kick = set(landed), set()
         for k in self.kicks:
             k['vblank'], k['duplicate'] = None, False
@@ -303,18 +300,13 @@ def main():
     if a.cadence:
         cad = [int(x) for x in a.cadence.split(',')]
         late_ids = {int(p['id']) for p in presents or [] if p['late'] == '1'}
-        # present-probe writes the refreshes it held each frame since the
-        # stall of a late frame became as long as asked; before, one more.
+        # Older captures lack hold and add one refresh for each late frame.
         holds = {int(p['id']): int(p['hold']) for p in presents or [] if p.get('hold')}
-        # Frames are counted by Mesa's serial, the present's place on its
-        # swapchain, which present-probe's IDs follow; an untagged present
-        # has no ID. Frames before the first timed one (observe) or the
-        # first three (own: the mode set) are startup, not the schedule.
+        # Mesa serials match probe IDs even for untagged presents.
+        # Skip startup: before the first target, or the first three in own mode.
         timed = [int(p['id']) for p in presents or [] if p['target_ns'] != '0']
         start = timed[0] if timed else 4
-        # Own mode presents without timing, so Mesa's serial stays 0 and
-        # the frames are counted in order: present-probe's IDs are 1, 2, ..
-        # and every present is shown on a fixed refresh.
+        # Untimed own-mode presents have serial 0; count them in order.
         if frames and all(c['serial'] == 0 for c in frames):
             for i, c in enumerate(frames):
                 c['serial'] = i + 1

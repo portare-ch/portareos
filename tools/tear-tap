@@ -2,31 +2,24 @@
 # SPDX-License-Identifier: GPL-2.0
 # Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
 
-# A tear test with a person as the detector (#623). present-probe sweeps a
-# full-height bar across the panel; whoever watches taps the touchscreen at
-# each tear. A tear inside the panel never reaches the DPU's CRC, so this
-# finds what tools/display-check cannot. The taps are kept with their
-# CLOCK_MONOTONIC times, the trace's clock, next to display-trace's record
-# of the same run.
+# A tear test (#623): watch present-probe's moving bar and tap at each tear.
+# Panel tears are invisible to the DPU's CRC. Taps use CLOCK_MONOTONIC to
+# match display-trace's timestamps.
 #
 #   tools/tear-tap root@nova NAME SECONDS [vrr|fixed|ab] [rate=HZ] [bar=PX] [mode=HZ] [late=E:MS]
 #
-# vrr (default) presents HZ (default 59.94) with variable refresh; fixed
-# holds each frame two refreshes on the mode nearest twice HZ. ab runs both
-# in random order as NAME-1 and NAME-2 and names them only at the end, so
-# what is reported is not what was expected. bar=PX is the bar's step a
-# frame (default 16). mode=HZ puts variable refresh on the mode nearest HZ
-# rather than the fastest. late=E:MS presents every Eth frame MS ms late,
-# a stall the panel has to hold and resume from; fixed holds the frame
-# before it MS ms longer, in whole refreshes rounded up, so an ab run
-# stalls both the same. Writes display-trace's NAME.*, present-probe's
-# NAME.presents.csv and NAME.records.csv next to them (display-check's
-# --cadence 2 reads the holds), and NAME.taps, one tap a line. PROBE=path runs another
-# present-probe build.
+# vrr (default): variable refresh at rate=HZ (default 59.94).
+# fixed: two refreshes per frame on the mode nearest twice HZ.
+# ab: both in random order as NAME-1 and NAME-2, identified after testing.
+# bar=PX: pixels per frame (default 16). mode=HZ: VRR mode (default fastest).
+# late=E:MS: every Eth frame MS ms late; fixed rounds the stall up to whole
+# refreshes. PROBE=path selects another present-probe build.
+# Writes display-trace's NAME.*, NAME.presents.csv, NAME.records.csv and
+# NAME.taps (one tap per line). display-check --cadence 2 checks fixed holds.
 #
 #   tools/tear-tap root@nova tear 60 ab
 
-[ $# -lt 3 ] && { sed -n '5,26p' "$0" | cut -c3-; exit 1; }
+[ $# -lt 3 ] && { sed -n '5,/^$/p' "$0" | cut -c3-; exit 1; }
 HOST=$1 NAME=$2 SECS=$3; shift 3
 MODE=vrr RATE=59.94 BAR=16 PMODE= LATE=
 for a in "$@"; do

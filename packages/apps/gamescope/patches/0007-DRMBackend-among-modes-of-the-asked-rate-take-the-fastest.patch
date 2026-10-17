@@ -3,37 +3,25 @@ From: portare-ch <hello@portare.org>
 Date: Sun, 27 Sep 2026 15:17:20 +0000
 Subject: [PATCH] DRMBackend: among modes of the asked rate, take the fastest
 
-drmModeModeInfo::vrefresh is rounded, so a panel with modes a fraction of
-a hertz apart has several at the same whole number, and find_mode() took
-whichever the driver listed first. Among those that match, take the
-fastest. Asking for no rate is unchanged.
+drmModeModeInfo::vrefresh is rounded. Choose the fastest matching mode
+instead of the first listed; leave selection without a requested rate alone.
 
-The Retroid Pocket Nova lists 119.880, 120.000, 120.198 and others that
-all round to 120. gamescope runs with adaptive sync, and the kernel shows
-a 60 fps game twice a frame. On 120.198 two refreshes are 27 us short of
-a 60.000 fps frame, so the panel waits for every commit and starts the
-scan 0.46 ms after it. On 120.000 they are the frame exactly: the panel
-stays wherever the last late frame left it, up to a refresh of latency
-that nothing drains. The closest-to-the-whole-number choice this
-replaces was for a fixed refresh, where 119.880 dropped a 60.000 fps
-game's frame every 17 s.
+On the Nova this selects 120.198 Hz for -r 120. Under adaptive sync its
+headroom lets doubled 60 fps frames recover from delays; at exactly
+120 Hz a late frame's latency persists. Measurements are in
+documentation/VARIABLE_REFRESH.md.
 ---
- src/Backends/DRMBackend.cpp | 16 ++++++++++++++--
- 1 file changed, 14 insertions(+), 2 deletions(-)
+ src/Backends/DRMBackend.cpp | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
 
 diff --git a/src/Backends/DRMBackend.cpp b/src/Backends/DRMBackend.cpp
 --- a/src/Backends/DRMBackend.cpp
 +++ b/src/Backends/DRMBackend.cpp
-@@ -975,8 +975,16 @@
+@@ -975,8 +975,11 @@
  	{ 4096, 2160, 0 },
  };
  
-+// A refresh rate asked for in whole hertz can match several modes, since
-+// drmModeModeInfo::vrefresh is rounded: a panel with modes a fraction of a
-+// hertz apart has several at "120". Among those, take the fastest, rather
-+// than whichever the driver listed first: with adaptive sync the panel
-+// follows the game, and the fastest mode leaves a frame shown k times the
-+// most room. Asking for no rate still returns the first mode that fits.
++// vrefresh is rounded; the fastest match gives VRR repeats the most headroom.
  static const drmModeModeInfo *find_mode( const drmModeConnector *connector, int hdisplay, int vdisplay, uint32_t vrefresh )
  {
 +	const drmModeModeInfo *best = nullptr;
@@ -41,7 +29,7 @@ diff --git a/src/Backends/DRMBackend.cpp b/src/Backends/DRMBackend.cpp
  	for (int i = 0; i < connector->count_modes; i++) {
  		const drmModeModeInfo *mode = &connector->modes[i];
  
-@@ -997,10 +1005,14 @@
+@@ -997,10 +1000,14 @@
  		if (vrefresh != 0 && vrefresh != mode->vrefresh)
  			continue;
  
