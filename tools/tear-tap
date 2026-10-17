@@ -19,8 +19,9 @@
 # rather than the fastest. late=E:MS presents every Eth frame MS ms late,
 # a stall the panel has to hold and resume from; fixed holds the frame
 # before it MS ms longer, in whole refreshes rounded up, so an ab run
-# stalls both the same. Writes display-trace's
-# NAME.* and NAME.taps, one tap a line. PROBE=path runs another
+# stalls both the same. Writes display-trace's NAME.*, present-probe's
+# NAME.presents.csv and NAME.records.csv next to them (display-check's
+# --cadence 2 reads the holds), and NAME.taps, one tap a line. PROBE=path runs another
 # present-probe build.
 #
 #   tools/tear-tap root@nova tear 60 ab
@@ -68,11 +69,11 @@ one() {
   sleep 1
   if [ "${mode}" = vrr ]; then
     "${TRACE}" "${HOST}" "${name}" "${SECS}" -- env MESA_VK_WSI_DISPLAY_VRR=1 \
-      "${PROBE}" /tmp/tear-tap "$((SECS + 2))" observe "rate:${RATE}" "bar=${BAR}" ${PMODE} ${LATE} >/dev/null
+      sh -c 'exec "$0" "${RUN}" "$@"' "${PROBE}" "$((SECS + 2))" observe "rate:${RATE}" "bar=${BAR}" ${PMODE} ${LATE} >/dev/null
   else
     hz=$(awk -v r="${RATE}" 'BEGIN { printf "%.3f", 2 * r }')
     "${TRACE}" "${HOST}" "${name}" "${SECS}" -- env MESA_VK_WSI_DISPLAY_VRR=0 \
-      "${PROBE}" /tmp/tear-tap "$((SECS + 2))" own cadence:2 "mode=${hz}" "bar=${BAR}" ${LATE} >/dev/null
+      sh -c 'exec "$0" "${RUN}" "$@"' "${PROBE}" "$((SECS + 2))" own cadence:2 "mode=${hz}" "bar=${BAR}" ${LATE} >/dev/null
   fi
   wait "${logger}"
   awk 'NR > 1 { g = g sprintf(" %.2f", $1 - p) } { p = $1 } END { printf "%s: %d taps; gaps, s:%s\n", FILENAME, NR, g }' "${name}.taps"

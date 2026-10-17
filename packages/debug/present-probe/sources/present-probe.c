@@ -35,7 +35,8 @@
 // DPU's CRC of them, differ from the last.
 //
 // Output: OUT.presents.csv, one line per present (id, image, whether it was
-// tagged, its target, when it was presented, whether it was scripted late),
+// tagged, its target, when it was presented, whether it was scripted late,
+// the refreshes it was held on a cadence),
 // and OUT.records.csv, one line per record read, or per read that returned
 // none (read, asked, got, result, then the record's fields). Times are
 // CLOCK_MONOTONIC in ns.
@@ -62,7 +63,7 @@ enum mode { MODE_OWN, MODE_OBSERVE, MODE_PARTIAL };
 
 struct present_rec {
 	uint32_t id, image;
-	uint8_t tagged, late;
+	uint8_t tagged, late, hold;	/* hold: refreshes on a cadence, else 0 */
 	uint64_t target, call;
 };
 
@@ -584,11 +585,11 @@ static void write_logs(const char *out)
 		perror(path);
 		return;
 	}
-	fprintf(f, "id,image,tagged,target_ns,call_ns,late\n");
+	fprintf(f, "id,image,tagged,target_ns,call_ns,late,hold\n");
 	for (size_t i = 0; i < npresents; i++)
-		fprintf(f, "%u,%u,%u,%llu,%llu,%u\n", presents[i].id, presents[i].image, presents[i].tagged,
+		fprintf(f, "%u,%u,%u,%llu,%llu,%u,%u\n", presents[i].id, presents[i].image, presents[i].tagged,
 			(unsigned long long)presents[i].target, (unsigned long long)presents[i].call,
-			presents[i].late);
+			presents[i].late, presents[i].hold);
 	fclose(f);
 
 	snprintf(path, sizeof(path), "%s.records.csv", out);
@@ -715,7 +716,7 @@ int main(int argc, char **argv)
 	if (mode == MODE_OWN) {
 		// Each frame is presented right after the vblank before the one it
 		// should start on, and lands on that one. Frame k is held
-		// cadence[k] refreshes, one more when scripted late.
+		// cadence[k] refreshes, late_ms more when scripted late.
 		wait_vblank();
 		for (uint32_t k = 0; !stop && now_ns() < end; k++) {
 			if (recreate_ns && now_ns() >= next_recreate) {
@@ -733,6 +734,7 @@ int main(int argc, char **argv)
 			unsigned hold = cadence[k % ncadence];
 			if (late)
 				hold += late_ms > 0 ? (unsigned)((late_ms * 1e6 + refresh - 1) / refresh) : 1;
+			presents[npresents - 1].hold = hold > 255 ? 255 : hold;
 			for (unsigned v = 0; v < hold && !stop; v++)
 				wait_vblank();
 		}

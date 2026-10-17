@@ -442,8 +442,11 @@ bar's step a frame and `mode=HZ` the mode variable refresh runs on (default
 the fastest), and `late=E:MS` presents every Eth frame MS ms late (fixed
 holds the frame before it that much longer, in whole refreshes), a stall
 for the panel to hold and resume from. Each run leaves display-trace's
-files and `NAME.taps`, the tap times in `CLOCK_MONOTONIC` seconds, the
-trace's clock, and prints the gaps between taps. A reaction lags a tear by
+files, present-probe's `NAME.presents.csv` and `NAME.records.csv` (the
+presents file carries each frame's hold on a fixed refresh, which
+`display-check --cadence 2` checks against) and `NAME.taps`, the tap times
+in `CLOCK_MONOTONIC` seconds, the trace's clock, and prints the gaps
+between taps. A reaction lags a tear by
 a few hundred milliseconds, so set taps against the trace with that margin;
 a steady gap between taps is a beat between two clocks.
 

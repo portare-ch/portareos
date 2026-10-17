@@ -303,17 +303,27 @@ def main():
     if a.cadence:
         cad = [int(x) for x in a.cadence.split(',')]
         late_ids = {int(p['id']) for p in presents or [] if p['late'] == '1'}
+        # present-probe writes the refreshes it held each frame since the
+        # stall of a late frame became as long as asked; before, one more.
+        holds = {int(p['id']): int(p['hold']) for p in presents or [] if p.get('hold')}
         # Frames are counted by Mesa's serial, the present's place on its
         # swapchain, which present-probe's IDs follow; an untagged present
         # has no ID. Frames before the first timed one (observe) or the
         # first three (own: the mode set) are startup, not the schedule.
         timed = [int(p['id']) for p in presents or [] if p['target_ns'] != '0']
         start = timed[0] if timed else 4
-        wrong = []
+        # Own mode presents without timing, so Mesa's serial stays 0 and
+        # the frames are counted in order: present-probe's IDs are 1, 2, ..
+        # and every present is shown on a fixed refresh.
+        if frames and all(c['serial'] == 0 for c in frames):
+            for i, c in enumerate(frames):
+                c['serial'] = i + 1
+        wrong, checked = [], 0
         for c, n in zip(frames, frames[1:]):
             if c['serial'] < start:
                 continue
-            want = cad[(c['serial'] - 1) % len(cad)] + (c['serial'] in late_ids)
+            checked += 1
+            want = holds.get(c['serial']) or cad[(c['serial'] - 1) % len(cad)] + (c['serial'] in late_ids)
             if n['vblank'][1] - c['vblank'][1] != want:
                 wrong.append(c)
         for c in wrong[:5]:
@@ -321,7 +331,7 @@ def main():
                   % (c['serial'], (c['vblank'][2] - frames[0]['vblank'][2]) / 1e9,
                      (frames[frames.index(c) + 1]['commit'] - c['vblank'][2]) / 1e6))
         wrong = len(wrong)
-        check(wrong == 0, 'every frame shown for its scripted refreshes (%d of %d not)' % (wrong, len(frames) - 1))
+        check(wrong == 0 and checked, 'every frame shown for its scripted refreshes (%d of %d not)' % (wrong, checked))
 
     # Integer multiple on a variable refresh panel.
     if a.rate:
