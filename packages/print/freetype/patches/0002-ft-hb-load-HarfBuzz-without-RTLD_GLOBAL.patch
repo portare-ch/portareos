@@ -1,0 +1,59 @@
+ft-hb: load HarfBuzz without RTLD_GLOBAL
+
+The autofitter dlopens libharfbuzz.so.0 the first time it shapes a
+font, and RTLD_GLOBAL puts HarfBuzz and everything under it - this
+library, libpng16, zlib, bz2 - into the process-wide symbol scope from
+that moment on. Any module dlopened afterwards then binds those names
+to the global copies before its own.
+
+Steam's arm64 client (1792099137, 2026-10-14) ships a static libpng
+1.6.37 inside steamui.so, friendsui.so and vgui2_s.so, with every
+png_* symbol exported. steamui.so is loaded before the autofitter
+runs and binds to its own copy; friendsui.so is loaded after login and
+binds png_create_info_struct to /usr/lib/libpng16.so.16. The png_ptr
+steamui made with Valve's build crosses into the image's build, whose
+struct layout differs, and the client segfaults a second after the
+login screen - back to the launcher. Verified with LD_DEBUG=scopes: the
+global scope gains libharfbuzz, libfreetype, libpng16 right before
+friendsui.so is loaded.
+
+FreeType itself takes every HarfBuzz symbol through dlsym on the
+handle, so RTLD_GLOBAL buys it nothing. RTLD_DEFAULT is still tried
+first, so a process that linked HarfBuzz keeps sharing that one.
+
+--- a/src/autofit/ft-hb.c
++++ b/src/autofit/ft-hb.c
+@@ -101,25 +101,25 @@
+ #else /* !_WIN32 */
+
+ #  ifdef RTLD_DEFAULT
+-#    define FT_RTLD_FLAGS RTLD_LAZY | RTLD_GLOBAL
+     lib             = RTLD_DEFAULT;
+     version_atleast = DLSYM( lib, hb_version_atleast );
+-#  else
+-#    define FT_RTLD_FLAGS RTLD_LAZY
+ #  endif
+
+     if ( !version_atleast )
+     {
+       /* Load the HarfBuzz library.
+        *
+-       * We never close the library, since we opened it with RTLD_GLOBAL.
+-       * This is important for the case where we are using HarfBuzz as a
+-       * shared library, and we want to use the symbols from the library in
+-       * other shared libraries or clients.  HarfBuzz holds onto global
++       * Without RTLD_GLOBAL: every symbol FreeType needs comes through
++       * DLSYM on this handle, and a global HarfBuzz drags its dependency
++       * tree (this library, libpng, zlib) into the process-wide search
++       * scope, where it interposes copies a client carries in its own
++       * modules.
++       *
++       * We never close the library.  HarfBuzz holds onto global
+        * variables, and closing the library will cause them to be
+        * invalidated.
+        */
+-      lib = dlopen( FT_LIBHARFBUZZ, FT_RTLD_FLAGS );
++      lib = dlopen( FT_LIBHARFBUZZ, RTLD_LAZY );
+       if ( !lib )
+         goto Fail;
+       version_atleast = DLSYM( lib, hb_version_atleast );
