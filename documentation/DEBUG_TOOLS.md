@@ -351,7 +351,7 @@ lateness; the latter records returned presentation timings. Times are
 | `rate:59.826` | Target a content rate; use `MESA_VK_WSI_DISPLAY_VRR=1` for VRR tests. |
 | `rate:30,60` | Step through content rates in one session, `switch=S` seconds each (default 5). |
 | `read=N`, `read=count`, `read=none` | Change how timing records are retrieved. |
-| `late=600:4` | Every 600th frame arrives 4 ms after its target in rate mode; cadence mode adds one refresh. |
+| `late=600:4` | Every 600th frame arrives 4 ms after its target in rate mode; cadence mode holds the frame before it 4 ms longer, in whole refreshes rounded up. |
 | `mode=119.652` | Select the nearest display mode; default is the fastest. |
 | `recreate=10` | Recreate the swapchain every ten seconds. |
 | `bar=16` | Sweep a full-height white bar, 64 px wide, 16 px a frame, for watching a panel tear (`tools/tear-tap`). |
@@ -439,7 +439,8 @@ order, as `tear-1` and `tear-2`, and only says which was which at the end.
 `vrr` or `fixed` runs one of them; `rate=HZ` sets the content rate (default
 59.94, fixed refresh then uses the mode nearest twice it), `bar=PX` the
 bar's step a frame and `mode=HZ` the mode variable refresh runs on (default
-the fastest), and `late=E:MS` presents every Eth frame MS ms late, a stall
+the fastest), and `late=E:MS` presents every Eth frame MS ms late (fixed
+holds the frame before it that much longer, in whole refreshes), a stall
 for the panel to hold and resume from. Each run leaves display-trace's
 files and `NAME.taps`, the tap times in `CLOCK_MONOTONIC` seconds, the
 trace's clock, and prints the gaps between taps. A reaction lags a tear by

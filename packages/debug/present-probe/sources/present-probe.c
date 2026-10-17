@@ -23,7 +23,8 @@
 //   read=N      read records with an array of N (default 64); "count" asks
 //               for the count first and reads that many; "none" never reads
 //   late=E:MS   every Eth frame is presented MS ms after its target (rate);
-//               in cadence mode it is held one refresh more
+//               in cadence mode the frame before it is held MS ms more,
+//               in whole refreshes rounded up, one at least
 //   mode=HZ     the display mode nearest HZ (default: the fastest)
 //   recreate=S  replace the swapchain every S seconds (oldSwapchain)
 //   switch=S    with several rates, how long each lasts (default 5)
@@ -727,7 +728,11 @@ int main(int argc, char **argv)
 			slot = (slot + 1) % (nimages + 1);
 			int late = late_every && k % late_every == late_every - 1;
 			present(img, k + 1, 0, 0, late);
-			unsigned hold = cadence[k % ncadence] + late;
+			// The stall of a late frame in refreshes: what late_ms is on
+			// a variable refresh, rounded up, one at least.
+			unsigned hold = cadence[k % ncadence];
+			if (late)
+				hold += late_ms > 0 ? (unsigned)((late_ms * 1e6 + refresh - 1) / refresh) : 1;
 			for (unsigned v = 0; v < hold && !stop; v++)
 				wait_vblank();
 		}
