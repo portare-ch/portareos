@@ -807,9 +807,13 @@ band that fits neither way, 60.7 to 70 fps:
 | 30.05 to 40.07 fps | three times |
 | below | four times and more |
 
-On Steam's 120.000 Hz mode (`-r 120`) the mode's exact rate no longer
-matters to a 60.000 fps game: doubled under AVR, its late frame has the
-room to the floor rather than none. The same R/50 slack takes a count
+Steam's gamescope asks for `-r 120` and its patch 0007 takes the fastest
+mode that rounds to it, 120.198 Hz, the mode every game runs variable
+refresh on. The exact rate matters to a 60.000 fps game shown twice: two
+refreshes of 120.198 are 27 us short of its frame, so after a late frame
+the panel's phase drains back at that rate, 1.6 ms a second; on 120.000,
+where two refreshes are exactly its frame, every late frame would shift
+the phase for good, latency that only grows. The same R/50 slack takes a count
 that needs more than the fastest refresh just above 40.07, 30.05, 24.04
 and 20.03 fps, for every client: 40.2 fps is shown three times with a
 refresh short 24 times a minute (#651).

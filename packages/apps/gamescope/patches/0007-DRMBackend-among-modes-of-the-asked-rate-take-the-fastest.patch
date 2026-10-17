@@ -1,0 +1,60 @@
+From 3c4ff3c11a0dacbff2728c010c14f853c3c85c05 Mon Sep 17 00:00:00 2001
+From: portare-ch <hello@portare.org>
+Date: Sun, 27 Sep 2026 15:17:20 +0000
+Subject: [PATCH] DRMBackend: among modes of the asked rate, take the fastest
+
+drmModeModeInfo::vrefresh is rounded, so a panel with modes a fraction of
+a hertz apart has several at the same whole number, and find_mode() took
+whichever the driver listed first. Among those that match, take the
+fastest. Asking for no rate is unchanged.
+
+The Retroid Pocket Nova lists 119.880, 120.000, 120.198 and others that
+all round to 120. gamescope runs with adaptive sync, and the kernel shows
+a 60 fps game twice a frame: on 120.000 that is exactly the game's
+period, so a late frame shifts every frame after it and nothing pulls
+them back; on 120.198 each frame gives 27 us back and the shift drains.
+The closest-to-the-whole-number choice this replaces was for a fixed
+refresh, where 119.880 dropped a 60.000 fps game's frame every 17 s.
+---
+ src/Backends/DRMBackend.cpp | 16 ++++++++++++++--
+ 1 file changed, 14 insertions(+), 2 deletions(-)
+
+diff --git a/src/Backends/DRMBackend.cpp b/src/Backends/DRMBackend.cpp
+--- a/src/Backends/DRMBackend.cpp
++++ b/src/Backends/DRMBackend.cpp
+@@ -975,8 +975,16 @@
+ 	{ 4096, 2160, 0 },
+ };
+ 
++// A refresh rate asked for in whole hertz can match several modes, since
++// drmModeModeInfo::vrefresh is rounded: a panel with modes a fraction of a
++// hertz apart has several at "120". Among those, take the fastest, rather
++// than whichever the driver listed first: with adaptive sync the panel
++// follows the game, and the fastest mode leaves a frame shown k times the
++// most room. Asking for no rate still returns the first mode that fits.
+ static const drmModeModeInfo *find_mode( const drmModeConnector *connector, int hdisplay, int vdisplay, uint32_t vrefresh )
+ {
++	const drmModeModeInfo *best = nullptr;
++
+ 	for (int i = 0; i < connector->count_modes; i++) {
+ 		const drmModeModeInfo *mode = &connector->modes[i];
+ 
+@@ -997,10 +1005,14 @@
+ 		if (vrefresh != 0 && vrefresh != mode->vrefresh)
+ 			continue;
+ 
+-		return mode;
++		if (vrefresh == 0)
++			return mode;
++
++		if (!best || gamescope::GetModeRefresh( mode ) > gamescope::GetModeRefresh( best ))
++			best = mode;
+ 	}
+ 
+-	return NULL;
++	return best;
+ }
+ 
+ static std::unordered_map<std::string, int> parse_connector_priorities(const char *str)
+-- 
+2.47.3

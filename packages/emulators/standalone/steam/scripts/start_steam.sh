@@ -138,17 +138,16 @@ steam_debug_print() {
 # needs no DRM master, so this works with the panel already handed over.
 #
 # The preferred mode's size and rounded rate, 1280x960 and 120. Several modes
-# round to 120; gamescope (its patch 0007) takes the one whose exact rate is
-# closest to what -r asks for, which is the panel's 120.000 Hz mode, there
-# for Steam: timer-paced PC games make 60.000 frames a second, and at the
-# preferred 119.88 gamescope would drop one of them about every 17 seconds.
+# round to 120; gamescope (its patch 0007) takes the fastest of them, the
+# panel's 120.198 Hz mode, the one every game runs variable refresh on.
 # gamescope runs with --adaptive-sync, variable refresh as for every game,
 # and --framerate-limit 60: a game never runs faster than 60 fps, so the
 # kernel shows every frame twice or more (documentation/VARIABLE_REFRESH.md)
 # and no game lands between 60.7 and 70 fps, where a frame is too fast to
 # show twice and too slow to reach the panel before it refreshes on its
-# own. Doubled on 120.000, a 60.000 game's late frame still has the room
-# to the 70 Hz floor, about 6 ms.
+# own. Two refreshes of 120.198 are 27 us short of a 60.000 fps game's
+# frame, which is what lets a late frame's offset drain; on 120.000 they
+# would be its period exactly and the offset would stay.
 steam_read_panel_geometry() {
   eval "$(/usr/bin/modetest -M msm -c 2>/dev/null | awk '
     /^[[:space:]]*#[0-9]+[[:space:]]/ && /preferred/ {
