@@ -797,6 +797,18 @@ Measured 2026-10-08 through runemu, flip traces:
 | Super Mario World, 30 s | 3606, every frame twice | 8.42 ms | `VRR_ENABLED` 0 before, 1 while running, 0 after exit |
 | Tekken 3 with `global.vrr=0` | - | - | a `VRR_ENABLED` left on was turned off; 119.652 Hz mode |
 
+## The launcher
+
+portarelauncher runs variable refresh too, on the fastest mode, and flips
+its one buffer 60 times a second whenever the panel is on and its own: each
+flip is a frame for the kernel, which shows it twice, and nothing new for
+the panel. Without the flips a variable refresh panel with nothing coming
+falls to its floor, and a static screen at 65 Hz is the one case the
+flicker tests above did not cover. Measured 2026-10-17 with a build from
+the launcher's tree: 119.9 Hz, refreshes 8.320 ms apart, 60 flips a second
+every one doubled, 1% of a core, and the mode set at start (111 ms) the
+only gap.
+
 ## Steam
 
 Steam's gamescope runs with `--adaptive-sync --framerate-limit 60`: it
