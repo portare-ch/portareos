@@ -15,7 +15,7 @@ host's AVR support bit, the way downstream switches Qsync. AVR runs in
 continuous mode: one-shot, downstream's default, never became active on
 SM8550.
 
-The Nova's panel declares 60 Hz up to its fastest mode, 120.198 Hz,
+The Nova's panel declares 70 Hz up to its fastest mode, 120.198 Hz,
 rounded up to 121. Measured: frames of 8.3 to 11.1 ms changing every
 frame, without flicker at 5% backlight.
 ---
@@ -370,13 +370,13 @@ frame, without flicker at 5% backlight.
  	.modes = il97680a_rpnova_modes,
  	.num_modes = ARRAY_SIZE(il97680a_rpnova_modes),
 +	/*
-+	 * A frame is held at most about one refresh past the fastest. LFC
-+	 * repeats every frame up to 60.7 Hz; a faster one is shown once and
-+	 * fits from about 63 Hz, where it reaches the plane in time before the
-+	 * floor runs out. On 80 that was about 86 Hz. On 50 the panel tore now
-+	 * and then with frames held 8 to 12 ms.
++	 * The lowest floor whose longest hold the panel showed without tears:
++	 * 71 fps shown once for 120 s, each frame 5.8 ms past the fastest
++	 * refresh. On 60 the same test (61 fps, 8.1 ms) tore a few times, on
++	 * 50 (61 fps) three times a minute. LFC repeats every frame up to 60.7
++	 * Hz; 60.7 to 70 fits neither way, and above it a frame is shown once.
 +	 */
-+	.vrr_min_hz = 60,
++	.vrr_min_hz = 70,
  	.width_mm = 91,
  	.height_mm = 68,
  	.bpc = 8,

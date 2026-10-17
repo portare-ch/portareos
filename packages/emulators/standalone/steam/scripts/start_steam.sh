@@ -142,10 +142,13 @@ steam_debug_print() {
 # closest to what -r asks for, which is the panel's 120.000 Hz mode, there
 # for Steam: timer-paced PC games make 60.000 frames a second, and at the
 # preferred 119.88 gamescope would drop one of them about every 17 seconds.
-# gamescope runs with --adaptive-sync, variable refresh as for every game
-# (documentation/VARIABLE_REFRESH.md), and 120.000 then shows a 60.000 game
-# twice a frame with no room to spare; the fastest mode, 120.198, would
-# have some, but -r takes whole hertz.
+# gamescope runs with --adaptive-sync, variable refresh as for every game,
+# and --framerate-limit 60: a game never runs faster than 60 fps, so the
+# kernel shows every frame twice or more (documentation/VARIABLE_REFRESH.md)
+# and no game lands between 60.7 and 70 fps, where a frame is too fast to
+# show twice and too slow to reach the panel before it refreshes on its
+# own. Doubled on 120.000, a 60.000 game's late frame still has the room
+# to the 70 Hz floor, about 6 ms.
 steam_read_panel_geometry() {
   eval "$(/usr/bin/modetest -M msm -c 2>/dev/null | awk '
     /^[[:space:]]*#[0-9]+[[:space:]]/ && /preferred/ {
@@ -358,7 +361,7 @@ steam_launch_bigpicture() {
       rm -f "${steam_exit_code_file}"
       GAMESCOPE_MODE_SAVE_FILE="${gamescope_mode_file}" GAMESCOPE_FAKE_OUTPUT_MM="${FAKE_MM}" \
       env -u WAYLAND_DISPLAY LD_LIBRARY_PATH=/storage/.local/share/Steam/lib/aarch64-linux-gnu/ ${EMUPERF} \
-      gamescope $PREFER_OUTPUT -W "$W" -H "$H" -r "$REFRESH_HZ" --xwayland-count 2 --mangoapp --adaptive-sync --backend drm --force-orientation "${force_orientation}" -e -- \
+      gamescope $PREFER_OUTPUT -W "$W" -H "$H" -r "$REFRESH_HZ" --xwayland-count 2 --mangoapp --adaptive-sync --framerate-limit 60 --backend drm --force-orientation "${force_orientation}" -e -- \
       /bin/bash -c '
         exit_file="$1"
         shift
@@ -386,7 +389,7 @@ steam_launch_bigpicture() {
     steam_touch_calibration_begin "${force_orientation}"
     trap steam_touch_calibration_end EXIT
     GAMESCOPE_MODE_SAVE_FILE="${gamescope_mode_file}" GAMESCOPE_FAKE_OUTPUT_MM="${FAKE_MM}" env -u WAYLAND_DISPLAY ${EMUPERF} \
-      gamescope $PREFER_OUTPUT -W "$W" -H "$H" -r "$REFRESH_HZ" --xwayland-count 2 --adaptive-sync --backend drm --force-orientation "${force_orientation}" -- \
+      gamescope $PREFER_OUTPUT -W "$W" -H "$H" -r "$REFRESH_HZ" --xwayland-count 2 --adaptive-sync --framerate-limit 60 --backend drm --force-orientation "${force_orientation}" -- \
       FEX /usr/bin/steam -nobigpicture -noverifyfiles -nobootstrapupdate -skipinitialbootstrap -norepairfiles -noshaders ${game_uri:+"$game_uri"}
     steam_touch_calibration_end
     trap - EXIT

@@ -407,9 +407,9 @@ Read the count of untraced vblanks and unmatched events before trusting the
 result. PASS/FAIL lines cover repeat buffers, cadence or rate, available
 presentation records, MangoHud data and CRCs. Optional data that is absent
 cannot be checked. Exit status is 1 when checks fail or no frames are found;
-0 means the checks that ran passed. `--floor-hz 80` or `90` is for captures
-on the older floors; `--refresh-ms` sets the shortest refresh when the base
-mode differs.
+0 means the checks that ran passed. `--floor-hz 60`, `80` or `90` is for
+captures on the older floors; `--refresh-ms` sets the shortest refresh when
+the base mode differs.
 
 If capture aborts before cleanup, stop the remaining probe, disable the three
 events it enabled and restart the launcher on the Nova before another measurement:
