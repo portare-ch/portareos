@@ -5,6 +5,36 @@ the panel blanked, and suspended. Measured on 2026-10-03, build `6f8d1b3`, on
 battery (the gauge reads 0 on a charger), with `idle-probe` and the battery's
 charge counter. #496 holds the discussion.
 
+## Suspend changes awaiting a Nova run (2026-10-18)
+
+Patches 1114-1124 adapt the merged Armada sleep fixes
+([#746](https://github.com/armada-os/armada/pull/746),
+[#723](https://github.com/armada-os/armada/pull/723)):
+
+- PCIe controller and PHY GDSCs can turn off instead of staying in
+  retention. The old suspend OPP floor and its diagnostic switches
+  (1048, 1049, 1086, 1089) are removed together. Armada found that the
+  powered controllers required the NoC bandwidth vote that blocked DDR
+  self-refresh; powering them off removes that requirement.
+- The board I2S clock is released across suspend even with a PCM open.
+  LPASS macro clocks follow runtime PM, and system sleep forces the
+  macros, SoundWire controllers and their SM8550 LPI pinctrl supplier
+  through runtime suspend. These release audio votes beyond the
+  AudioReach graph teardown already in 1057.
+
+Linux 7.2.11 validation: all 121 production patches apply in order; all
+nine affected driver objects and the Nova DTB compile with `W=1` without
+warnings. All 27 required kernel options survive `olddefconfig`; the
+config gate rejects a deliberately disabled `PM_CLK`.
+
+The results below predate these changes. They do not establish whether
+the Nova now resumes without the floor or reaches CX/DDR low-power states.
+Validate through `systemctl suspend`, with an RTC alarm and the sleep
+hooks running: compare `boot_id`, suspend failures, the sleep ledger and
+`qcom_stats`, then check Wi-Fi and speaker/headphone audio after wake.
+Include an open playback PCM at suspend, charger attach while asleep,
+repeated short cycles and an overnight battery run.
+
 ## Summary
 
 | State | Draw |
@@ -13,8 +43,8 @@ charge counter. #496 holds the discussion.
 | Suspended (s2idle) | 54-200 mA, about 60-80 mA overnight |
 
 Suspend saves between a quarter and three quarters, and the CPU settings below
-change nothing measurable. The SoC never reaches its system-level low-power states, awake or
-suspended, and that, not the CPUs, is where the draw is. See "The SoC never
+change nothing measurable. In these measurements the SoC never reaches its
+system-level low-power states, awake or suspended. See "The SoC never
 sleeps".
 
 ## CPU settings: no measurable effect
@@ -107,15 +137,15 @@ pending lines are gone, but nothing changed measurably: 1.015 W idle with the
 panel blanked, and 80 mA over a 10-minute suspend, within the old spread.
 `cxsd`, `aosd` and `ddr` stay 0.
 
-The one known vote that holds the platform up in suspend is deliberate. With
-the Wi-Fi link in D3cold, kernel patches 1048 and 1049 set the PCIe
+The measured builds deliberately kept a vote that held the platform up in
+suspend. With the Wi-Fi link in D3cold, kernel patches 1048 and 1049 set the PCIe
 controller's suspend OPP through s2idle: a 250 MB/s DDR and LLCC bandwidth
 vote, and a request for `low_svs` on CX. Without that vote the firmware never
 returned from `cluster_sleep_1` on the AYN Thor and the Retroid Pocket 6.
 The Nova is no different. With the vote dropped (`pcie_qcom.suspend_floor=N`,
-kernel patch 1086) it restarted by itself instead of resuming, so the floor
-stays and CX and DDR collapse in s2idle is out of reach with this firmware
-(#505). The switch is runtime-only, so the restart brings the floor back.
+kernel patch 1086) it restarted by itself instead of resuming, so those builds
+retained the floor (#505). The switch was runtime-only, so the restart brought
+the floor back. The 2026-10-18 changes above replace this workaround.
 
 Awake, the CPU subsystem itself never reaches its system-level idle (`apss`
 stays 0), so the platform cannot collapse whatever the votes.

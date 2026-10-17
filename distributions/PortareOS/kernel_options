@@ -83,3 +83,11 @@ CONFIG_ATH_REG_DYNAMIC_USER_REG_HINTS=y
 # The kernel's LFC (patch 1107) kicks every repeat of a slow frame from an
 # hrtimer; at tick resolution a repeat would come up to a tick late.
 CONFIG_HIGH_RES_TIMERS=y
+# LPASS clock release across system sleep (patches 1115-1124).
+CONFIG_PM_CLK=y
+CONFIG_SND_SOC_SC8280XP=m
+CONFIG_SND_SOC_LPASS_VA_MACRO=m
+CONFIG_SND_SOC_LPASS_RX_MACRO=m
+CONFIG_SND_SOC_LPASS_TX_MACRO=m
+CONFIG_SOUNDWIRE_QCOM=m
+CONFIG_PINCTRL_SM8550_LPASS_LPI=m
