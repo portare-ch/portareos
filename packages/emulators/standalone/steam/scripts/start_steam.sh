@@ -141,7 +141,8 @@ steam_debug_print() {
 # round to 120; gamescope (its patch 0007) takes the fastest of them, the
 # panel's 120.198 Hz mode, the one every game runs variable refresh on.
 # gamescope runs with --adaptive-sync, variable refresh as for every game,
-# and --framerate-limit 60: a game never runs faster than 60 fps, so the
+# and --framerate-limit 60, a ceiling Steam's own setting cannot lift
+# (gamescope patch 0008): a game never runs faster than 60 fps, so the
 # kernel shows every frame twice or more (documentation/VARIABLE_REFRESH.md)
 # and no game lands between 60.7 and 70 fps, where a frame is too fast to
 # show twice and too slow to reach the panel before it refreshes on its

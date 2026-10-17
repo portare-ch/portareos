@@ -825,8 +825,10 @@ and 20.03 fps, for every client: 40.2 fps is shown three times with a
 refresh short 24 times a minute (#651).
 
 The limit is gamescope's, the one of master (#650) whose variable refresh
-limiter keeps its schedule; Steam's own frame rate setting writes the same
-property and overrides it for the session. Not measured yet: a real game
+limiter keeps its schedule, and its patch 0008 makes the command line's
+limit a ceiling: Steam's own frame rate setting and the refresh cycle
+override lower it, never lift it, where before the first focus change
+replaced it with the override, 0 without one. Not measured yet: a real game
 on the final kernel and gamescope.
 
 ## The panel's porches
