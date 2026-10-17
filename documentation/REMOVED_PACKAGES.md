@@ -2,8 +2,8 @@
 
 The device serves a fixed list of systems, and the emulator picked for each
 one is the table in the README's "One emulator per system". Everything below
-was removed because it served a system that is not on that list, or because
-it duplicated the emulator that was already the default.
+was removed because it served a system that is not on that list, duplicated
+the default emulator, or supported a runtime the device no longer uses.
 
 This was `.upstream-ignore`, the list of packages the upstream import tool
 was told never to bring back. Neither survives: the fork does not track
@@ -33,6 +33,7 @@ trimmed out of the image, with sizes.
 | `bsnes-lr` | Replaced Snes9x for the SNES in #520 for its accuracy, with patches for the exact NTSC rate, the DSP's 32040 Hz and accurate defaults. A tester measured the cost: severe frame drops in Yoshi's Island's intro with one run-ahead frame, and the battery going with it, for an accuracy difference nobody noticed in play. Snes9x is back with its exact-rate patch; `sufami` stays gone. |
 | `beetle-saturn-lr` | Replaced for the Saturn by `ymir-lr`: Ymir is more accurate, and it runs the VDPs and the SCSP on their own threads where Beetle Saturn ran the console on one, which on this device was the difference a tester saw in Grandia. Ymir is also the one Saturn emulator with a GPU renderer in the making. |
 | `nestopia-lr` | Replaced for NES, Famicom and FDS by `mesence-lr`, the nesdev community's Mesen. It is more accurate, and the NES is cheap enough that the accuracy costs nothing that matters here. |
+| `gpsp-lr` | Unused alternative to `mgba-lr`. GBA, GBA Hacks and GBA Video all use mGBA. |
 | `skyemu-sa`, `nanoboyadvance-sa`, `hatarisa` | Alternatives nobody defaulted to, all covered by the retroarch core that was already the default. skyemu also remains as `skyemu-lr`. |
 | `sndio` | The only thing that pulled it in was `touchhle-sa`. |
 | `vlc` | Only emulationstation ever linked it, and that is libmpv now. |
@@ -73,3 +74,19 @@ Libretro cores (78):
 |---|---|
 | `gamepadcalibration` | GPcal, stick and trigger calibration in Python drawn with pyxel, under Tools. The one stick problem found on the Nova was the MCU's deadband, not calibration, and a calibration tool would be a launcher screen writing the same rsinput parameters. One saved before still applies at boot from `/storage/.config/autostart/GPcal.sh`. |
 | `pyxel` | GPcal's UI library, and GPcal its only user. Its upstream (github.com/kitao) disappeared on 2026-10-09 and took the wheel's URL with it. |
+
+## Unused package recipes
+
+These 30 recipes, plus `gpsp-lr` above, were removed from `packages/` with
+their patches and support files. None was selected by either the official
+or unofficial SM8550 build, including the CI LLVM builds and source-unpack
+dependencies. Removing them leaves both build plans unchanged.
+
+| Removed | Why |
+|---|---|
+| `mako-notify`, `mako-osd` | Require a Wayland compositor; they cannot draw over the launcher's or an emulator's direct KMS output. |
+| `bemenu`, `fcft`, `foot`, `sway`, `swaybg`, `tllist`, `waylandpp`, `wl`, `wlr-randr`, `wlroots` | The former Sway desktop and its unused dependencies. Gamescope keeps its Wayland dependencies and bundled wlroots. |
+| `at-spi2-atk`, `at-spi2-core`, `atk`, `gdk-pixbuf`, `gtk2`, `gtk3`, `mesa-demos`, `wxwidgets` | Unused GTK frontends, libraries and demos. |
+| `common-shaders`, `glsl-shaders`, `retroarch-overlays`, `retropie-shaders` | Already excluded from the image; RetroArch uses the retained `slang-shaders` package. |
+| `batteryplus`, `btop`, `entware`, `texturecache.py`, `wait-time-sync` | Legacy tools with no build-plan users. |
+| `vulkan-wsi-layer` | Unused Vulkan WSI layer; Mesa supplies the device's Vulkan drivers. |
