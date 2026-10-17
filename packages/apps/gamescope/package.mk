@@ -2,7 +2,7 @@
 # Copyright (C) 2026-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="gamescope"
-PKG_VERSION="fa0b4d3342078f01eadff0193e09c3b561f40c03"
+PKG_VERSION="2b5cf191d1047d6895516a834de8a72ac1c342f3"
 PKG_GIT_CLONE_BRANCH="master"
 PKG_LICENSE="BSD-2-Clause"
 PKG_SITE="https://github.com/ValveSoftware/gamescope"
@@ -26,6 +26,7 @@ PKG_MESON_OPTS_TARGET="-Ddrm_backend=enabled \
                        -Dinput_emulation=disabled \
                        -Drt_cap=enabled \
                        -Denable_tests=false \
+                       -Denable_zenity=false \
                        -Dsdl2_backend=enabled"
 
 pre_configure_target() {
