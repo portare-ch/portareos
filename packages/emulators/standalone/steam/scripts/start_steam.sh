@@ -146,8 +146,9 @@ steam_debug_print() {
 # and no game lands between 60.7 and 70 fps, where a frame is too fast to
 # show twice and too slow to reach the panel before it refreshes on its
 # own. Two refreshes of 120.198 are 27 us short of a 60.000 fps game's
-# frame, which is what lets a late frame's offset drain; on 120.000 they
-# would be its period exactly and the offset would stay.
+# frame, so the panel waits for every commit and scans 0.46 ms after it;
+# on 120.000 they are the frame exactly, and the panel stays wherever the
+# last late frame left it, up to a refresh of latency.
 steam_read_panel_geometry() {
   eval "$(/usr/bin/modetest -M msm -c 2>/dev/null | awk '
     /^[[:space:]]*#[0-9]+[[:space:]]/ && /preferred/ {

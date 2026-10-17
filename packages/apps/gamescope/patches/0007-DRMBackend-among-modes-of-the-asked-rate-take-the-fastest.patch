@@ -10,11 +10,13 @@ fastest. Asking for no rate is unchanged.
 
 The Retroid Pocket Nova lists 119.880, 120.000, 120.198 and others that
 all round to 120. gamescope runs with adaptive sync, and the kernel shows
-a 60 fps game twice a frame: on 120.000 that is exactly the game's
-period, so a late frame shifts every frame after it and nothing pulls
-them back; on 120.198 each frame gives 27 us back and the shift drains.
-The closest-to-the-whole-number choice this replaces was for a fixed
-refresh, where 119.880 dropped a 60.000 fps game's frame every 17 s.
+a 60 fps game twice a frame. On 120.198 two refreshes are 27 us short of
+a 60.000 fps frame, so the panel waits for every commit and starts the
+scan 0.46 ms after it. On 120.000 they are the frame exactly: the panel
+stays wherever the last late frame left it, up to a refresh of latency
+that nothing drains. The closest-to-the-whole-number choice this
+replaces was for a fixed refresh, where 119.880 dropped a 60.000 fps
+game's frame every 17 s.
 ---
  src/Backends/DRMBackend.cpp | 16 ++++++++++++++--
  1 file changed, 14 insertions(+), 2 deletions(-)

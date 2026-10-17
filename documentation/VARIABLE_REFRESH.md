@@ -809,11 +809,17 @@ band that fits neither way, 60.7 to 70 fps:
 
 Steam's gamescope asks for `-r 120` and its patch 0007 takes the fastest
 mode that rounds to it, 120.198 Hz, the mode every game runs variable
-refresh on. The exact rate matters to a 60.000 fps game shown twice: two
-refreshes of 120.198 are 27 us short of its frame, so after a late frame
-the panel's phase drains back at that rate, 1.6 ms a second; on 120.000,
-where two refreshes are exactly its frame, every late frame would shift
-the phase for good, latency that only grows. The same R/50 slack takes a count
+refresh on. The exact rate matters to a 60.000 fps game shown twice,
+measured with present-probe on both modes, 2026-10-17: two refreshes of
+120.198 are 27 us short of its frame, so the panel waits for every
+commit and starts the scan 0.46 ms after it (median; min 0.20), every
+frame, without a hitch when the slack runs out. On 120.000 two refreshes
+are the frame exactly: the panel locks to the game at whatever offset
+the first frame set, 5.4 ms in one run, and an 8 ms late frame moves it
+to wherever it lands, 1.8, 7.6, 1.5, 7.3 ms in turn, latency that
+nothing drains. A late frame itself scans about 3 ms after its commit on
+either mode, against 0.46 for one on time; the kernel's part in that is
+not understood. The same R/50 slack takes a count
 that needs more than the fastest refresh just above 40.07, 30.05, 24.04
 and 20.03 fps, for every client: 40.2 fps is shown three times with a
 refresh short 24 times a minute (#651).
