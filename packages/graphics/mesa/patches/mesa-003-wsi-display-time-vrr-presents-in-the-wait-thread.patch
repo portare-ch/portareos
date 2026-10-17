@@ -14,6 +14,9 @@ target, and let the wait thread, which now polls the timer beside the DRM
 fd, queue it when the timer fires, as the FRR branch does after a vblank
 event. A target under 0.2 ms away still sleeps.
 
+Only consume a held image when the timer read reports an expiration:
+swapchain teardown can cancel or rearm it after poll has returned.
+
 Measured on SM8550 (Retroid Pocket Nova), VRR on, 50 Hz frames presented
 twice with VK_GOOGLE_display_timing: vkQueuePresentKHR blocked a median
 9.48 ms before and 0.04 ms after (max 0.31 ms). Presents reached the
@@ -60,7 +63,7 @@ Signed-off-by: PortareOS <hello@portare.org>
     _wsi_display_cleanup_state(chain);
  
     for (uint32_t i = 0; i < chain->base.image_count; i++)
-@@ -2118,21 +2134,45 @@
+@@ -2118,21 +2134,49 @@
     .sequence_handler = wsi_display_sequence_handler,
  };
  
@@ -73,7 +76,11 @@ Signed-off-by: PortareOS <hello@portare.org>
 +   struct wsi_display_image *image = wsi->timer_image;
 +   uint64_t expirations;
 +
-+   (void) read(wsi->timer_fd, &expirations, sizeof(expirations));
++   /* poll() may have returned before swapchain teardown cancelled or rearmed
++    * this timer. Only release the current image for an actual expiration.
++    */
++   if (read(wsi->timer_fd, &expirations, sizeof(expirations)) != sizeof(expirations))
++      return;
 +   wsi->timer_image = NULL;
 +
 +   if (image && image->state == WSI_IMAGE_WAITING && !image->fence) {
@@ -111,7 +118,7 @@ Signed-off-by: PortareOS <hello@portare.org>
           u_cnd_monotonic_broadcast(&wsi->wait_cond);
           mtx_unlock(&wsi->wait_mutex);
        }
-@@ -2144,6 +2184,8 @@
+@@ -2144,6 +2188,8 @@
  wsi_display_start_wait_thread(struct wsi_display *wsi)
  {
     if (!wsi->wait_thread) {
@@ -120,7 +127,7 @@ Signed-off-by: PortareOS <hello@portare.org>
        int ret = pthread_create(&wsi->wait_thread, NULL,
                                 wsi_display_wait_thread, wsi);
        if (ret)
-@@ -3212,6 +3254,26 @@
+@@ -3212,6 +3258,26 @@
               * times in the past. */
              target_ns -= 1 * 1000 * 1000;
  
@@ -147,7 +154,7 @@ Signed-off-by: PortareOS <hello@portare.org>
              os_time_nanosleep_until(target_ns);
           }
        }
-@@ -3734,6 +3796,8 @@
+@@ -3734,6 +3800,8 @@
  
     list_inithead(&wsi->connectors);
  
@@ -156,7 +163,7 @@ Signed-off-by: PortareOS <hello@portare.org>
     int ret = mtx_init(&wsi->wait_mutex, mtx_plain);
     if (ret != thrd_success) {
        result = VK_ERROR_OUT_OF_HOST_MEMORY;
-@@ -3794,6 +3858,8 @@
+@@ -3794,6 +3862,8 @@
           wsi_display_free_connector(wsi, connector);
  
        wsi_display_stop_wait_thread(wsi);
