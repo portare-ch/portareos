@@ -2,7 +2,7 @@
 # Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
 
 PKG_NAME="ymir-lr"
-PKG_VERSION="f688221babc44761ab8c070d5e04fe2f0b77bb76"
+PKG_VERSION="25cd2c2d2bf994d43872e2b3776cd4cf7912387e" # v0.4.0
 PKG_LICENSE="GPL-3.0-only"
 PKG_SITE="https://github.com/ymir-emu/Ymir"
 PKG_URL="${PKG_SITE}.git"
@@ -13,8 +13,10 @@ PKG_BUILD_FLAGS="speed"
 
 # The libretro core is not upstream's: Ymir declined one (ymir-emu/Ymir#746),
 # so patch 001 carries libretro's own wrapper (git.libretro.com/libretro/emir,
-# branch libretro), rebased onto the pinned upstream commit. A bump is a pin
-# move and a rebase of that patch.
+# branch libretro), rebased onto the pinned upstream commit. The pin is a
+# release by its commit, and the comment on PKG_VERSION is how
+# tools/bump-emulator-pins knows to follow releases rather than the branch.
+# A bump is a pin move and a rebase of that patch.
 #
 # No Vulkan: with the sysroot's Vulkan found, CMake makes the GPU backend's
 # shaders mandatory and wants DXC to compile them to SPIR-V, which the

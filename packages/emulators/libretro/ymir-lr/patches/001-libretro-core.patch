@@ -25,9 +25,9 @@ rebased here onto the pinned commit, with the two API moves since
 +    set(Ymir_LIBRARY_ONLY ON)
 +endif ()
 +
- ## Feature flags
- ## If ON, all feature flags will be enabled by default
- ## All feature flags can be selectively overridden
+ ## Version and build info
+ if (DEFINED Ymir_VERSION_PRERELEASE AND NOT Ymir_VERSION_PRERELEASE STREQUAL "")
+     set(Ymir_VERSION "${Ymir_VERSION}-${Ymir_VERSION_PRERELEASE}")
 @@ -127,6 +134,13 @@ else ()
      message(STATUS "IPO / LTO not supported: ${IPO_ERROR}")
  endif ()
