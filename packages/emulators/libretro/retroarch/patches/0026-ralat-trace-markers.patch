@@ -1,0 +1,51 @@
+One trace marker per frame at the input poll and the video callback
+
+With RALAT set, RetroArch writes "ralat poll" when it polls the pad and
+"ralat video" when the core hands it the frame, to the kernel's trace
+marker. A trace of vblanks, flips and Mesa's commit markers then gives
+read to first line per frame (documentation/LATENCY.md). Unset, it is
+one getenv and a branch per call. runemu sets it from portareos.ralat.
+
+--- a/input/input_driver.c
++++ b/input/input_driver.c
+@@ -7675,11 +7675,29 @@
+       for (i = 0; i < 9; i++)
+          memcpy(&dst[i / 3][i % 3], &v[i], sizeof(float));
+       return;
++   }
++}
++
++/* ralat: one trace marker per frame at the input poll and at the video
++ * callback, when RALAT is set, so a kernel trace of flips and vblanks
++ * can be paired with the poll each frame was emulated from. Test only. */
++#include <fcntl.h>
++#include <unistd.h>
++void ralat_mark(const char *s)
++{
++   static int fd = -2;
++   if (fd == -2)
++      fd = getenv("RALAT") ? open("/sys/kernel/tracing/trace_marker", O_WRONLY) : -1;
++   if (fd >= 0)
++   {
++      ssize_t n = write(fd, s, strlen(s));
++      (void)n;
+    }
+ }
+ 
+ void input_driver_poll(void)
+ {
++   ralat_mark("ralat poll\n");
+    size_t i, j;
+    rarch_joypad_info_t joypad_info[MAX_USERS];
+    input_driver_state_t *input_st = &input_driver_st;
+--- a/gfx/video_driver.c
++++ b/gfx/video_driver.c
+@@ -6027,6 +6027,8 @@
+ void video_driver_frame(const void *data, unsigned width,
+       unsigned height, size_t pitch)
+ {
++   { extern void ralat_mark(const char *s); ralat_mark("ralat video\n"); }
++
+    char status_text[256];
+    settings_t *settings = config_get_ptr();
+    static char video_driver_msg[256];
