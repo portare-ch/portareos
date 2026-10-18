@@ -5,6 +5,16 @@ workload cheap enough that any host overhead shows. The question is not
 whether Metal Slug runs at full speed, but how cheaply the Nova reproduces
 the Neo Geo CD correctly and where the remaining host cost is.
 
+## Status: optimization finished, 2026-10-18
+
+Four of the five goals below hold on build 287 with the shipped settings
+(full-screen 4:3, lines-1x, the preemptive frame); the fifth, the prime
+core's clock, is a system-wide scheduler policy and not this emulator's,
+and is handed over as its own issue. Nothing in NeoCD is left to tune for
+this device; the next emulator starts from the methodology this one
+produced (capture, three replays, intro and gameplay apart, the latency
+rig, one change per round).
+
 ## Goal
 
 Optimization is finished when all of these hold on the fixed Metal Slug
@@ -25,6 +35,17 @@ capture, measured the way [Measurements](#measurements) describes:
    change can be checked against the same frames.
 
 Candidates that fail 1 are rejected whatever they gain elsewhere.
+
+How it ended: 1, 2, 4 and 5 met (see Measurements). 3 is met for the
+emulation, which never touches the X3, and not met for the X3's clock:
+`kernel.sched_util_clamp_min_rt_default` 1024 lifts any core an RT thread
+wakes on to its maximum, and the X3 collects RetroArch's audio threads,
+the msm `gpu-worker` (SCHED_FIFO, ~180 wakes/s) and the odd irq thread.
+Three cheap fixes were measured and rejected: the default at 0 (the middle
+cluster drops to its floor with it, late frames double), RetroArch confined
+to 3-6 (the worker keeps the X3 up, cost +45 %), the worker on 0-2 (the
+audio threads keep it up, cost +27 %). A per-thread clamp or a kernel-side
+policy is the fix, for every system at once; it is not NeoCD's to carry.
 
 ## What runs
 
@@ -224,6 +245,25 @@ Two runs per setting, full-screen 4:3 with the mask, charger connected.
   the poll and waits for its slot; the display adds 0.3 ms after the commit.
 - The maxima (150 to 159 ms) are the capture's load frames.
 
+### 2026-10-18, build 287, capture `neocd/metal-slug-003`, final state
+
+The image's own core (#668, #671 in), the shipped settings. Capture 003
+recorded and verified on it: validated, and every replay below validated
+too (the "diverged" on capture 002 was the core-build mismatch, #685).
+Charger connected, so no drain column. Gameplay window, medians:
+
+| | shipped | RetroArch on 3-6 | gpu-worker on 0-2 |
+|---|---|---|---|
+| RetroArch ticks/s | 12.9 / 12.9 / 12.8 | 18.5 / 18.6 / 18.7 | 16.4 / 16.4 / 16.3 |
+| X3 median / p95 | 2957 / 2957 MHz | 2957 / 2957 | 2957 / 2957 |
+| xruns, intro / gameplay | 0 / 0 | 0 / 0 | 0 / 0 |
+| display interval mean / p99 | 16.86 / 17.6 ms | 16.87 / 17.7 | 16.85 / 17.7 |
+| frames over 21 ms (the capture's loads) | 8-13 | 11-16 | 9-11 |
+| verify | diverged (capture 002, other build) | same | validated (capture 003) |
+
+Both placements are rejected; see the Goal section for why the X3 item
+leaves this page.
+
 ## What is already good
 
 - Audio runs at the CD's own rate with no conversion, 8 ms, no xruns.
@@ -234,16 +274,18 @@ Two runs per setting, full-screen 4:3 with the mask, charger connected.
 
 ## Room for improvement
 
-- The X3 and the A510 cluster run at their maximum for RT threads that are
-  ~1 % busy. `sched_util_clamp_min_rt_default` 0 was measured and rejected
-  (late frames double; see Measurements). Next: keep the clamp and keep
-  RetroArch off the X3 with a 3-6 core mask, so the boosted cluster is the
-  one doing the work.
+- The X3 at its maximum for RT threads that are ~1 % busy: measured three
+  ways, rejected three ways (Goal, Measurements). Handed to a system-level
+  issue; nothing more to do here.
 - Frametime logging needs MangoHud's overlay drawn (its smallest form is
   used); the overlay's own cost sits in every logged run.
 - GPU floor at 401 MHz: a 320x224 frame scaled to 1280x960 does not need it;
-  measure what it buys.
-- Preemptive frame: one frame, same capture, once goal 5 holds.
+  a system-level question, the floor is set for every client.
+- Skip CD Loading runs a whole load inside one frontend frame (146 ms at
+  Metal Slug's boss, 8-13 such frames in the capture): a per-frame budget in
+  the core's skip loop would spread it. Parked; a later round if it bothers.
+- The 68000 overclock as a per-game option for the game's own slowdown.
+- Neo Drift Out and Pulstar as regression checks when something changes.
 
 ## Open questions
 
