@@ -256,6 +256,11 @@ sed -i -e 's|^saturn\.shaderset=crt/crt-guest-advanced\.slangp$|saturn.shaderset
 sed -i -e 's|^neocd\.integerscale=1$|neocd.integerscale=0|' \
   /storage/.config/system/configs/system.cfg
 
+### Neo Geo CD's preemptive frame: the key is new, so an install from before
+### it has none. Added when absent; a chosen value stays.
+grep -q "^neocd\.preempt=" /storage/.config/system/configs/system.cfg ||
+    sed -i '$ a\neocd.preempt=1' /storage/.config/system/configs/system.cfg
+
 ### Neo Geo CD's scanlines (portare/lines-1x): the key is new, so an install
 ### from before it has none. Added when absent; a chosen value stays.
 grep -q "^neocd\.shaderset=" /storage/.config/system/configs/system.cfg ||
