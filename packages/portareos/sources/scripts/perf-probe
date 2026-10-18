@@ -17,7 +17,9 @@ LABEL="${1:?usage: perf-probe <label> [seconds]}"
 SECONDS_TO_RUN="${2:-60}"
 OUT="/storage/perf/${LABEL}"
 GPU="$(echo /sys/class/devfreq/*gpu* | cut -d' ' -f1)"
-BAT="$(echo /sys/class/power_supply/*/charge_now | cut -d' ' -f1)"; BAT="${BAT%/*}"
+# The Nova's battery (qcom-battmgr) reports charge_counter, not charge_now;
+# both are uAh remaining.
+CHARGE="$(ls /sys/class/power_supply/*/charge_now /sys/class/power_supply/*/charge_counter 2>/dev/null | head -1)"
 
 mkdir -p "${OUT}" || exit 1
 
@@ -67,7 +69,7 @@ while [ "$(date +%s)" -lt "${END}" ]; do
     "$(cat /sys/devices/system/cpu/cpufreq/policy7/scaling_cur_freq 2>/dev/null || cat /sys/devices/system/cpu/cpufreq/policy4/scaling_cur_freq 2>/dev/null)" \
     "$(cat "${GPU}"/cur_freq 2>/dev/null)" \
     "$(( $(cat /sys/class/thermal/thermal_zone*/temp 2>/dev/null | sort -n | tail -1) / 1000 ))" \
-    "$(cat "${BAT}/charge_now" 2>/dev/null)" \
+    "$(cat "${CHARGE}" 2>/dev/null)" \
     "${CPU_T}" \
     "$(pw-top -b -n 1 2>/dev/null | awk 'NR>1 {e+=$8} END {print e+0}')" \
     >> "${OUT}/samples.csv"
