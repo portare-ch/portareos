@@ -1,0 +1,21 @@
+# Scanlines only, over the console's own frame: crt-lines with its aperture
+# grille, glow and horizontal softness off, so only the beam remains. Chosen
+# for the Neo Geo CD on 2026-10-18 from seven candidates rendered at the
+# panel's pixels (documentation/emulators/NeoCD.md): gaps near 35 % in dark
+# colours, the boost brings the average back. The console's 224 lines land
+# on 960 rows, 4.29 each, and the beam is drawn per line at sub-pixel
+# positions, so no fixed-row pattern beats against the scale.
+shaders = 1
+
+shader0 = crt-lines.slang
+scale_type0 = viewport
+filter_linear0 = false
+
+parameters = "UPSCALE;MASK;GLOW;SOFT;BEAM_MIN;BEAM_MAX;BOOST"
+UPSCALE = "1.000000"
+MASK = "0.000000"
+GLOW = "0.000000"
+SOFT = "0.000000"
+BEAM_MIN = "0.260000"
+BEAM_MAX = "0.380000"
+BOOST = "1.250000"
