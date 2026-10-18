@@ -108,7 +108,7 @@ Candidates that fail 1 are rejected whatever they gain elsewhere.
 | `neocd.shaderset` | portare/lines-1x.slangp | Scanlines only; see Presentation. Its GPU time is in the latency path (LATENCY.md); measured in the next round. |
 | `neocd_region` | Japan | |
 | `audio_out_rate` | 44100 | See Audio. |
-| `neocd.preempt` | 0 | Offered in the launcher's Settings > Consoles (portarelauncher #56) since the core's states are deterministic (#667, #671); off until the one-frame A/B on the capture says what it costs. |
+| `neocd.preempt` | 1 | On by default (user, 2026-10-18) after the A/B: 0.5 ms more path and a third more CPU for the game's frame of lag, zero xruns, and the console's own pause and RetroArch's survive it in Metal Slug and Metal Slug 2. Settings > Consoles switches it (portarelauncher 0.8.3). |
 
 ## Measurements
 
