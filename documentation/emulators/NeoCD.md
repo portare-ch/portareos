@@ -58,6 +58,12 @@ Candidates that fail 1 are rejected whatever they gain elsewhere.
   draws a beam per console line at sub-pixel positions rather than darkening
   fixed rows. Integer 4x (1216x896, square pixels, a 32-row bar top and
   bottom) was the alternative; the faithful geometry won.
+- Scanlines, decided 2026-10-18: `portare/lines-1x.slangp`, crt-lines with
+  only the beam (no grille, glow or horizontal softness), beam 0.26 dark to
+  0.38 bright, boost 1.25. Seven candidates were rendered at the panel's
+  pixels from the same replay frame and viewed live; the user chose this one
+  over a wider-beam "mild" (too saturated: the boost clips highlights) and
+  prefers the dimmer picture. Lines only, no CRT filter, was the brief.
 - Open: a display trace of the fixed capture confirming 2x LFC with no late
   or single-refresh frames (goal 2). Not yet taken.
 
@@ -99,6 +105,7 @@ Candidates that fail 1 are rejected whatever they gain elsewhere.
 | `neocd_aspect_ratio` | 4:3 DAR | The tube's geometry; see Presentation. |
 | `neocd_overscan_h` | 8 (default) | The hardware's blanked columns; 0 showed them as black bands. |
 | `neocd.integerscale` | 0 | Full-screen 4:3. |
+| `neocd.shaderset` | portare/lines-1x.slangp | Scanlines only; see Presentation. Its GPU time is in the latency path (LATENCY.md); measured in the next round. |
 | `neocd_region` | Japan | |
 | `audio_out_rate` | 44100 | See Audio. |
 | `neocd.preempt` | 0 | Offered in the launcher's Settings > Consoles (portarelauncher #56) since the core's states are deterministic (#667, #671); off until the one-frame A/B on the capture says what it costs. |

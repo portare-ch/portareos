@@ -256,6 +256,11 @@ sed -i -e 's|^saturn\.shaderset=crt/crt-guest-advanced\.slangp$|saturn.shaderset
 sed -i -e 's|^neocd\.integerscale=1$|neocd.integerscale=0|' \
   /storage/.config/system/configs/system.cfg
 
+### Neo Geo CD's scanlines (portare/lines-1x): the key is new, so an install
+### from before it has none. Added when absent; a chosen value stays.
+grep -q "^neocd\.shaderset=" /storage/.config/system/configs/system.cfg ||
+    sed -i '$ a\neocd.shaderset=portare/lines-1x.slangp' /storage/.config/system/configs/system.cfg
+
 ### The same for Nestopia, which MesenCE (mesen2) replaced for the NES.
 sed -i -e '/^nes\(\[.*\]\)\?\.core=nestopia$/d' \
        -e '/^famicom\(\[.*\]\)\?\.core=nestopia$/d' \
