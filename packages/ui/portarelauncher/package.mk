@@ -2,8 +2,8 @@
 # Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
 
 PKG_NAME="portarelauncher"
-PKG_VERSION="0.8.1"
-PKG_SHA256="534c5c09e6586a182be725bcf82b5af83e26f9089b7cda9d149e024a10a519e2"
+PKG_VERSION="0.8.2"
+PKG_SHA256="f212587ec390fcabfd2ddbcd9f43082b1bb5187c572a0be51f0d6974c044b4d6"
 PKG_LICENSE="GPL-2.0"
 PKG_SITE="https://github.com/portare-ch/portarelauncher"
 # A release, not a commit: the tarball is made once by the launcher's release
@@ -17,9 +17,9 @@ PKG_TOOLCHAIN="make"
 # libdrm and libc, and that is the whole list. No GBM, EGL, Vulkan or Mesa -
 # a text screen on a black field is a dumb buffer and a memcpy, so the GPU
 # never leaves idle while the menu is up. The CHD decoder lives in ps-chd-id,
-# the helper the launcher runs to name a PS1, PS2 or PSP disc image; it is
-# built by the Makefile through CMake with the toolchain's $CMAKE, and links
-# only the libchdr it vendors.
+# the helper the launcher runs to name a PS1, PS2, PSP or Neo Geo CD disc
+# image; it is built by the Makefile through CMake with the toolchain's
+# $CMAKE, and links only the libchdr it vendors.
 
 # The default target also regenerates the PlayStation title tables from the
 # vendored PCSX2 index and libretro DATs, with Python and PyYAML. The tables
@@ -51,7 +51,8 @@ makeinstall_target() {
     # decoder are made from: the same files and names as the Makefile's
     # install-disc-titles, without its dependency on regenerating the tables.
     cp -a ${PKG_BUILD}/data/ps2-titles.tsv ${PKG_BUILD}/data/psx-titles.tsv \
-          ${PKG_BUILD}/data/psp-titles.tsv ${INSTALL}/usr/share/portarelauncher
+          ${PKG_BUILD}/data/psp-titles.tsv ${PKG_BUILD}/data/neocd-titles.tsv \
+          ${INSTALL}/usr/share/portarelauncher
   mkdir -p ${INSTALL}/usr/share/portarelauncher/notices
     cp -a ${PKG_BUILD}/third_party/libretro/NOTICE ${INSTALL}/usr/share/portarelauncher/notices/LIBRETRO-NOTICE.txt
     cp -a ${PKG_BUILD}/third_party/libretro/LICENSE ${INSTALL}/usr/share/portarelauncher/notices/LIBRETRO-LICENSE.txt
