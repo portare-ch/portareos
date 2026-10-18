@@ -348,6 +348,30 @@ case ${EMULATOR} in
     ${VERBOSE} && log $0 "Execute setsettings (${PLATFORM} ${ROMNAME} ${CORE} --controllers=${CONTROLLERCONFIG} --autosave=${AUTOSAVE} --snapshot=${SNAPSHOT})"
     (/usr/bin/setsettings.sh "${PLATFORM}" "${ROMNAME}" "${CORE}" --controllers="${CONTROLLERCONFIG}" --autosave="${AUTOSAVE}" --snapshot="${SNAPSHOT}" >${SET_SETTINGS_TMP})
 
+    ### Per-disc core options, keyed by the disc's serial and not its file
+    ### name: ps-chd-id reads it from the CHD (the launcher's own title
+    ### lookup). /usr/config/games/<system>/<serial>.opt ships with the
+    ### image, /storage/.config/games/... is the player's and wins. The
+    ### global core options file is copied with the override's keys
+    ### replaced, and RetroArch is pointed at the copy, so the global file
+    ### is never written for one game.
+    if [ "${ROMNAME##*.}" = "chd" ] && [ -x /usr/bin/ps-chd-id ]; then
+      DISC_SERIAL="$(/usr/bin/ps-chd-id "${ROMNAME}" 2>/dev/null)"
+      for d in /storage/.config/games /usr/config/games; do
+        GAME_OPTS_SRC="${d}/${PLATFORM}/${DISC_SERIAL}.opt"
+        [ -n "${DISC_SERIAL}" ] && [ -f "${GAME_OPTS_SRC}" ] || continue
+        GAME_OPTS="/tmp/retroarch-core-options.cfg"
+        awk -F' = ' 'NR == FNR { if ($0 !~ /^#/ && NF > 1) o[$1] = $0; next }
+                     ($1 in o) { print o[$1]; delete o[$1]; next }
+                     { print }
+                     END { for (k in o) print o[k] }' \
+          "${GAME_OPTS_SRC}" /storage/.config/retroarch/retroarch-core-options.cfg > "${GAME_OPTS}"
+        echo "core_options_path = \"${GAME_OPTS}\"" >> "${RETROARCH_APPEND_CONFIG}"
+        ${VERBOSE} && log $0 "Core options for ${DISC_SERIAL} from ${GAME_OPTS_SRC}"
+        break
+      done
+    fi
+
     ### Enable RetroArch Network Control for this session on dual-screen devices
     ### so the bottom-screen UI can forward save-state / load-state / resume commands.
     if [ "${DEVICE_HAS_DUAL_SCREEN}" = "true" ]; then

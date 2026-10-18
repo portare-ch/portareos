@@ -59,7 +59,9 @@ policy is the fix, for every system at once; it is not NeoCD's to carry.
   `savestate_features = "deterministic"` to NeoCD's info file (#667).
   Upstream's file predates the keys, and without them RetroArch and
   gamecapture refuse run-ahead, preemptive frames and captures.
-- Games are `.chd` only (#669); `nova-push` converts on the way in.
+- Games are `.chd` only (#669). Prepare them with PortareOS tools and
+  transfer the CHD with `nova-push neocd`; automatic conversion currently
+  recognizes the older `neogeocd` name. See [installation](../INSTALLATION.md).
 - Build: the toolchain passes `-O2 -flto -march=armv9-a+... -mtune=cortex-x3`;
   NeoCD's Makefile appends `-Ofast -DNDEBUG` and `USE_LTO=1` on its own, and
   the last `-O` wins. The effective build is `-Ofast` with LTO. Enabling LTO
@@ -122,7 +124,7 @@ policy is the fix, for every system at once; it is not NeoCD's to carry.
 | `neocd_bios` | `neocd_z.rom (CDZ)` (#663) | Boots the game itself, loads at double speed. Redundant once #668 is in. |
 | `neocd_loadskip` | On | Skips the CD load wait; does not change the game's behaviour. |
 | `neocd_cdspeedhack` | Off | Guest unchanged for measurements. |
-| `neocd_cpu_overclock` | 100% | Same. |
+| `neocd_cpu_overclock` | 100% | Same. One exception: Metal Slug 2 (disc serial `NGCD-00241`) runs at 150 % through a per-disc override, `/usr/config/games/neocd/NGCD-00241.opt`; its own slowdown is the engine's (SNK rewrote it as Metal Slug X) and its logic is vblank-paced, so only the overrun frames get faster. Keyed by the disc, not the file name. |
 | `neocd_aspect_ratio` | 4:3 DAR | The tube's geometry; see Presentation. |
 | `neocd_overscan_h` | 8 (default) | The hardware's blanked columns; 0 showed them as black bands. |
 | `neocd.integerscale` | 0 | Full-screen 4:3. |

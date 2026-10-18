@@ -25,5 +25,12 @@ Each file keeps these sections, leaving out what does not apply:
   rewrite.
 - **Open questions**.
 
+Per-disc core options: for a CHD game, runemu asks `ps-chd-id` for the
+disc's serial and, if `/usr/config/games/<system>/<serial>.opt` exists (or
+the player's copy under `/storage/.config/games/`), starts RetroArch on a
+copy of the global core options with those keys replaced. Keyed by the
+disc, never by the file name. The first one is Metal Slug 2's 68000 at
+150 % (`neocd/NGCD-00241.opt`).
+
 The core layout of the SoC that every mapping refers to is in
 [../CPU_ISOLATION.md](../CPU_ISOLATION.md).
