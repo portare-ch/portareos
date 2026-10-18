@@ -1,0 +1,52 @@
+Save states without host pointers
+
+The 68000 core struct and the Z80 registers are written whole, host
+pointers included: the two cycle tables, the callbacks, the daisy chain.
+Those are addresses in the saving process, so two processes saving the
+same machine wrote different states, and a replay's checkpoint could
+never match the state that reproduced it (RetroArch's replay verify
+reported a divergence at the cycle-table pointers with the game's RAM,
+video and audio identical). Restore already ignores them; save zeros.
+
+--- a/src/neogeocd.cpp
++++ b/src/neogeocd.cpp
+@@ -298,11 +298,35 @@
+     // these are the idle values.
+     HleBios::saveState(out);
+ 
+-    // M68K
+-    out << m68ki_cpu;
++    // M68K. The core struct carries host pointers: the two cycle tables
++    // and the callbacks. Their values are an address in this process, so
++    // two processes saving the same machine wrote different states, and a
++    // replay's checkpoint could never match the state that reproduced it.
++    // Restore ignores them anyway (below), so save them as nothing.
++    {
++        m68ki_cpu_core cpu = m68ki_cpu;
++        cpu.cyc_instruction = nullptr;
++        cpu.cyc_exception = nullptr;
++        cpu.int_ack_callback = nullptr;
++        cpu.bkpt_ack_callback = nullptr;
++        cpu.reset_instr_callback = nullptr;
++        cpu.cmpild_instr_callback = nullptr;
++        cpu.rte_instr_callback = nullptr;
++        cpu.tas_instr_callback = nullptr;
++        cpu.illg_instr_callback = nullptr;
++        cpu.pc_changed_callback = nullptr;
++        cpu.set_fc_callback = nullptr;
++        cpu.instr_hook_callback = nullptr;
++        out << cpu;
++    }
+ 
+-    // Z80
+-    out << Z80;
++    // Z80, the same for its daisy chain and interrupt callback.
++    {
++        Z80_Regs z80 = Z80;
++        z80.daisy = nullptr;
++        z80.irq_callback = nullptr;
++        out << z80;
++    }
+ 
+     // Timers
+     out << timers;
