@@ -100,7 +100,7 @@ Candidates that fail 1 are rejected whatever they gain elsewhere.
 | `neocd.integerscale` | 0 | Full-screen 4:3. |
 | `neocd_region` | Japan | |
 | `audio_out_rate` | 44100 | See Audio. |
-| run-ahead / preemptive frames | excluded (`NO_RUNAHEAD` in setsettings) | Predates #667; to be re-evaluated with the capture (goal 5 first). |
+| `neocd.preempt` | 0 | Offered in the launcher's Settings > Consoles (portarelauncher #56) since the core's states are deterministic (#667, #671); off until the one-frame A/B on the capture says what it costs. |
 
 ## Measurements
 
