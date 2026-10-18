@@ -148,6 +148,60 @@ replays through `gamecapture verify`, a perf-probe over each.
   duration ends, and the duration was longer than the run; being fixed), so
   application and display intervals are missing here.
 
+### 2026-10-18, build 20261018, capture `neocd/metal-slug-002`, three settings
+
+Capture 002 is the same scripted input recorded with the pointer-free core
+(#671); it verified with every checkpoint matched. These replays ran on the
+image's core from before #671, so verify reports "diverged" at the pointer
+bytes; the replays are deterministic (two end states identical but for
+those bytes). MangoHud logged with its smallest overlay shown (fps only),
+which the earlier baseline did not have. Gameplay window, three replays
+each, medians unless noted:
+
+| | aspect only | aspect + lines-1x | RT clamp 0 (aspect only) |
+|---|---|---|---|
+| RetroArch ticks/s | 12.9 / 12.9 / 13.0 | 12.8 / 12.9 / 13.1 | 43.6 / 44.3 / 43.8 |
+| main thread ticks/s | 9.8 / 9.7 / 9.8 | 9.6 / 9.8 / 10.0 | 31.8 / 32.4 / 31.9 |
+| X3 (policy7) | 2957 MHz | 2957 MHz | 595 MHz |
+| cores 3-6 (policy3) | 499-2803, swinging | 499-2803, swinging | 499 MHz |
+| GPU | 401 MHz, 1.0 % load | 401 MHz, 4.0 % load | 401 MHz, 1.0 % |
+| xruns, intro / gameplay | 0 / 0 | 0 / 0 | 0 / 0 |
+| display interval mean / p99 | 16.85 / 17.5-17.7 ms | 16.85 / 17.5 ms | 16.90 / 18.4-18.5 ms |
+| frames over 21 ms (the capture's loads) | 8-10 | 9-10 | 17-22 |
+| single-refresh frames | 7-8 | 7-8 | 14-22 |
+| present interval p99 | 19.3-19.4 ms | 19.3 ms | 21.4-21.6 ms |
+| `data-loop.0` sits on | cpu 7 | cpu 7 | cpu 4-5 |
+
+- **The shader costs nothing measurable in delivery.** GPU load 1 to 4 % at
+  the 401 MHz floor, about 0.5 ms a frame, with identical frame intervals,
+  late counts and CPU cost. The lag felt live is not in these numbers; if
+  it is real it is below what frame intervals show and needs the
+  LATENCY.md rig (read to first line).
+- **The 8 to 10 frames over 21 ms per run are the capture's own loads**
+  (deaths and continues; max 170 ms), the same count in every replay.
+- **RT clamp default 0 is rejected as it stands.** The X3 goes to its floor
+  and the audio threads leave it, with no xruns, but the middle cluster
+  drops to 499 MHz too and the main thread takes three times as long for
+  the same work: late frames double, p99 display interval 18.5 against 17.5
+  ms, present p99 over 21 ms. Drain read 89 to 166 mAh against 47 to 55 in
+  the other runs, but the pack was at 12 to 18 % by then and the counter's
+  run-to-run spread says the gauge, not the load; not used.
+- **Next candidate instead:** keep the clamp, move RetroArch off the X3
+  (`cores` mask 3-6 for this system). The RT audio threads then lift the
+  middle cluster, which the main thread uses anyway, and the X3 idles at
+  595 MHz. Measured the same way.
+- Aspect-only cost sits 1 tick/s above the first baseline (12.9 against
+  11.9); the overlay drawn for logging is in that number, the first
+  baseline had none. Compare rounds from here against this one.
+
+### 2026-10-18, boss fight live, new geometry and lines-1x
+
+145 s of play, flip trace and frame log: 8633 frames, every one two
+refreshes after the previous (16.79 ms), one 146 ms frame at a CD load
+inside the fight, zero xruns, GPU 4 % at 401 MHz. The slowdown felt is the
+game's own (Metal Slug slows on hardware when sprites pile up); a 68000
+overclock would remove it and is parked as a per-game option.
+
 ## What is already good
 
 - Audio runs at the CD's own rate with no conversion, 8 ms, no xruns.
@@ -159,19 +213,18 @@ replays through `gamecapture verify`, a perf-probe over each.
 ## Room for improvement
 
 - The X3 and the A510 cluster run at their maximum for RT threads that are
-  ~1 % busy. First candidate: lower `kernel.sched_util_clamp_min_rt_default`
-  (0, then a middle value), same capture, three replays, audio constraint
-  enforced.
-- Checkpoint divergence at `z80TimeSlice`: find out whether it is the
-  recording's checkpoint being taken mid-slice or a real nondeterminism;
-  the core declares its states deterministic.
-- Frametime logging in the benchmark runner.
+  ~1 % busy. `sched_util_clamp_min_rt_default` 0 was measured and rejected
+  (late frames double; see Measurements). Next: keep the clamp and keep
+  RetroArch off the X3 with a 3-6 core mask, so the boosted cluster is the
+  one doing the work.
+- Frametime logging needs MangoHud's overlay drawn (its smallest form is
+  used); the overlay's own cost sits in every logged run.
 - GPU floor at 401 MHz: a 320x224 frame scaled to 1280x960 does not need it;
   measure what it buys.
 - Preemptive frame: one frame, same capture, once goal 5 holds.
 
 ## Open questions
 
-- Does the Z80 time slice depend on the host (audio buffer state) or only on
-  the frame?
+- Is the lag felt with the shader real? Frame intervals say no; only the
+  read-to-first-line rig can say.
 - What keeps the GPU at 401 MHz, and is it wanted for this system?
