@@ -23,13 +23,24 @@ makeinstall_target() {
     cp -a ${PKG_BUILD}/${core}_libretro.info ${INSTALL}/usr/lib/libretro/
   done
 
-  # Neo Geo CD games are CHD only (config/emulators/neocd.conf): nova-push
-  # converts before it copies, and one format is one set of behaviours to
-  # test. The pilot for the disc systems; the others follow later.
+  # Disc games are CHD only (config/emulators/{neocd,psx,ps2,dreamcast}.conf, the
+  # README's note): lossless, smaller, and nova-push converts before it
+  # copies. An .m3u names CHDs for a multi-disc game. The info files say
+  # the same so RetroArch's own content filter matches the launcher's.
   sed -i 's/^supported_extensions = "cue|chd"$/supported_extensions = "chd"/' \
     ${INSTALL}/usr/lib/libretro/neocd_libretro.info
   grep -q '^supported_extensions = "chd"$' \
     ${INSTALL}/usr/lib/libretro/neocd_libretro.info
+  sed -i 's/^supported_extensions = "exe|psexe|cue|bin|img|iso|chd|pbp|ecm|mds|psf|m3u"$/supported_extensions = "chd|m3u"/' \
+    ${INSTALL}/usr/lib/libretro/swanstation_libretro.info
+  grep -q '^supported_extensions = "chd|m3u"$' \
+    ${INSTALL}/usr/lib/libretro/swanstation_libretro.info
+  sed -i 's/^supported_extensions = "elf|iso|ciso|chd|cso|zso|bin|mdf|nrg|dump|gz|img|irx|m3u"$/supported_extensions = "chd|m3u"/' \
+    ${INSTALL}/usr/lib/libretro/armsx2_libretro.info
+  grep -q '^supported_extensions = "chd|m3u"$' \
+    ${INSTALL}/usr/lib/libretro/armsx2_libretro.info
+  # Flycast's file is left alone: the same core runs Naomi and Atomiswave
+  # from .zip and .lst, so its list cannot be CHD only; dreamcast.conf is.
 
   # RetroArch allows run-ahead and preemptive frames only for a core whose
   # info file says "deterministic"; SwanStation's was lowered to "basic" in

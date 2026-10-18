@@ -78,6 +78,15 @@ SUPERHOT runs with sound ([#535](https://github.com/portare-ch/portareos/pull/53
 [#536](https://github.com/portare-ch/portareos/pull/536)), and Big Picture uses
 a readable 1.6 scale ([#534](https://github.com/portare-ch/portareos/pull/534)).
 
+**Disc games are CHD only** (PlayStation, PlayStation 2, Dreamcast, Neo Geo
+CD; the other disc systems follow). CHD is lossless, the disc comes back bit for
+bit, and it is a fraction of the size of a CUE/BIN or ISO. The card has to
+stay well below full: flash storage slows down heavily as it nears its
+capacity, and a smaller library is a faster one. So the format is forced
+rather than offered, and [nova-push](https://github.com/portare-ch/portareos_tools)
+converts a CUE, GDI or ISO on the way to the device. An `.m3u` that names
+CHDs still works for a multi-disc game.
+
 See [folders, formats and cores](documentation/PER_DEVICE_DOCUMENTATION/SM8550/SUPPORTED_EMULATORS_AND_CORES.md)
 for game setup, [emulator notes](documentation/emulators/README.md) for
 measurements and configuration decisions, and
