@@ -256,6 +256,14 @@ sed -i -e 's|^saturn\.shaderset=crt/crt-guest-advanced\.slangp$|saturn.shaderset
 sed -i -e 's|^neocd\.integerscale=1$|neocd.integerscale=0|' \
   /storage/.config/system/configs/system.cfg
 
+### Neo Geo CD's preemptive frame, on by default (documentation/emulators/
+### NeoCD.md): #674 shipped the key as 0 and build 287 wrote that on every
+### install. Only the old default moves; an install that has no key yet
+### gets 1; a value someone chose stays.
+sed -i 's|^neocd\.preempt=0$|neocd.preempt=1|' /storage/.config/system/configs/system.cfg
+grep -q "^neocd\.preempt=" /storage/.config/system/configs/system.cfg ||
+    sed -i '$ a\neocd.preempt=1' /storage/.config/system/configs/system.cfg
+
 ### Neo Geo CD's scanlines (portare/lines-1x): the key is new, so an install
 ### from before it has none. Added when absent; a chosen value stays.
 grep -q "^neocd\.shaderset=" /storage/.config/system/configs/system.cfg ||
