@@ -3,7 +3,16 @@
 One test per row of FEATURES.md, on a Retroid Pocket Nova running the build
 under test. Automatic tests are run by `tools/device-tests` over SSH and
 print PASS, FAIL or SKIP per test; human tests are a checklist with the
-exact thing to look or listen for. Last revised 27 September 2026.
+exact thing to look or listen for. Configuration expectations reviewed
+18 October 2026; recorded runs below include older builds.
+
+`tools/device-tests` still contains obsolete assertions, including a fixed
+256-frame audio quantum, automatic frame delay outside its current
+conditions, and old PlayStation profile behavior. Its panel-mode checks
+also need to distinguish fixed refresh from VRR. Keep its results, but
+check those failures against the current configuration and the manual
+procedures below before treating them as regressions. Updating the checker
+is tracked in [known issues](../BUGS.md#build-and-configuration).
 
 Test IDs follow the FEATURES.md groups: D display, A audio, E emulation,
 L launcher and system, P power and hardware, M media, B build. A test is
@@ -43,7 +52,7 @@ build named at the top of that file.
 | PipeWire graph | `pw-dump`, `pw-top -b -n 1`, `wpctl status` |
 | Settings | `/storage/.config/system/configs/system.cfg` |
 | Migration markers | `/storage/.config/system/.migrations/` |
-| SwanStation options | `/storage/.config/retroarch/config/SwanStation/SwanStation.opt`, marker `.latency-profile` beside it |
+| Core options | `/storage/.config/retroarch/retroarch-core-options.cfg`; inspect the launched configuration for overrides |
 | GPU frequency | `/sys/devices/platform/soc@0/3d00000.gpu/devfreq/3d00000.gpu/cur_freq` |
 | Battery | `/sys/class/power_supply/battery/{temp,current_now,constant_charge_current,constant_charge_current_max,status}` |
 | Fan | `$DEVICE_PWM_FAN` from `/etc/profile` (hwmon `pwm1`), `pwm1_enable` |
@@ -60,11 +69,17 @@ grep -c . /sys/class/drm/card*-DSI-1/modes          # 8
 modetest -M msm -c | grep -oE '[0-9]+\.[0-9]+' | sort -u
 ```
 Expected refresh rates, to three decimals: 119.880, 119.652, 119.455,
-120.198, 119.846, 118.360, 119.200, and 120.000 for Steam.
+120.198, 119.846, 118.360, 119.200, and 120.000.
 
-Game running: `video_refresh_rate` in `/tmp/.retroarch.cfg` is the table
-value for the system, and the RetroArch log has a `[Vulkan]` line naming
-the same mode.
+With the default built-in-panel VRR path, every core uses the fastest
+120.198 Hz mode. Check `video_refresh_rate`, the live CRTC state and a
+display trace; the panel repeats frames at an integer multiple of the
+core's rate. See [variable refresh](VARIABLE_REFRESH.md).
+
+For a fixed-refresh comparison, save the current VRR setting, set the
+tested system's `<system>.vrr=0` and relaunch. `video_refresh_rate` and
+the Vulkan log should then name the table's mode. Restore the original
+setting afterward.
 
 | System (core) | Expected |
 |---|---|
@@ -76,19 +91,20 @@ the same mode.
 | neocd | 119.200 |
 | everything else | 119.880 |
 
-Steam: gamescope's log says `selecting mode 1280x960@120Hz`, and a vblank
-count over a minute on `/dev/dri/card0` (no master needed) gives 120.00,
-not 119.88.
+Steam: gamescope selects the fastest mode that rounds to 120 Hz, currently
+120.198 Hz, with adaptive sync and a 60 fps ceiling. Check live refreshes,
+game rate and repeat cadence instead of expecting a constant 120.000 Hz.
+Real-game validation of the final stack is still pending.
 
-Fail if the config names a different rate or the log shows the default
-mode for a system with its own row.
+Fail if the selected mode disagrees with the path being tested, or a
+fixed-refresh test falls back to the default for a system with its own row.
 
-### D3 Two-image swapchain, no threaded video (auto)
+### D3 Per-core swapchain, no threaded video (auto)
 
 Game running, in the launched config:
 
 ```
-video_max_swapchain_images = "2"
+video_max_swapchain_images = "2"  # 3 for ParaLLEl N64 and Dolphin
 video_threaded = "false"
 video_swap_interval = "0"      # RetroArch takes 1 under Sync to Exact Content Framerate
 video_black_frame_insertion = "0"
@@ -102,11 +118,12 @@ above it, which is the loop running on audio sync alone.
 
 ### D4 Automatic frame delay (auto+human)
 
-Auto, game running: `video_frame_delay_auto = "true"` in the launched
-config. Human: RetroArch quick menu, Settings > On-Screen Display >
-Statistics on; after thirty seconds of play the frame delay line reads a
-value above 0 and below the frame time (8.3 ms at 120 Hz). Fail if it
-sits at 0 or the statistics show dropped frames while the core is idle.
+At fixed refresh without preemptive frames,
+`video_frame_delay_auto = "true"` in the launched config. With VRR or
+preemptive frames it must be `false`; VRR uses the timed-present scheduler
+instead. Test each path explicitly. For the fixed-refresh path, enable
+RetroArch's statistics and check frame delay after thirty seconds of play;
+keep frame-delivery logs alongside the configuration.
 
 ### D5 Integer scaling per system (human)
 
@@ -232,13 +249,21 @@ config under `/storage/.config/retroarch/config/<core>/<core>.cfg` is
 Plus GX and PicoDrive, and the global file keeps `0`, which picks 32000
 for Snes9x's 32040 and 44100 for an MSU-1 game.
 
-### A4 PipeWire only, 256-frame quantum (auto)
+### A4 PipeWire and the 3 ms quantum floor (auto+human)
 
+```sh
+command -v pulseaudio              # no separate PulseAudio server
+pw-top                            # read the running sink, its rate and ERR
+grep -E 'allowed-rates|min-quantum|power-of-two-quantum' /usr/share/pipewire/pipewire.conf
 ```
-which pulseaudio                    # nothing
-pw-top -b -n 1 | awk 'NR>1{print $3}' | sort -u   # 256 during a game
-grep -A3 allowed-rates /etc/pipewire/pipewire.conf # 48000 44100 32000
-```
+
+The graph permits 32, 44.1 and 48 kHz, with a 144-frame minimum at the
+48 kHz reference rate and power-of-two rounding disabled. With an 8 ms
+RetroArch request, its requested quantum is 96, 133 or 144 frames at the
+three rates. Other clients can raise the running quantum. Test all three
+rates, retain before/after ERR counters and listen for crackle. A follower's
+QUANT column may show its request rather than the running sink's quantum.
+See [audio latency](AUDIO_LATENCY.md) for measured limits and open coverage.
 
 ### A5 Display audio switch (auto+human)
 
@@ -280,7 +305,8 @@ run_ahead_frames = "1"
 ```
 in `/tmp/.retroarch.cfg`, plus `video_frame_delay_auto = "false"`, which
 the preemptive frame turns off. With `preempt=0` the first key is
-`false` and the delay is back on.
+`false`; automatic delay returns only at fixed refresh, since VRR disables
+it independently.
 
 The log has no `[Run-Ahead Preemptive]` line: RetroArch logs one only
 when the preemptive frame fails. That absence is worth nothing until the
@@ -314,24 +340,22 @@ the same setting would not.
 | playing, preempt=1 | 2704 | 2704.4 | 16.638 | 21.11 | 23.46 |
 
 Target 16.639 ms, one refresh 8.32, so a missed refresh is 24.96 and
-none of the four runs reached it. This is the opposite of the
-PlayStation in E3, where the same switch cost 12 fps: snes9x is cheap
-enough to rerun inside the frame, SwanStation at 4x is not.
+none of the four runs reached it. These are historical fixed-mode runs.
+SwanStation's readback fix and later VRR changes have separate measurements
+in [SwanStation](emulators/SwanStation.md) and [latency](LATENCY.md).
 
-What is not measured is the other side of it. A frame of input latency
-is what the preemptive frame buys, and turning it on gives up the
-automatic frame delay, which was already claiming most of a frame, so
-the net may be close to nothing. Deciding that needs a 240 fps recording
-of a button press, not a frametime log, and nobody has taken one. It
-stays off by default.
+Preemptive frames remove one frame of the game's own lag. Physical
+button-to-screen latency still needs a controlled trigger and camera test;
+frametime logs alone do not establish that benefit. Neo Geo CD now enables
+one preemptive frame by default, with Metal Slug 1/2 pause and resume
+checks recorded; other systems keep it off. See [NeoCD](emulators/NeoCD.md).
 
 ### E3 PlayStation runs every frame on time (auto+human)
 
-The PlayStation's default is the Vulkan renderer at 4x with preemptive
-frames off, two swapchain images and automatic frame delay on, and it was
-measured at the ceiling: every frame the console asks for, delivered on
-its vblank. A change to this path is a regression unless it reproduces
-the numbers below.
+The PlayStation defaults to Vulkan at 4x, preemptive frames off and two
+swapchain images. With VRR it uses the fastest 120.198 Hz mode and automatic
+frame delay is off. Compare current delivery and latency with
+[SwanStation](emulators/SwanStation.md) and [latency measurements](LATENCY.md).
 
 Auto, after a PSX launch:
 
@@ -339,13 +363,17 @@ Auto, after a PSX launch:
 grep -E 'GPU_Renderer|GPU_ResolutionScale' \
   /storage/.config/retroarch/retroarch-core-options.cfg    # "Vulkan" and "4"
 grep -E 'preemptive_frames_enable|video_frame_delay_auto|video_max_swapchain_images' \
-  /tmp/.retroarch.cfg          # "false", "true", "2"
-grep -E 'video_refresh_rate' /tmp/.retroarch.cfg           # 119.652237
+  /tmp/.retroarch.cfg          # "false", "false", "2" with VRR
+grep -E 'video_refresh_rate' /tmp/.retroarch.cfg           # about 120.198 with VRR
 grep 'Timed presents' /storage/.config/retroarch/logs/retroarch.log
-# swap interval 2, one present a frame, 16.715 ms apart
+# One present per core frame, about 16.715 ms apart; no vsync counting.
 ```
 
-Human, with MangoHud logging on (`portareos.mangohud.enabled=1`, and
+The figures below are the historical fixed-mode baseline, before the
+current VRR path. Compare them only with that configuration; they are not
+absolute acceptance thresholds for VRR or every later core build.
+
+With MangoHud logging on (`portareos.mangohud.enabled=1`, and
 `output_folder`, `autostart_log`, `log_duration` in MangoHud.conf): play
 Tekken 3 for the whole window. Against the 16.715 ms target the reference
 run is mean 16.71, p95 18.23, p99 19.70, max 22.07, and 59.8 fps.

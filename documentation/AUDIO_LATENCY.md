@@ -1,4 +1,97 @@
-# Audio latency: where the milliseconds are
+# Audio latency: current path and measurements
+
+Reviewed 18 October 2026. These settings describe the current tree; the
+[investigation log](#investigation-log-historical) below retains the earlier
+measurements and superseded models in their original sequence.
+
+## Current configuration
+
+| Layer | Shipped behavior |
+| --- | --- |
+| RetroArch | 8 ms audio buffer request; this is not button-to-sound latency |
+| RetroArch PipeWire driver | Requests one quarter of that setting as a quantum, with a 3 ms floor rounded up to whole frames: 96 at 32 kHz, 133 at 44.1 kHz, 144 at 48 kHz |
+| PipeWire graph | Allows 32, 44.1 and 48 kHz; 144-frame minimum at the 48 kHz reference rate, scaled with the rate; power-of-two rounding disabled |
+| AudioReach playback | Shared-memory pull mode with sample-accurate position reporting; no `SNDRV_PCM_INFO_BATCH` headroom |
+| DSP period constraint | 10 ms of frames at the stream's rate, subject to alignment; this interrupt period is distinct from the graph quantum |
+
+The 3 ms quantum is the tuned floor, not a fixed quantum for every client.
+Other applications and outputs can negotiate larger buffers. RetroArch's
+ring, the running graph quantum, PCM queue and physical speaker latency are
+separate quantities.
+
+Sources: [RetroArch's quantum patch](../packages/emulators/libretro/retroarch/patches/0017-pipewire-quantum-floor-3ms.patch),
+[PipeWire graph configuration](../packages/audio/pipewire/patches/SM8550/002-graph-quantum.patch),
+and the [default latency setting](../packages/hardware/quirks/autostart/020-set_audio_latency).
+See [sample rates](PER_DEVICE_DOCUMENTATION/SM8550/AUDIO_SAMPLE_RATES.md) for
+which rates the cores and physical links can carry.
+
+## What has been measured
+
+- The original Snes9x/Kirby Super Star camera report was 42–79 ms from button
+  to sound, against Android's 42–50 ms. Those are historical image results.
+- Rate-scaled DSP periods (#422) and pull-mode/no-batch playback (#428)
+  lowered the crackle-free RetroArch setting from the reported 32 ms to
+  8 ms. `pcm-flags` confirmed the driver's flags and accepted periods.
+- A forced-quantum sweep found failures around 2 ms and clean operation at
+  3 ms in the tested sessions. With graph rounding disabled, requests of
+  96, 133 and 144 frames ran for 30 seconds at the three rates with no
+  sink/client xruns. A 32 kHz 96-frame run also lasted about ten minutes.
+- At 32 kHz the PCM's mean queued delay fell from about 6.5 ms at a 128-frame
+  quantum to 4.9 ms at 96 frames. This is PCM delay, not end-to-end latency.
+- Direct ALSA playback and a smaller DSP period did not improve the measured
+  queue enough to replace the tuned PipeWire path. Light cores underrun on
+  small direct-ALSA buffers because they deliver frame-sized audio bursts.
+- NeoCD's 18 October capture tests also recorded zero xruns at the shipped
+  44.1 kHz / 8 ms setting; see [NeoCD](emulators/NeoCD.md).
+
+These tests do not establish stability for every core, wired headphones,
+Bluetooth or external displays. An absolute camera result for the complete
+current configuration is still needed.
+
+## Checking a current image
+
+Run on the Nova while a game plays:
+
+```sh
+. /etc/profile
+get_setting global.audiolatency
+cat /proc/asound/card0/pcm0p/sub0/hw_params
+pw-top
+journalctl -b | grep -E 'period frames|headroom|xrun|underrun'
+grep 'ms setting' /storage/.config/retroarch/logs/*
+```
+
+`pcm-flags` in an unofficial debug image checks the driver's capabilities
+and accepted period sizes. Check that playback is not marked BATCH. Read
+`pw-top`'s running sink quantum and ERR counters; a follower's QUANT column
+can show its request rather than the quantum actually running. A journal
+summary depends on the enabled log level. Do not expect the old 480-frame
+batch headroom from the historical model.
+
+`setsettings.sh` writes `audio_latency` at every launch. To test a different
+request, set `global.audiolatency` (or a system/game override) through
+`set_setting`, then relaunch; a RetroArch-menu edit alone is not persistent.
+Restore the original setting after an experiment. For logging and tools,
+see [debugging](DEBUG_TOOLS.md) and the [performance plan](PERFORMANCE_PLAN.md).
+
+## Remaining work
+
+Measure physical button-to-sound latency and audio/video alignment on the
+current image, using the same trigger and game as the Android comparison.
+Instrument the threaded audio pipeline before attributing delay to its
+nominal target. Extend playback and rate-switch tests across cores and
+outputs, and compare wakeups and power without changing latency at the same
+time. Lowering the quantum below 3 ms is not a validated default.
+
+## Investigation log (historical)
+
+The record below covers successive configurations. Statements such as
+"now", "shipped", "not yet run", the 24 ms default, the fixed 128-frame
+floor and power-of-two rounding refer to the build under investigation at
+that point. They are retained to explain the experiments, not as current
+setup instructions. Use the configuration and checks above on current images.
+
+### Original report
 
 A user measured button-to-sound on the Nova against Android, filming at 240 fps
 and counting frames in Premiere: 10-19 frames on PortareOS (42-79 ms) against
@@ -7,7 +100,7 @@ button-to-screen by about a frame. They also found RetroArch's audio latency
 setting would not go below 32 ms without crackling, where Android took 15. The
 game was Kirby Super Star, so the path under test was Snes9x at a 32 kHz link.
 
-## Where it ended up
+### Where it ended up
 
 **The setting now goes to 8 ms, which is as low as RetroArch allows.** The
 sweep was run downwards to find the breaking point and never found one: at 4
@@ -98,7 +191,7 @@ Broken pipe` repeats a few hundred times a second, `pw-top` shows the sink at
 `QUANT 0 RATE 0`, and nothing comes out until the quantum is raised. It
 recovers the moment it is.
 
-### The floor is not 128 frames, and it is a time
+#### The floor is not 128 frames, and it is a time
 
 **Shipped as RetroArch patch 0017 (2026-10-05): the requested quantum is
 floored at 3 ms of frames at the stream's rate, rounded up: 96 at 32 kHz,
@@ -167,7 +260,7 @@ over it. What 3 ms takes off the PCM's mean delay: 6.49 to 4.91 ms at
 32 kHz, and 7.43 to 4.68 at 48 with the same Dolphin session, where the
 graph runs 256 today.
 
-### Why the setting cannot reach it
+#### Why the setting cannot reach it
 
 Three floors, all policy and none hardware:
 
@@ -190,7 +283,7 @@ At 48 kHz that is 384 frames in front of a 256-frame quantum today, one and
 a half quanta. Dolphin did not underrun on it, but a 48 kHz core on the
 threaded pipeline has not been measured.
 
-### Found on the way
+#### Found on the way
 
 - **GameCube has had no sound since #431.** Dolphin renders through its own
   audio callback and hands the driver whatever it mixed in one write, and
@@ -215,15 +308,15 @@ and soaked; 44.1 kHz; why RetroArch fails at a quantum ARMSX2 holds;
 power, since pull mode has the DSP publish its position continuously and
 nothing has looked at idle wakeups or suspend.
 
-## How it was reasoned about first
+### How it was reasoned about first
 
 Everything below was written before any of it was measured, from the code this
 image ships. It is kept because it is what the fixes were aimed at, and it was
 right about where the milliseconds were.
 
-## The chain, at the shipped values
+### The chain, at the shipped values
 
-### 1. The setting was 32 ms, and it was not this device's number
+#### 1. The setting was 32 ms, and it was not this device's number
 
 `packages/hardware/quirks/autostart/020-set_audio_latency` is a ROCKNIX file
 and writes the default when the setting is absent. `setsettings.sh`'s
@@ -236,7 +329,7 @@ moves, 32 to 24 and 24 to 8, registered in that order so an install still on
 upstream's value lands on 8 in one update; each moves only the old default and
 leaves a value chosen since alone.
 
-### 2. What RetroArch does with the setting
+#### 2. What RetroArch does with the setting
 
 `audio/drivers/pipewire.c`, at the pinned commit `9705e03a`:
 
@@ -251,7 +344,7 @@ leaves a value chosen since alone.
 It sizes the ring to hold at least twice the quantum **it asked for**. What it
 gets can be different, and it is never told.
 
-### 3. What the graph does with the request
+#### 3. What the graph does with the request
 
 Two things in `src/pipewire/context.c`, neither of them obvious from the config:
 
@@ -294,7 +387,7 @@ outvoting the request. `flp2(352)` is 256, so that observation is the
 power-of-two flooring, and it is the only reading of the graph quantum anyone
 has actually taken here.
 
-### 4. The sink: a 480-frame floor that nothing above it can move
+#### 4. The sink: a 480-frame floor that nothing above it can move
 
 *Superseded by #422 and #428; kept because the mechanism is unchanged and the
 numbers below are what the fixes were measured against.*
@@ -318,7 +411,7 @@ constant in frames, so it is 10.0 ms at 48 kHz, 10.9 at 44.1 and 15.0 at 32.
 It is the largest single term in the budget and nothing in userspace can move
 it.
 
-## The budget
+### The budget
 
 `ring/2 + quantum + (quantum + 480)`, in milliseconds:
 
@@ -343,7 +436,7 @@ from here. The measurement was 42-79 ms against a 47.0 ms budget for the path
 measured, so the rows above account for it and the answer is not hiding in the
 DSP.
 
-## What is still open
+### What is still open
 
 1. **Why 32 ms was a floor for the reporter is not explained.** By the table
    above, 16 ms at a 32 kHz link leaves the ring two pulls deep, which should
@@ -364,7 +457,7 @@ DSP.
    entirely untested.
 3. **The 480-frame step itself.** See below.
 
-## The 32 kHz link is not the problem
+### The 32 kHz link is not the problem
 
 It costs about 2 ms against 48 kHz, not the 13 an earlier draft of this document
 claimed: the fixed 480-frame headroom is worse in milliseconds at a lower rate,
@@ -381,7 +474,7 @@ So dropping 32 kHz for 44.1 or 48 buys half a frame at 240 fps and gives up the
 gentler conversion `AUDIO_SAMPLE_RATES.md` chose it for. Not worth it. Keep the
 rate; the milliseconds are in item 2 above and in the step below.
 
-## The ULL graph: not a port, and probably not the first move
+### The ULL graph: not a port, and probably not the first move
 
 AudioReach is not something to bring to Linux - it is already the framework
 mainline uses, `sound/soc/qcom/qdsp6`, and `q6apm-dai` opens graphs out of the
@@ -420,7 +513,7 @@ the way in. Three pieces, in increasing order of how much is unknown:
 So: yes in principle, and the honest order is 1, then 2, and only then consider
 3. Item 1 may make the rest unnecessary.
 
-## What Android does on the same device
+### What Android does on the same device
 
 2026-10-06, the Nova booted into its stock Android, idle, no game yet:
 `dumpsys media.audio_flinger`, `dumpsys media.audio_policy`, `dumpsys audio`.
@@ -472,7 +565,7 @@ RetroArch's Android log or config: `audio_driver` (`opensl` or `aaudio`),
 `audio_latency`, `audio_block_frames`. That `Latency` figure against the
 8.9 ms here is the comparison the rest of this document leads to.
 
-## Android's calibration database and mixer paths
+### Android's calibration database and mixer paths
 
 2026-10-06, pulled from the stock Android alongside the dumps above and kept
 outside the tree (`~/1234/android/vendor`): `acdbdata/kalama_cdp/CDP_acdb_cal.acdb`
@@ -543,7 +636,7 @@ routing. They confirm the RX routing we already have and nothing further.
 (high entropy from byte 0); it is Qualcomm's tool format, so the ACDB cannot
 be edited or diffed here beyond its strings.
 
-## RetroArch straight to the PCM: measured, and not a lever either
+### RetroArch straight to the PCM: measured, and not a lever either
 
 2026-10-06. `audio_driver = alsa`, `audio_device = hw:0,0`, PipeWire idle so
 the device is free, the DSP period floor at 4 ms (patch 1077), and a 10 Hz
@@ -579,7 +672,7 @@ frame counts, and what its DSP graph does after that: `dumpsys
 media.audio_flinger` and `dumpsys media.audio_policy` on the Android Nova
 while a game runs, against the 8.9 ms measured here.
 
-## The DSP period floor, measured: not a lever
+### The DSP period floor, measured: not a lever
 
 2026-10-06, kernel patch 1077's `period_min_ms` swept on the device. With
 `pcm-floor` on the bare PCM, PipeWire stopped: 160 frames at 32 kHz (5 ms)
@@ -605,7 +698,7 @@ stays at 10; a smaller one would only matter in IRQ mode
 (`api.alsa.disable-tsched`), where the period becomes the wake, and that
 trade has not been measured.
 
-## The experiment that settles it
+### The experiment that settles it
 
 Read the two lines that state what was actually negotiated. From the journal,
 the sink's own summary:

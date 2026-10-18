@@ -4,7 +4,7 @@
 
 **For Retroid Pocket Nova owners who care about every frame and millisecond.**
 
-[Home](https://os.portare.org) · **[Features](documentation/FEATURE_OVERVIEW.md)** · **[Installation guide](documentation/INSTALLATION.md)** · [Known issues](BUGS.md) · [Roadmap](ROADMAP.md)
+[Home](https://os.portare.org) · **[Features](documentation/FEATURE_OVERVIEW.md)** · **[Installation guide](documentation/INSTALLATION.md)** · [Documentation](documentation/README.md) · [Known issues](BUGS.md) · [Roadmap](ROADMAP.md)
 
 > Black coffee without sugar and milk. With the right amount of beans and water.
 
@@ -30,6 +30,14 @@ prevents in-place updates from ROCKNIX. Later updates download from GitHub
 over Wi-Fi through the launcher, using the nightly or release channel, and
 install on restart.
 
+**Use CHD for disc games; cartridge games keep their native ROM formats.**
+PlayStation, PS2, Dreamcast and Neo Geo CD enforce CHD-only images. Use
+**[PortareOS tools / nova-push](https://github.com/portare-ch/portareos_tools)**
+to convert and verify CUE, GDI or ISO images while transferring them over
+SSH. It also copies existing CHDs and cartridge ROMs. See the installation
+guide for setup, multi-disc playlists and experimental systems with other
+format requirements.
+
 [portarelauncher](https://github.com/portare-ch/portarelauncher) provides
 consoles, games and settings for Wi-Fi, Bluetooth, SSH, USB mode, language
 and time zone, and updates, in English or Japanese. Each device generates a root password on first boot, shown
@@ -42,9 +50,9 @@ under About.
 * **L1 + Y** shows or hides the MangoHud performance overlay in a game. The
   overlay is off by default; `portareos.mangohud.enabled=1` in `system.cfg`
   loads it, or `psx.portareos.mangohud.enabled=1` for one system.
-* **Settings > Consoles > PRMPT** enables an experimental pre-emptive frame
-  per 2D console. PlayStation keeps its measured configuration without this
-  switch because the performance cost was too high.
+* **Settings > Consoles > PRMPT** toggles one preemptive frame on supported
+  consoles. Neo Geo CD enables it by default; the others keep it off.
+  PlayStation offers it with additional CPU/GPU cost; see the emulator notes.
 
 ## Systems and status
 
@@ -54,7 +62,7 @@ by game. Status notes below cover specific tests, not every included system.
 | System | Emulator / player | Status notes |
 | --- | --- | --- |
 | Arcade, Neo Geo | FBNeo | — |
-| Neo Geo CD | [NeoCD](documentation/emulators/NeoCD.md) | ✅ Tested and tuned: full-screen 4:3, scanlines, one preemptive frame, 4.3 ms pad to panel ([#666](https://github.com/portare-ch/portareos/issues/666)) |
+| Neo Geo CD | [NeoCD](documentation/emulators/NeoCD.md) | ✅ Tested and tuned: full-screen 4:3, scanlines, one preemptive frame; optimization finished ([#666](https://github.com/portare-ch/portareos/issues/666)) |
 | Game Boy, Game Boy Color | Gambatte | — |
 | Game Boy Advance | mGBA | — |
 | NES, Famicom, Famicom Disk System | MesenCE | — |
@@ -78,15 +86,6 @@ SUPERHOT runs with sound ([#535](https://github.com/portare-ch/portareos/pull/53
 [#536](https://github.com/portare-ch/portareos/pull/536)), and Big Picture uses
 a readable 1.6 scale ([#534](https://github.com/portare-ch/portareos/pull/534)).
 
-**Disc games are CHD only** (PlayStation, PlayStation 2, Dreamcast, Neo Geo
-CD; the other disc systems follow). CHD is lossless, the disc comes back bit for
-bit, and it is a fraction of the size of a CUE/BIN or ISO. The card has to
-stay well below full: flash storage slows down heavily as it nears its
-capacity, and a smaller library is a faster one. So the format is forced
-rather than offered, and [nova-push](https://github.com/portare-ch/portareos_tools)
-converts a CUE, GDI or ISO on the way to the device. An `.m3u` that names
-CHDs still works for a multi-disc game.
-
 See [folders, formats and cores](documentation/PER_DEVICE_DOCUMENTATION/SM8550/SUPPORTED_EMULATORS_AND_CORES.md)
 for game setup, [emulator notes](documentation/emulators/README.md) for
 measurements and configuration decisions, and
@@ -94,8 +93,8 @@ measurements and configuration decisions, and
 along with their untuned settings.
 
 [Known issues](BUGS.md) tracks observed problems and changes awaiting device
-testing. The [roadmap](ROADMAP.md) covers suspend power, the SNES core
-choice and further footprint reductions.
+testing. The [roadmap](ROADMAP.md) covers emulator reliability, measured
+latency, suspend validation and further footprint reductions.
 
 ## What it looks like
 
@@ -124,7 +123,7 @@ all open to change. Measurements guide the work.
 
 RetroArch enables variable refresh automatically on the built-in panel
 when it is the only connected display and no display mode is pinned.
-The panel follows timed frames within an 80–120.198 Hz range, using the
+The panel follows timed frames within a 65–120.198 Hz range, using the
 display controller's AVR, the hardware behind Qualcomm's Qsync.
 
 RetroArch paces the game at the core's reported frame rate, and our Mesa
@@ -147,8 +146,10 @@ twice. Late frames and startup can still disrupt the cadence. See
 [variable refresh](documentation/VARIABLE_REFRESH.md) for the hardware,
 measurements and design.
 
-Fixed refresh remains for xemu, Steam and mpv, and for RetroArch when
-variable refresh is disabled. To compare, set `global.vrr=0` in
+The launcher and Steam's gamescope also use variable refresh; Steam is
+capped at 60 fps. A real game on the final gamescope/kernel combination
+still needs validation. Fixed refresh remains for xemu and mpv, and for
+RetroArch when variable refresh is disabled. To compare, set `global.vrr=0` in
 `/storage/.config/system/configs/system.cfg`; use `snes.vrr=0` for one
 system or `snes["Super Mario World.sfc"].vrr=0` for one ROM filename.
 With fixed refresh, RetroArch selects a mode from the table below and
@@ -163,7 +164,7 @@ still times frames at the core's rate; each is shown at the next refresh.
 | 119.846 Hz | Master System, Game Gear, Mega Drive, Mega CD | 59.9227 |
 | 118.360 Hz | Neo Geo | 59.18 |
 | 119.200 Hz | Neo Geo CD | 59.5999 |
-| 120.000 Hz | Steam: PC games capped at 60 or 120 by a timer | 60 |
+| 120.000 Hz | Fixed 120 Hz mode; Steam now uses 120.198 Hz with VRR and a 60 fps cap | 60 |
 
 Every mode now uses the panel's own 1302 × 998 timing, changing only the
 pixel clock. The wider blanking used previously let the panel lose lock
@@ -230,7 +231,7 @@ batch-device headroom. Qualcomm DSP periods follow the stream's rate:
 10 ms instead of 480 frames, which previously meant 15 ms for SNES audio.
 PortareOS configures PipeWire for a 3 ms graph quantum. Current PCM
 measurements and the remaining latency budget are documented in
-[audio latency](docs/audio-latency.md).
+[audio latency](documentation/AUDIO_LATENCY.md).
 
 RetroArch defaults to **8 ms**, down from the observed 32 ms crackle-free
 floor. This setting is not end-to-end latency. Camera tests showed
@@ -260,9 +261,10 @@ automatic frame delay and schedules each frame using recent CPU and GPU
 completion times plus a safety margin. This is a presentation target;
 actual display latency also depends on the panel's refresh limits.
 
-A community tester reports latency variation down to one frame and
-button-to-screen latency about one frame lower than Android. These results
-describe the tested setup; they are separate from the audio setting above.
+Recorded [latency measurements](documentation/LATENCY.md) separate the
+emulator and display path from the gamepad, the game's own lag and scanout.
+A community tester also reported button-to-screen latency about one frame
+lower than Android; that result describes the tested setup.
 
 The **gamepad MCU reports every 5 ms (200 Hz)**, down from the vendor's
 9 ms (111 Hz). `rsinput.frame_rate=3` sets the scan delay from boot and
@@ -284,9 +286,9 @@ flowchart TD
     SDL --> VK
     VK["Mesa Turnip / Vulkan<br/>Adreno GPU rendering"] --> WSI["Mesa Vulkan WSI / VK_KHR_display<br/>PortareOS patches: timed presents<br/>and VRR control"]
     WSI -->|Timed page flips| KMS
-    STEAM["Steam / PC games"] --> GS["gamescope compositor<br/>Mesa / GPU rendering; DRM backend"]
+    STEAM["Steam / PC games<br/>60 fps ceiling"] --> GS["gamescope compositor<br/>DRM backend; variable refresh"]
     GS --> KMS
-    LAUNCHER["portarelauncher<br/>CPU-written dumb buffer"] --> KMS
+    LAUNCHER["portarelauncher<br/>CPU-written dumb buffer; variable refresh"] --> KMS
     KMS["Linux DRM/KMS<br/>Patched msm driver: DSI VRR / AVR control<br/>and integer-multiple repeats"] --> DPU["Qualcomm display controller<br/>Scanout, optional color correction and AVR"]
     DPU -->|MIPI DSI| PANEL["Nova AMOLED panel<br/>1280 × 960; up to 120.198 Hz"]
 ```
@@ -301,10 +303,11 @@ submits each frame once with a presentation target. Our Mesa Vulkan WSI
 patches time the page flips and enable `VRR_ENABLED`. The patched msm
 driver schedules integer-multiple repeats through the display controller's
 AVR, scanning the same buffer at evenly spaced intervals without another
-render, submission or page flip, within an 80–120.198 Hz range. For example,
+render, submission or page flip, within a 65–120.198 Hz range. For example,
 59.8261 fps becomes 119.6522 Hz (2×), and 30 fps can become 120 Hz (4×).
 Kernel repeat scheduling applies to any commit with `VRR_ENABLED` set,
-whether timed or not; mpv, xemu and Steam currently use fixed refresh.
+whether timed or not; mpv and xemu currently use fixed refresh. The launcher
+and Steam's gamescope use the same kernel repeat scheduling.
 See [variable refresh](documentation/VARIABLE_REFRESH.md) for the Mesa and
 kernel patches and measured behavior.
 
@@ -318,8 +321,11 @@ Small services handle the rest:
 
 ### Device integration
 
-Suspend/resume fixes cover UFS, PCIe, Wi-Fi, the gamepad MCU and LEDs;
-overnight battery drain remains unresolved. microSD runs at UHS-I SDR104,
+Suspend/resume fixes cover UFS, PCIe, audio clocks, Wi-Fi, the gamepad MCU
+and LEDs. The SoC now reaches platform sleep: a 10-minute test on
+18 October measured 23 mA, with CX, AOSS and DDR asleep. Overnight drain
+and wider resume coverage still need verification; see
+[power measurements](documentation/POWER.md). microSD runs at UHS-I SDR104,
 and the GPU can drop to 124.8 MHz for menus and films. Charging mitigation
 reduces current as the battery warms; device verification is pending.
 
@@ -327,8 +333,9 @@ reduces current as the battery warms; device verification is pending.
 
 The compressed image is **under 500 MB**, without artwork scraping, a media
 centre or a file manager. Duplicate tools and wrappers are removed;
-[the package inventory](documentation/PACKAGE_INVENTORY.md) records about
-250 MB removed and roughly 130 MB still targeted.
+[the package inventory](documentation/PACKAGE_INVENTORY.md) records historical
+size measurements and remaining candidates. Re-measure the current image
+before quoting further savings.
 
 ## Building
 

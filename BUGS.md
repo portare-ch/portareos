@@ -1,721 +1,205 @@
 # Known bugs and loose ends
 
-Things found and not fixed. GitHub issues are the tracker for work with a
-shape; this file is the record of everything else, including findings too
-small, too uncertain or too far from a fix to file. Nothing here is
-speculative: each item is something observed on the device or read in the
-tree, with enough detail to pick up cold.
+Reviewed 18 October 2026 against the current tree and recorded Nova tests.
+An implemented fix is not a device test. Items below distinguish observed
+failures from checks still needed; each has a next action.
 
-Add to it when you leave something behind. When something is fixed, move it to
-Resolved at the bottom rather than deleting it: what was wrong and why is worth
-keeping, especially where the first few explanations were wrong.
+GitHub issues track work; the [roadmap](ROADMAP.md) sets priorities.
+Older reproductions, rejected explanations and resolved bugs are preserved
+in the [investigation history](documentation/BUG_HISTORY.md). Commands there
+may refer to removed programs or older kernels.
 
-## Landed on 26 September, not yet run on the device
+## Emulators
 
-Each has its check; do them before building on top.
+### nova-push and the Neo Geo CD folder name
 
-* **Charger current limit, kernel patch `0510` (#354).**
-  `/sys/class/power_supply/battery/constant_charge_current_max` should read
-  the firmware's ceiling in µA, and while charging `echo 2000000 >
-  .../constant_charge_current` should bring `current_now` to about 2 A. An
-  error on the write means the firmware rejects the property and charging is
-  unaffected. The protocol was read from Qualcomm's downstream
-  `qti_battery_charger.c`, not from a device.
-* **`charge-throttle` (#355)**, the service that steps the current at 40, 42
-  and 44 °C of battery temperature. `journalctl -u charge-throttle -f` while
-  charging and playing: a line such as `battery 402: charge current 3000000
-  uA` when the battery crosses 40 °C, and `current_now` following it. `no
-  charge current limit on this kernel` means the patch above is not working.
-* **RetroArch's automatic output rate (#356)**, `audio_out_rate = "0"`. The
-  log carries `[Audio] Output rate picked for the core's … Hz: … Hz` at
-  every audio init. On an N64 game the second such line, after the game
-  programs its DAC, should name 32000 or 44100, and `hw_params` should show
-  the same rate. A regression here would sound like every game at once, so
-  a session across systems is the test.
-* **strace 7.2 (#357).** The SHA-256 in the recipe came from the GitHub
-  release asset because strace.io was unreachable from the sandbox. A hash
-  mismatch at unpack is that, and the fix is the checksum of the tarball
-  strace.io serves.
-* **Game guides through RetroArch (sdl2text)** worked on the device on the
-  evening of 26 September: M2 opens the guide, the D-pad scrolls and zooms,
-  M2 returns to the game where it was. So sdl2text does get DRM master, the
-  udev button for M2 is 16, and the held-paddle grace holds. Still open:
-  whether a Vulkan core (parallel-n64, Flycast) comes back cleanly from the
-  context destroy and reset the handover forces, and whether it stutters
-  for a moment afterwards while it refills its pipeline and texture caches.
-* **Settings > Consoles, PRMPT and latency (preemptive frames, 1).** Not
-  yet run on the device. With `snes.preempt=1` in system.cfg, a SNES game's
-  RetroArch config should carry `preemptive_frames_enable = "true"` and
-  `run_ahead_frames = "1"`, the shader and integer scaling stay, and the
-  statistics overlay's
-  core time should rise only a little while nothing is pressed. A
-  `[Run-Ahead Preemptive]` warning in the log means the core does not
-  support it and it goes on the NO_RUNAHEAD list; a frame flickering back
-  on a press means its savestate is not deterministic, same list. The
-  PlayStation uses the same key, `psx.preempt=1`, and keeps Vulkan at 4x;
-  measured in `documentation/emulators/SwanStation.md`.
-* **Which N64 games run at 32 kHz.** Super Mario 64 and the two Zeldas are
-  believed to; RetroArch's statistics overlay, or the `Sink rate` log line,
-  says. Nothing depends on the list any more, it is only worth knowing.
+The current PortareOS tools automatic converter recognizes `neogeocd`,
+while PortareOS stores these games in `/storage/roms/neocd/`. Passing a CUE
+with `nova-push neocd` is rejected; using `neogeocd` targets the wrong folder.
+Until the tools recognize the current name, convert locally with
+`portare_chd.py` and transfer the resulting CHD with `nova-push neocd`.
+The [installation guide](documentation/INSTALLATION.md) uses this workaround.
 
-## Unexplained
+### Dolphin hangs and audio problems
+
+GameCube remains broken in the libretro path
+([#463](https://github.com/portare-ch/portareos/issues/463)). Soul Calibur II
+has hung after a FIFO error. An audio-driver fix restored batches that
+exceeded RetroArch's small PipeWire ring, but clean gameplay with sound has
+not been established. Older standalone `Dolphin.ini` experiments do not
+establish the current core's behavior.
+
+Reproduce with the shipped core; keep RetroArch's log, `/var/log/exec.log`
+and `dmesg`. While frozen, identify the RetroArch PID and collect all-thread
+backtraces with gdb. Separate an emulator deadlock from a graphics-driver
+wait before changing settings. See the
+[debug tools guide](documentation/DEBUG_TOOLS.md) for collection commands.
+
+### Flycast: Tony Hawk regression check
+
+Tony Hawk's Pro Skater dropped from its intended 30 fps to 26 or less with
+audio stutter in standalone Flycast. Changing audio backends and pinning
+the GPU did not fix it. That frontend, its `emu.cfg` and `start_flycast.sh`
+are gone; RetroArch now owns audio and presentation.
+
+Replay the same section with the current libretro core and record
+application/display intervals and xruns. If it is clean, close the old
+finding as removed with the standalone. Do not apply the old backend or
+compositor experiments to the current image. See the
+[performance plan](documentation/PERFORMANCE_PLAN.md).
+
+### PlayStation and PS2: remaining coverage
+
+SwanStation's preemptive-frame readback cost was reduced by patch 002
+([#495](https://github.com/portare-ch/portareos/pull/495)). PlayStation's
+PRMPT switch is available again, off by default, with higher CPU/GPU clocks
+while enabled. The old claim that the switch was removed is obsolete.
+Measured throughput, remaining missed refreshes and settings are in
+[SwanStation](documentation/emulators/SwanStation.md).
+
+ARMSX2 is playable through libretro; tuning and compatibility work continues
+([#477](https://github.com/portare-ch/portareos/issues/477)). Recheck Time
+Crisis II's glitches and speed against the standalone baseline. PS2 has no
+RetroAchievements because the core exposes no memory to RetroArch. See
+[ARMSX2](documentation/emulators/ARMSX2.md) for measured configurations.
+
+### Guides and preemptive frames
+
+M2 guide handover worked on a 2D core; returning from a guide still needs
+explicit tests on Vulkan cores such as ParaLLEl N64 and Flycast. Check
+graphics-context recovery, audio and the first seconds of resumed play.
+
+Neo Geo CD now enables one preemptive frame by default, with Metal Slug and
+Metal Slug 2 pause/resume checks recorded. Other consoles keep it off.
+SNES and PlayStation have performance measurements, but every offered core
+still needs deterministic save/load and input tests. Watch for
+`[Run-Ahead Preemptive]` failures and flicker after a changed input; a
+metadata claim of deterministic states alone is insufficient. See
+[NeoCD](documentation/emulators/NeoCD.md) and the
+[test plan](documentation/TEST_PLAN.md#e2-preemptive-frame-per-2d-console-autohuman).
+
+## Display
 
 ### The color profiles crush the dark greys
 
-Both Gamma 2.2 and sRGB, on the device, 26 September: the darkest greys
-come out as one black where stock shows steps. The fit's own caveat
-already put codes 16 to 32 as its least certain region. The likely cause is
-the output table driving the low codes under the panel's black floor; the
-matrix on gamma-encoded values is the other suspect. Stock is the default
-and `post-update` moves a device that had chosen a profile back to it, once
-(`colorprofile-stock`). The refit and the checks are in
-`documentation/PER_DEVICE_DOCUMENTATION/SM8550/COLOR_PROFILE.md`, "Known
-issue". The launcher's hint under the setting still says "Gamma 2.2 for
-consoles"; that text lives in portarelauncher and is next.
-
-### Suspend power draw
-
-Tracked in [#62](https://github.com/portare-ch/portareos/issues/62). The
-device loses meaningful charge overnight and the cause is not known.
-
-Three hypotheses were tested on hardware and all three were wrong:
-
-* `apss` in `/sys/kernel/debug/qcom_stats/` reaching sleep was read as the SoC
-  reaching sleep. It is the apps subsystem only.
-* Interconnect `avg` votes were read as the DDR floor. Setting `ebi` to zero
-  changed nothing.
-* CPU frequency was read as what drives DDR. Moving the governor moved the
-  clocks and DDR did not follow.
-
-What is established: DDR has not touched its 200 MHz minimum since boot, in
-any state, and with the frontend stopped it pins at 3187 MHz on an idle
-system. `aosd`, `cxsd` and `ddr` in `qcom_stats` all read `Count: 0`, though
-several files in that directory are empty on this SoC so the zeros may mean
-"not reported" rather than "never entered".
-
-Nobody has measured `/sys/class/power_supply/*/current_now`. Everything so far
-has been proxies. Start there.
-
-### CX never leaves performance state 64
-
-`pm_genpd_summary` shows `cx on 64` with three holders: `898000.serial`
-(uart14, the gamepad MCU by the `serial1` alias), `pcie_0_gdsc` at 64
-(ath12k), and `mmcx` at 64 (display controller). The serial releases its
-interconnect vote in suspend since kernel patch 1103 (POWER.md); whether the
-others do is unknown.
-
-### pcie_ports=compat
-
-On the kernel cmdline, which disables the PCIe port services including PME.
-`CONFIG_PCIEASPM_DEFAULT=y` leaves link power states at whatever firmware set,
-and Qualcomm firmware commonly leaves ASPM off. Never investigated. Costs
-power awake as well as asleep if the ath12k link never reaches L1SS.
-
-## Patches applying with fuzz
-
-`scripts/unpack` runs `patch -p1`, which takes GNU patch's default fuzz factor
-of 2. A hunk can apply with two lines of context discarded and the build says
-nothing. Re-measured on 26 September against a clean 7.2.5 tree, applying the
-97 kernel patches in the build's order: **20 apply with fuzz, none fail.**
-
-`0002` input-polldev, `0005` btrtl RTL8733BU, `0033` HTR3212 leds, `0054`
-goodix, `0055` `0056` `0057`x2 `0104` `0105` panels, `0058` Odin2 Mini
-backlight, `0059` hynitron, `0121` rpmhpd gmu rails, `0210` sdhci-msm,
-`0501` wifi/bt mac, `0504` compat input syscalls, `1003` rsinput ff, `1007`
-ufs hibern8, `1048` PCI suspend opp, and the qce runtime-pm patch.
-
-Most are for hardware this fork does not build and could go. Ours among them:
-`0105` the Nova panel, `0210` microSD SDR104, `1003` gamepad force feedback,
-`1007`, `1048` and `0501`.
-
-`1051` is not in the list: GNU `patch` takes it cleanly. `git apply` reports
-`corrupt patch at line 32` because its final context line is bare rather than
-a single space; the build does not use `git apply`.
-
-A trap for whoever measures this next: `patch -s` silences the "succeeded
-with fuzz" lines along with everything else, and a run with it reports zero.
-The first count on 26 September was taken that way and was wrong.
-
-Making the build reject fuzz outright (`patch -F0`) would need all twenty
-regenerated first.
-
-## Dolphin
-
-Both findings below were made on the standalone Dolphin. The image now runs
-Dolphin as its libretro core inside RetroArch, and neither has been re-tested
-there. They stay until someone does.
-
-### Soul Calibur II freezes
-
-Diagnosed but unconfirmed. `Dolphin.ini` ran Dual Core with
-`SyncOnSkipIdle = False` and `SyncGPU = False`, which is the exact combination
-`CommandProcessor::HandleUnknownOpcode` singles out as making an unknown FIFO
-opcode "very likely". `SyncOnSkipIdle` is restored to upstream's default.
-
-It still freezes, so that was not it, or not all of it. Dolphin's own
-escalation from here is `SyncGPU = True`, then `CPUThread = False`. One at a
-time. `/var/log/exec.log` now carries the reason, since the patch that silenced
-20 PanicAlerts is gone.
-
-What the kernel rules out: a 2.5 hour dmesg covering a play session has no GPU
-fault, no `*ERROR*` from msm, no hung task, no rcu stall, no OOM. One
-`dpu_encoder_resource_control: invalid parameters` from the display controller,
-once, and nothing else. So whatever stops is stopping in userspace, without the
-kernel noticing. That is Dolphin's own threads or the Vulkan driver deadlocking
-before it submits anything the kernel would object to, and it argues against
-the GPU firmware being the cause.
-
-The measurement nobody has taken: while it is frozen, dump per-thread state.
-
-    P=$(pidof dolphin-emu-nogui)
-    for t in /proc/$P/task/*; do
-      echo "$(basename $t) $(cut -d' ' -f3 $t/stat) $(cat $t/wchan) $(cut -d' ' -f1 $t/syscall)"
-    done
-
-That separates the three candidates in one shot. Threads blocked in an ioctl on
-a DRM fd means the driver. Everything in a futex wait means a deadlock between
-Dolphin's own threads. A thread in state R with no syscall means the JIT is
-spinning.
-
-Soul Calibur III is not a way around this: it is PS2 only, so it belongs to
-armsx2, which is reported to run fine.
-
-### Truncations in the 240p patch
-
-`004-enable-240p-res.patch` assigns `GetEFBScalef()` to an `unsigned int` in
-`TryToSnapToXFBSize` and to an `int` in `GetCustomCrop`, both in `Present.cpp`.
-At the 240p setting a scale of 0.5 truncates to 0. Neither crashes and both
-affect only that one resolution. Left alone because picking a rounding is a
-design call, not a fix.
-
-## Flycast
-
-Found on the standalone Flycast, with its own audio backend, `emu.cfg` and
-`start_flycast.sh`. The image now runs Flycast as its libretro core, where
-RetroArch owns audio, vsync and pacing, so most of the reasoning below is
-about a program that is no longer shipped. Whether Tony Hawk still stutters
-under the core is the one thing worth checking; if it does not, this moves to
-Resolved as "gone with the standalone".
-
-### Tony Hawk's Pro Skater stutters
-
-The audio backend was changed from `pulse` to `sdl2` when pulseaudio was
-removed, on the theory that the backend was behind the stutter. It still
-stutters, so it was not.
-
-The change did reach the device: `start_flycast.sh` rewrites `backend =` in an
-existing `/storage/.config/flycast/emu.cfg` on every launch, so a config
-predating the switch is not the explanation.
-
-Nor is staleness. `PKG_VERSION` is `5aa091f`, which is exactly `v2.7`, the
-newest tag upstream has.
-
-Measured. The counter sits at 30, dips to 26 when the audio stutters, and
-falls as far as 9 at its worst. So this is not presentation: frames are not
-being made. Whatever is wrong is upstream of the compositor.
-
-Ruled out since, in order:
-
-The audio backend. `sdl2` replaced `pulse` when pulseaudio was removed and the
-stutter survived it.
-
-The GPU clock. Utilisation looked damning at first: 10 to 20 percent at full
-speed, 80 to 90 while dropping. But pinning the devfreq governor to
-`performance` holds the GPU at its 680 MHz ceiling and the drops continue
-essentially unchanged. (That test did expose a real bug, a suspend hook
-latching the GPU to powersave, but a different one.)
-
-CPU shortage. `top -H` during a drop: `Flycast-emu` at 42.6 percent of one
-core, `Flycast-rend` at 14.5, `SDLAudioP0` at 2.3, and 87.8 percent of the
-machine idle with a load average of 1.14. Nothing is saturated. There is no
-shortage of anything.
-
-So flycast is waiting, not working. Which puts the audio path back in front,
-for a better reason than the first guess: flycast gates emulation on the audio
-buffer, so a backend that delivers late does not follow a frame drop, it causes
-one. The `SDLAudioP0` thread exists and is nearly idle, which is what a thread
-blocked on a slow consumer looks like.
-
-The next measurement is `pw-top` during a drop, watching flycast's node for a
-climbing ERR count and for what quantum it negotiated. `backend = alsa` against
-`sdl2` is the A/B underneath it.
-
-That `pw-top` was taken, during Tony Hawk gameplay on a KMS launch:
-
-    R  50  1024  44100  18.9us  53.1us  0.00  0.00  0  S16LE 2 44100  alsa_output...Speaker__sink
-    R  47  1024  44100  27.2us  17.2us  0.00  0.00  0  S16LE 2 44100  Audio Stream
-
-Quantum 1024 at 44100, ERR 0 on both flycast's stream and the sink, wait and
-busy times in the tens of microseconds. No xruns, and the rate is the one the
-Dreamcast wants, so the audio path is not visibly late at the moment the
-frames are missing. That weakens the gating theory rather than settling it:
-the remaining A/B, `backend = alsa` against `sdl2`, is still untried.
-
-The baseline is 30 because the game renders at 30. Flycast says so itself:
-
-    N[RENDERER]: Swap interval changed to 4
-
-which is `swapInterval` 2, from DupeFrames on a 120 Hz panel, times
-`gameSwapInterval` 2. `setSwapInterval` is called with what the game asks
-for, and Tony Hawk asks for every second Dreamcast vblank. So the 30 is not
-evidence of anything being starved, and the earlier reading of it as "half
-rate is what an emulator gated on audio does" should not be carried forward.
-
-Per-thread sampling during gameplay, which refines the earlier `top -H`
-numbers: `Flycast-emu` 17 percent of one core, `Flycast-rend` 3 percent, GPU
-load 4 to 14 percent with the devfreq governor pinned to `performance` and
-the clock held at 680 MHz. Still waiting, not working.
-
-One more thing the frametime logs show. With vsync on, gameplay frametimes
-land on multiples of the 8.33 ms vblank - 599 frames at 33 ms, 309 at 41, 207
-at 50 - so a frame that misses by a hair costs a whole vblank and 30 fps
-becomes 24, then 20. Flycast's Vulkan backend always takes FIFO on ARM, and
-until SDL2 was replaced by sdl2-compat nothing in the image could tear under
-sway either. `rend.vsync = no` now ships as the default and removes the 24
-fps step, but the drops themselves survive it, so this was never the cause.
-
-Note that `pvr.AutoSkipFrame` is not it unless the ES `auto_frame_skip` setting
-has been set by hand. Nothing in the tree defines a default for it, so
-`get_setting` comes back empty and the launcher takes the `else` arm, which
-writes 0.
-
-## PlayStation
-
-### Preemptive frames cost the frame rate on a two-image queue
-
-Reported as performance dips on the PlayStation, with two workarounds found by
-hand: turning preemptive frames off, or raising the swapchain to three images.
-Both are real, and they are the same mechanism.
-
-Measured on Tekken 3, SwanStation, the 119.652 Hz mode, MangoHud frametimes
-over a window of real play. Frametimes in ms, target 16.715:
-
-| renderer | images | preempt | input | mean | p95 | p99 | >30 ms | fps |
-|---|---|---|---|---|---|---|---|---|
-| Vulkan 4x | 2 | off | play | 16.71 | 18.23 | 19.70 | 0 | 59.8 |
-| Software 1x | 2 | on | play | 19.43 | 31.48 | 34.05 | 154 | 51.5 |
-| Vulkan 4x | 2 | on | mashing | 20.96 | 37.05 | 39.63 | 23% | 47.7 |
-| Vulkan 4x | 3 | on | mashing | 16.71 | 32.89 | 34.99 | 14% | 59.8 |
-
-A frame whose input changed loads a state, runs the core twice and saves
-twice. With two images the long frame cannot start until the short one is on
-screen, so it misses its vblank and costs a whole refresh - the ParaLLEl N64
-and Dolphin case of #389 and #397, reached through emulation cost rather than
-an uneven VI frame. A third image lets it start early and the frame rate comes
-back whole, 47.7 to 59.8.
-
-The renderer is not the variable. The `latency` profile picks the software
-renderer at 1x so that savestates carry no GPU state, on the reasoning that
-this is what makes a preemptive frame affordable. Vulkan at 4x with preemptive
-frames measures the same, 50.7 fps against the software renderer's 51.5, so
-what costs is running the emulator twice on the one thread, not what the
-savestate holds. Nothing is saturated while this happens: 10% CPU across eight
-cores, 25% GPU.
-
-Three images does not make preemptive frames free. It restores throughput -
-the mean lands exactly on the target - but p99 stays at 35 ms against 19.7 ms
-with preemptive frames off, and 14% of frames still cross 30 ms against none.
-The profile buys about a frame of input latency and pays a visibly less even
-frame for it, so it is a preference rather than a better setting, and the
-frame rate part of the cost is avoidable.
-
-Ruled out first, both verified on the device rather than reasoned about:
-
-The audio stack, including the quantum. `pw-top` during play: the speaker sink
-at quantum 256 and 44100, RetroArch's node at 352, ERR 0 on both, wait and
-busy in the tens of microseconds against a 5.8 ms cycle. SwanStation asks for
-44100 and the graph is allowed to run there, so no resampler is in the path -
-RetroArch's own log says so, `the writer blocks, so the source follows the
-device and resampling is not biased`. A blocked write could cost at most one
-quantum, which is too small for the refresh-sized dips seen.
-
-The timed presents patch. The log reports `presents are timed by the driver`
-and `swap interval 2, one present a frame, 16.715 ms apart`, which is two
-periods of the 119.652 Hz mode, and `video_refresh_rate` is 119.652237. Mode
-and pacing are right, and the patch's target agrees with what Mesa 26.2.3's
-`wsi_common_display.c` does with it.
-
-What was done about it: the PlayStation's mode switch is gone, from
-`setsettings.sh` and from the launcher's Settings > Consoles both. The
-shipped configuration is the one measured above and there is no longer a
-setting that makes it worse. E3 in the test plan is now the frametime
-reference rather than a test of the removed mode.
-
-One real bug fell out of this and is fixed with it. The guard that turns off
-automatic frame delay was keyed on `profile = latency`, but `set_runahead`
-also enables preemptive frames for `<system>.preempt=1`, so that path shipped
-`video_frame_delay_auto = "true"` next to `preemptive_frames_enable = "true"`
-- confirmed on the device - which is the combination the comment there warns
-about. It reached every 2D console using `preempt`, not just the PlayStation.
-The condition now lives in `preempt_enabled` and both callers read it.
-
-The 2D consoles keep their switch, and it was measured too rather than left
-to the same guess. SNES, Super Mario World, snes9x, idle and playing, with
-`preempt` off and on: all four runs delivered every frame the console asked
-for - 1802 in 30 s and 2704 in 45 s against 60.0989 Hz - with the mean on
-16.638 ms either way and no frame reaching the 24.96 ms a missed refresh
-costs. Playing with it on moved p99 from 20.82 to 21.11. That is the
-opposite of the PlayStation above, and the reason is the same one: snes9x is
-cheap enough to rerun inside the frame, SwanStation at 4x is not.
-
-So `set_swapchain_images` keying the third image on the core name
-(`parallel_n64|dolphin`) is left alone. A third image is what rescued the
-PlayStation once preemptive frames were on, but the 2D consoles never reach
-the case it fixes, and it would cost them a frame of queueing for nothing.
-
-What none of this measures is what the preemptive frame buys. It is worth a
-frame of input latency and it turns off the automatic frame delay, which was
-already claiming most of one, so the net may be close to nothing - and
-playing it blind, nobody noticed the difference. Settling it needs a 240 fps
-recording of a button press rather than a frametime log. It stays off by
-default on every console, which is also the safer answer: the preemptive
-frame asks the core to round-trip a savestate every frame and polls input
-only through `preempt_input_state` with the core's own poll stubbed out, so
-a core whose `deterministic` claim in its info file is not quite true drifts
-quietly rather than failing. We assert that claim ourselves for SwanStation,
-over an upstream that lowered it to `basic`.
-
-### Fixed: the cost was the VRAM readback, not the second run (#495)
-
-The explanation above was wrong in its middle step. The emulation thread
-was idle at 13-30% of a core while frames missed, because SwanStation's
-`retro_serialize` read VRAM back for every state, and the readback waits for
-the GPU to finish the whole queued frame first. Raising the clocks did not
-help on its own: `performance` on cores 3-7 left 53.3 fps, and the GPU at
-680 MHz restored 59.0 fps but still missed 8.7 vblanks a second. The
-software renderer measuring the same as Vulkan was probably a cost of its
-own, the CPU rasterizer running twice; it was not measured again.
-
-SwanStation patch `002` keeps VRAM on the GPU for frontend run-ahead states,
-the way the core's own memory states do: 59.6 fps and 3.8 missed a second
-at the default clocks, 59.8 and 0.5 with `performance` and the GPU at
-maximum, which `runemu.sh` now sets while PRMPT is on. So the PlayStation has
-its switch back, still off by default.
-`documentation/emulators/SwanStation.md` has the runs.
+Gamma 2.2 and sRGB collapsed dark steps that remained visible with stock
+on 26 September. Stock remains the default, and the one-shot
+`colorprofile-stock` migration resets earlier selections. Refit the low
+codes and verify grey ramps on the panel before recommending either profile.
+De-gamma and 8bpc dithering also need device checks. See
+[color profiles](documentation/PER_DEVICE_DOCUMENTATION/SM8550/COLOR_PROFILE.md).
+
+### External displays and audio routing
+
+`power-handler` still refers to `/usr/bin/external-display`, which is absent.
+Its fallback blanks the launcher's CRTC, but external-display detection
+answers false. The intended docked power-key policy therefore needs work.
+
+`hdmi_sense` scans DisplayPort connectors and matches sinks named `hdmi`,
+`displayport` or `dp`; nobody has recorded `wpctl status` while docked to
+confirm the match. Test display ownership, hotplug, audio routing and return
+to the panel together. The historical monitor-source behavior dropped with
+`pactl` also needs a decision if a retained client needs it.
+
+### VRR and Steam validation
+
+The current floor is 65 Hz, up to 120.198 Hz. The launcher and Steam's
+gamescope use VRR too, and Steam is capped at 60 fps. Probe measurements
+support the new floor and repeat scheduling; a real Steam game on the final
+kernel/gamescope combination is still unmeasured. Check frame delivery,
+late-frame recovery and display transitions. RetroArch rejects rates that
+cannot fit twice, including some arcade boards near 61 Hz. See
+[variable refresh](documentation/VARIABLE_REFRESH.md).
 
 ## Audio
 
-### Audio latency: 8 ms now, and the DSP is no longer what sets the floor
-
-A user filming at 240 fps measured 10-19 frames of button-to-sound against
-Android's 10-12, on Snes9x at a 32 kHz link, and could not lower RetroArch's
-audio latency setting below 32 ms without crackling where Android took 15.
-
-`docs/audio-latency.md` budgets the chain. The default is now 24 rather than
-upstream's 32, worth 4 ms at 48 and 44.1 kHz and 12 ms at 32 kHz, because at
-24 ms a 32 kHz link is the one whose request falls under 256 frames and takes
-the graph quantum to 128. That needed no device: PipeWire floors the quantum to
-a power of two and scales its bounds by rate, so the ring stays more than two
-quanta deep at every rate this device uses.
-
-What remained was the sink. `q6apm-dai` stepped `PERIOD_SIZE` by 480 frames
-whatever the rate, so PipeWire's batch headroom was 10 ms at 48 kHz and 15 at
-32. #422 replaced the step with 10 ms of frames at the stream's own rate, which
-the device confirms: `period_size` 320 at 32 kHz, and RetroArch's `Sink rate`
-line now reads -50 ppm where it used to report -17451 and refuse to bias
-resampling. #428 clears `SNDRV_PCM_INFO_BATCH` in push-pull mode and moves the
-topology to `SH_MEM_PULL_MODE` to drop the headroom as well; merged, not run.
-
-**Two things in the report are still unexplained.** 16 ms at a 32 kHz link
-should not crackle by this model, so either something else was late on that
-device or the setting was not taking effect - `setsettings` rewrites
-`audio_latency` at every launch, so a value changed in RetroArch's own menu does
-not survive. And none of the model has been measured: the journal line stating
-`period frames` and `headroom` is what confirms or kills it.
-
-### hdmi_sense sink match is unverified
-
-The external display is DisplayPort over USB-C alt mode, so the connector is
-`DP-1`. The script scans DP connectors and matches sinks on `hdmi`,
-`displayport` and `dp`, on the assumption that the ALSA device behind a DP
-output is still named for HDMI on this SoC. Its header comment still points
-at `111-sway-init`, which no longer exists. **Nobody has docked the device and
-run `wpctl status` to check.** If the sink matches none of those, the regex
-needs another alternative.
-
-### Two pactl calls dropped rather than ported
-
-* `set-default-source <sink>.monitor` has no PipeWire equivalent: a monitor is
-  a port on the sink node, not a node, so there is no id to make default.
-  `pipewire-pulse` synthesises those sources for pulse clients only. This is a
-  real behaviour change and nobody has said whether it mattered.
-* `set-card-profile` was already dead. `DEVICE_PIPEWIRE_PROFILE` is exported in
-  `quirks/profile.d/999-export` and never assigned.
-
-### Names that lie
-
-`hdmi_sense`, its udev rule `99-hdmi.rules` and its status file
-`/run/hdmi-status.last` are all named for hardware this device does not have.
-
-## Display and power
-
-### /usr/bin/external-display is not in the tree
-
-`power-handler` calls it when it exists and otherwise answers "no external
-display" and blanks through the front-end. The helper is referenced in
-comments as the thing that blanks internal panels only, and it has never
-existed here. Either write it or finish removing the indirection.
-
-### The DPMS toggle is gone
-
-`system.suspend.dpms` chose between a real DPMS off and dropping the backlight.
-Its only reader was `portareos-fake-suspend`, removed in `a61c3f72a4`, and the
-setting went with it. The blank path now always does a real DPMS off, through
-the front-end since sway went, which is the better default, but the choice no
-longer exists.
-
-### The power LED does not exist
-
-`sleep.d/pre/000-led`, `sleep.d/post/099-led-restore` and `power-handler` all
-write to `/sys/class/leds/power-led`. That node is declared only in the AYN and
-AYANEO device trees, so every `[ -d "${POWER_LED}" ]` guard is false here and
-the writes never happen. Dead, not harmful. The analogue stick LEDs are real
-and that code stays.
-
-Worth knowing: `power-handler` lights the LED at press time specifically so the
-press does not feel dead while WiFi tears down. On this device that comfort
-feature does nothing.
-
-## rsinput
-
-### Truncated frames are still dropped
-
-`1013` fixed the batch-wide checksum that was discarding whole receive batches
-and added header resynchronisation. What it does not do is buffer a partial
-frame for the next callback: `rsinput_process_data()` returns when
-`len < frame_length` and those bytes are lost. Proper reassembly needs
-persistent state across callbacks.
-
-## Build and process
-
-### Changed defaults still need a migration
-
-Half fixed. `post-update` now runs an `--ignore-existing` pass over
-`/usr/config`, so a config file that is *new* in an image reaches a device
-that has already booted, where before only `userconfig-setup` did that and
-only once, guarded by `/storage/.configured`.
-
-A changed *value* inside a file the install already has still cannot be
-delivered that way, and needs a one-shot migration at the bottom of
-`post-update`. There is a `migrate` helper and a marker directory for it now,
-so each runs once and a later deliberate choice is not undone on the next
-update. Two exist, for `system.cpugovernor` and `FpsLimit`.
-
-The trap to remember: shipping a new default in a config file is not enough on
-its own. Ask whether an existing device can receive it.
-
-And the thing to know about the other direction: parts of `/usr/config` are
-copied over the top on every update, not merged, so shipping a file into one
-of those paths hands the image ownership of it. `retroarch.cfg` and the whole
-of `retroarch/config/`, `.opt` files included, work this way on purpose.
-
-That is a deliberate trade, not an accident to be guarded against. A core
-option changed in the RetroArch menu does not survive an update for any core
-the image seeds. In exchange, an updated device and a freshly flashed one are
-in the same state, and a build can be tested without first working out which
-of the settings on the device came from it. One copy of what was there is kept
-the first time, at `config.pre-refresh`.
-
-So the question to ask about a new default is still whether an existing device
-can receive it - and for these paths the answer is now yes, by overwriting.
-
-### Do not reuse a merged branch
-
-Three pull requests, [#59](https://github.com/portare-ch/portareos/pull/59),
-[#61](https://github.com/portare-ch/portareos/pull/61) and
-[#73](https://github.com/portare-ch/portareos/pull/73), arrived as conflicts
-that were really reverts: a branch whose PR had already merged, still carrying
-old copies of merged work and a base predating later merges. Merging any of
-them would have undone real changes.
-
-A branch whose PR has merged is spent. Start a fresh one from the new default
-branch.
-
-### "does not close #62" closes #62
-
-GitHub's linked-issue parser matches `close #62` and ignores the negation, so
-that sentence in a pull request body closes the issue it disclaims. It happened
-once, in #70, and the same phrasing sits in #68's commit message.
-
-## Resume time
-
-rsinput and Bluetooth are under Resolved, worth about 3.2s between them. What
-is left:
-
-* **WiFi**, was 10.6s to `associated`. The rfkill is not optional:
-  `ath12k_core_continue_suspend_resume()` returns 0 and does nothing unless
-  `ar->ah->state == ATH12K_HW_STATE_OFF`, and `wcn7850 hw2.0` does carry
-  `.supports_suspend = true`, so the radio has to be down for the driver's
-  suspend path to run at all. The reassociation cannot be avoided.
-
-  Measured split: NetworkManager's wake is only ~1.1s, consistently, and a
-  flat `sleep 4` in `wifi-resume` was better than a third of the total. That
-  is now a readiness poll, and it reports `WIFI ready after 0ms`, meaning iwd
-  answered on the first try and the whole four seconds was wasted. Or meaning
-  the readiness test answers before the chip is up, in which case the scan
-  fires too early and iwd's backoff costs a minute. Those look identical from
-  that log line. **Nobody has measured resume to `associated` since**, and
-  that is the one number that separates them.
-
-  What remains beyond it is the firmware reload on unblock and the scan
-  itself, roughly 5s. Association once the scan lands is 26ms, so the scan is
-  the target. A directed scan on the pinned network's channel would be the
-  thing to try, but `iwctl` does not expose one.
-
-`CONFIG_PM_DEBUG` is off, so `pm_print_times` is unavailable and per-device
-suspend and resume timings have to be read out of `dmesg` timestamps by hand.
-Turning it on is cheap and would make this measurable.
-
-## Resolved
-
-Kept rather than deleted. Several of these took more than one explanation to
-find, and the wrong ones are recorded too.
-
-### 44.1 kHz on the speakers: five gates, the last two found late
-
-The Dreamcast's AICA, the PS1 SPU and the PSP are 44.1 kHz with no 48 kHz
-mode. Five things pinned the speaker path (`PRIMARY_MI2S_RX` into two
-`awinic,aw88166`) to 48 kHz:
-
-| gate | where | fix |
-|---|---|---|
-| backend DAI rate masks | `q6dsp-lpass-ports.c` | `1052` |
-| backend hw_params fixup | `sc8280xp.c` | `1053` |
-| MI2S bit clock fixed by the device tree | `sc8280xp.c` | `1054` |
-| frontend PCM caps `rate_min = rate_max = 48000` | `AYN-Odin2-tplg.bin` | `extra-firmware/sources/tplg-allow-44100.py` |
-| bit clock rate set but not re-voted | `sc8280xp.c` | `1054`, second version |
-
-The fourth is why `1052`-`1054` changed nothing on their own: the topology
-caps the frontend before any kernel mask is consulted, so `aplay -r 44100`
-was refined to 48000 and PipeWire's allowed rates never mattered. Neither the
-amps nor the DSP were ever the limit.
-
-The fifth was measured on hardware with the topology widened by hand. A q6dsp
-clock only reaches the DSP when it is prepared, and startup prepares it before
-`1054` sets the rate, so each stream started on the previous stream's bit
-clock and `APM_CMD_GRAPH_START` failed on every rate change. Opening the same
-rate twice ran cleanly the second time, at 44100 (bit clock 1411200) as at
-48000, which is what gave it away. It also made one failed 44.1 stream take
-48 kHz down with it until the next rate change, which looked like a wedged DSP.
-
-**Confirmed on hardware** on 24 September (#290): with the widened topology
-loaded live and the kernel from nightly 126, Tekken 3 ran with the link at
-44100 and a bit clock of 1,411,200, Super Mario World at 32000 and
-1,024,000, and the link switched 48 → 32 → 48 → 44.1 kHz between games with
-nothing in `dmesg`. The same gates, widened once more, are what carry 32 kHz
-(#291, #297). Not recorded in that test: the headphone path
-(`RX_CODEC_DMA_RX_0`) at 44.1 or 32 kHz, which `AUDIO_SAMPLE_RATES.md` covers
-in theory and nobody has listened to.
-
-### Gone with EmulationStation and sway
-
-Three items were about the old front-end and went with it (#222,
-portarelauncher replaced both). Kept in one place so a future import does
-not trip over them: the repeated `Unknown element of type "notification"`
-theme warning, never explained and now moot; the frontend redrawing every
-loop iteration with no damage tracking, which the launcher's dumb-buffer
-text rendering does not have; and `isAvailable()`, removed from
-`emulationstation-sdl3` because its only caller hid the whole VOLUME group.
-The `pactl` findings above stay, since the scripts they concern are still
-in the image.
-
-### The gamepad failed to resume
-
-`rsinput_rx()` treated every serdev receive callback as exactly one frame:
-checksum the whole batch, discard it all on a mismatch. serdev frames nothing,
-so a batch holding two frames, a partial frame, or a frame behind power-cycle
-noise was thrown away entire. At resume that was the MCU's version reply, so
-the handshake added in `1012` timed out three times and gave up with
-`-ETIMEDOUT`, burning 1.48s of a 2.85s kernel resume and leaving the pad on a
-driver that had given up.
-
-`rsinput_process_data()` already validated each frame separately, so the fix in
-`1013` was to delete the batch-wide check and add header resynchronisation.
-
-**Confirmed on hardware.** Across three resumes the version reply is parsed and
-the parameters acknowledged 13ms later, with no `Checksum mismatch`, no timeout
-and no `-110`. That the reply is parsed at all is the proof: the batch checksum
-destroyed it before.
-
-Worth remembering: `1012` was blamed first, and it was innocent. It could not
-succeed while the layer beneath it was discarding the reply.
-
-### Bluetooth reloaded its firmware on every resume
-
-1.76s of `hmtbtfw20.tlv` and `hmtnv20.bin` on each resume, and self-inflicted.
-`hci_qca` sets `HCI_QUIRK_NON_PERSISTENT_SETUP` when it controls the chip's
-power, and `hci_dev_setup_sync()` then runs `hdev->setup` on *every* open, not
-just the first. `sleep.sh` stopping bluetoothd is what closed the device.
-`qca_pm_ops` already carries the controller through system suspend in in-band
-sleep with its firmware intact, so it just had to be left alone.
-
-**Confirmed on hardware.** `QCA Downloading` now appears only at boot, at 2.9s
-and 4.0s uptime, and on none of three later resumes.
-
-Untested: whether a paired controller still reconnects after resume. That is
-the failure mode that would send this back, and restoring the two `systemctl`
-calls in `sleep.sh` is the whole revert.
-
-### EmulationStation had no volume bar and no volume control
-
-Three separate faults wearing one symptom, which is why it took three goes.
-
-1. **The hardware +/- keys never reached ES at all.** `ViewController::input`
-   maps volume to `joystick2up`, the right stick. `portsense` owns the
-   physical keys and calls `/usr/bin/volume`.
-2. **`/usr/bin/volume` was broken by the pulse ban.** It ended in `pactl
-   set-sink-volume`, and #54 deleted `pactl`. Fixed in #63 by moving to
-   `wpctl`, with the cubic curve converted explicitly since `wpctl` takes a
-   linear factor where `pactl` took a percentage.
-3. **ES could not reach PipeWire.** `PipeWireControl` was a file-scope static,
-   so its constructor ran before `main()` and before the log existed: every
-   error went nowhere and a single failed connect was permanent. Fixed in
-   `emulationstation-sdl3#12` by constructing on first use and retrying.
-
-**Confirmed on hardware.** The overlay now appears on a hardware volume press,
-which exercises the entire chain in one go: `portsense` to `/usr/bin/volume`
-to `wpctl` setting the sink, `node_param` seeing `channelVolumes` change on the
-PipeWire loop thread, and `VolumeInfoComponent` noticing the new value 40ms
-later.
-
-A wrong turn worth recording: the missing overlay was blamed on the
-`Unknown element of type "notification"` theme warnings. It was not them, and
-they are still there.
-
-### dwc3 never runtime suspended
-
-`a600000.usb` held `avg 1000000  peak 2500000` on the path to `ebi`
-permanently, awake, on battery, with nothing plugged in. Those are
-`USB_MEMORY_AVG_SS_BW` and `USB_MEMORY_PEAK_SS_BW` from `dwc3-qcom.c` to the
-digit. `dwc3_core_probe()` ends with `pm_runtime_forbid()` and the only
-`pm_runtime_allow()` calls are on error and teardown paths, so `power/control`
-stayed `on` and `dwc3_qcom_runtime_suspend()`, which is what calls
-`dwc3_qcom_interconnect_disable()`, could never run.
-
-**Confirmed on hardware.** Writing `auto` took `runtime_status` to `suspended`,
-the usb row to `0 0`, and the `ebi` aggregate from 1735805 to 735805. Shipped
-as a udev rule in #70.
-
-This is an awake-power fix. The system suspend path drops the vote by itself
-through `dwc3_qcom_pm_suspend()`, so it does not touch the suspend draw.
-
-### Blanking the panel did not blank anything
-
-`power-handler` called `external_display blank`, and
-`/usr/bin/external-display` is not in this tree, so the call returned 1 and
-nothing happened. The flag was set, the backlight went dark on a separate path,
-and the DPU carried on scanning out at 120Hz behind it.
-
-**Confirmed on hardware.** `swaymsg "output * power off"` takes
-`ae00000.display-subsystem` from `avg 735805` to `0` and the whole `ebi`
-aggregate with it. That was the sway-era fallback; sway is gone from the image
-and the launcher holds DRM master, so the equivalent is a DPMS off on the CRTC.
-
-### ondemand parked the little cluster at maximum
-
-`008-perfmode` preferred `ondemand` wherever it existed. **Measured**: policy0
-at 2016000 kHz on a 97% idle system, dropping to 556800 under `schedutil`. That
-is also the cluster `irqaffinity=0-2` sends every interrupt to.
-
-It did not move DDR, which was the hypothesis it was meant to test, but it
-stands on its own.
+RetroArch defaults to 8 ms. The current PipeWire path permits a 3 ms graph
+quantum at 32, 44.1 and 48 kHz; pull-mode position reporting and removal of
+batch headroom have been measured. The earlier 24 ms default and
+"#428 merged, not run" notes describe intermediate builds.
+
+The remaining work is end-to-end button-to-sound and audio/video alignment,
+longer cross-core playback tests, headphones, Bluetooth and output changes.
+Measure the threaded audio pipeline rather than adding its nominal target
+to the budget by assumption. A smaller DSP period and direct ALSA did not
+improve the measured queue. See [audio latency](documentation/AUDIO_LATENCY.md)
+for current settings and the investigation log.
+
+Automatic output-rate selection still needs explicit N64 coverage after
+the game programs its DAC: compare `[Audio] Output rate picked` and the
+PCM's `hw_params`, then listen through rate changes. The tested speaker
+rates do not establish headphone or Bluetooth behavior.
+
+## Power and resume
+
+### Platform sleep works; overnight validation remains
+
+The earlier "SoC never sleeps" finding is superseded by #658. Nightly
+20261018 (`9d0a1c9`) entered CX, AOSS and DDR sleep and resumed in both a
+30-second and a 10-minute test. The latter measured **23 mA**, against
+39 mA over 5.9 hours on the preceding nightly. These are different test
+durations, not a current overnight comparison.
+
+Run an overnight battery test, repeated short cycles, suspend with an open
+playback PCM, charger attachment while asleep, and speaker/headphone checks
+after wake. Wi-Fi returned within a second in the recorded test; the old
+10.6-second NetworkManager-era delay is no longer the current baseline.
+Investigate the new `hwmon ... parent phy0 should not be sleeping` resume
+warning if it produces a failure. Full evidence and earlier failed
+hypotheses are in [power measurements](documentation/POWER.md).
+
+### Charging-current limits remain unverified
+
+Kernel patch 0510 and `charge-throttle` implement a firmware current ceiling
+and temperature steps at 40, 42 and 44 °C. Verify
+`constant_charge_current_max`, a supported current-limit write, and
+`current_now` while charging; watch `journalctl -u charge-throttle -f` as
+the battery warms. A rejected property or
+`no charge current limit on this kernel` means the mitigation is ineffective.
+
+### RT threads keep clocks high
+
+NeoCD's emulation uses about a tenth of a middle core, yet the X3 remains
+at 2957 MHz for mostly idle real-time audio/GPU threads. The default RT
+utilization clamp is 1024. Lowering it globally or moving threads with
+coarse masks increased late frames or CPU cost in recorded tests; all three
+experiments were rejected. Measure a per-thread or kernel policy across
+systems; see [NeoCD's measurements](documentation/emulators/NeoCD.md).
+
+### Gamepad report loss and suspend indicators
+
+200 Hz MCU reporting survives resume. At 250 Hz, about 19% of reports did
+not reach evdev; values 0 and 1 stopped the pad. Trace the loss before
+raising the default. `rsinput_process_data()` also drops a partial frame at
+the end of a callback instead of reassembling it across callbacks.
+
+The suspend hooks and power handler write `/sys/class/leds/power-led`,
+which the Nova does not expose. The guarded writes do nothing; the stick
+LEDs are separate. Test a real indication before claiming feedback during
+the suspend transition. Bluetooth controller reconnect after resume and
+MCU/LED rail power-off still need explicit device checks.
+
+## Build and configuration
+
+`tools/device-tests` predates several current defaults: it still expects a
+256-frame audio quantum, unconditional fixed-mode panel selection and old
+automatic-frame-delay/PlayStation profile behavior. Update those assertions
+and demonstrate failure on deliberately wrong settings before relying on
+the checker as a current regression gate. The
+[test plan](documentation/TEST_PLAN.md) records the current expectations.
+
+Changed defaults in persistent files need one-shot migrations; copying new
+files with `--ignore-existing` does not update values in existing files.
+Fresh installs now mark the existing migrations as done (#638).
+`retroarch.cfg` and `retroarch/config/`, including seeded core options, are
+deliberately refreshed on update; the first copy is kept at
+`config.pre-refresh`. Changes in those managed paths may overwrite menu
+edits. Test both fresh and updated devices when changing defaults.
+
+The kernel patch-fuzz count from 26 September was for Linux 7.2.5 and
+97 patches. It is historical, not the current 7.2.11 stack. #658 recorded
+121 production patches applying and nine changed objects plus the DTB
+compiling; that does not establish zero fuzz. If tightening patch policy,
+measure the current stack without `patch -s`, retain its output and test a
+deliberately rejected hunk. The old patch list is in the investigation
+history.

@@ -14,7 +14,7 @@
 #
 # Swept downwards on the device to find a breaking point and there was none;
 # pw-top's ERR stayed flat on Snes9x and SwanStation. pcm-flags reads the
-# driver's own flags if this needs checking again. docs/audio-latency.md.
+# driver's own flags if this needs checking again. documentation/AUDIO_LATENCY.md.
 AUDIO_LATENCY=$(get_setting audiolatency)
 if [ -z "${AUDIO_LATENCY}" ]
 then

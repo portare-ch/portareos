@@ -32,14 +32,14 @@ start_system_doc() {
     cat ${ROOT}/templates/${DOCTEMPLATE}.md >>${SYSDOC}.md
   fi
   cat <<EOF >>${SYSDOC}.md
-|Manufacturer|System|Release Date|Games Path|Supported Extensions|Emulator / Core|
+|Manufacturer|System|Release Date|Games Path|Recognized Extensions|Emulator / Core|
 |----|----|----|----|----|----|
 EOF
 }
 
 add_system_doc() {
   # A lone / means folders play too; written out, it reads as a typo.
-  echo -n "|${SYSTEM_MANUFACTURER}|${SYSTEM_FULLNAME} (${SYSTEM_NAME})|${SYSTEM_RELEASE}|\`$(basename ${SYSTEM_PATH})\`|${SYSTEM_EXTENSION/% \// folders}|" >>${DOCTMP}/${1}:system.tmp
+  echo -n "|${SYSTEM_MANUFACTURER}|${SYSTEM_FULLNAME} (${SYSTEM_NAME})|${SYSTEM_RELEASE}|\`${SYSTEM_PATH#/storage/roms/}\`|${SYSTEM_EXTENSION/% \// folders}|" >>${DOCTMP}/${1}:system.tmp
 }
 
 add_emu_doc() {

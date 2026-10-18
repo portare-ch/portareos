@@ -59,7 +59,8 @@ Late frames are frames ready after their target, out of about 3590.
 
 - **Preemptive frames cost almost nothing on the 2D systems**: 0.01 to 0.22 ms
   more core time per frame, for a frame (16.7 ms) of the game's own lag
-  taken off. The image ships them off for every system.
+  taken off. The image now enables one preemptive frame by default for Neo
+  Geo CD; the other systems keep it off. The 9 October rows predate that change.
 - **A shader's GPU time is latency.** The frame is timed to when it is
   ready, and at this load the GPU stays at its 401 MHz floor, so Snes9x's
   CRT shader (3.8 ms) and Gambatte's LCD shader (2.2 ms) sit in the path

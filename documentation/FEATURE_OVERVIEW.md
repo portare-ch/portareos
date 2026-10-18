@@ -4,7 +4,7 @@ Built for the Retroid Pocket Nova, with low latency and faithful console timing
 as priorities. One line per feature; implementation and device verification
 vary. Experimental work and known limitations are listed separately below.
 
-Reviewed 8 October 2026. See the [supported systems](../README.md#systems-and-status),
+Reviewed 18 October 2026. See the [supported systems](../README.md#systems-and-status),
 [verification inventory](FEATURES.md) and [known issues](../BUGS.md) for coverage
 and test status.
 
@@ -23,7 +23,7 @@ and test status.
 * Small native networking, input and Bluetooth services.
 * UHS-I SDR104 microSD support.
 * Automatic fan control.
-* Suspend/resume fixes for storage, Wi-Fi, Bluetooth, controls and LEDs; overnight drain remains unresolved.
+* Platform sleep confirmed with CX, AOSS and DDR down: 23 mA over ten minutes; overnight and wider resume validation remain open.
 * Low GPU idle frequency and USB runtime power management.
 
 Details: [CPU isolation](CPU_ISOLATION.md), [power measurements](POWER.md).
@@ -32,7 +32,8 @@ Details: [CPU isolation](CPU_ISOLATION.md), [power measurements](POWER.md).
 
 * Direct KMS presentation for emulators, without a desktop compositor.
 * Automatic integer-multiple VRR for RetroArch on the built-in display.
-* Variable refresh currently spans 80–120.198 Hz.
+* Launcher and Steam gamescope use VRR too; Steam is capped at 60 fps, with final game-level validation pending.
+* Variable refresh currently spans 65–120.198 Hz.
 * The display driver repeats frames to keep lower frame rates within the panel's refresh range, without a commit or rendering again.
 * Dedicated fixed-refresh modes matched to console families.
 * Corrected frame-rate calculations for NES, SNES, PlayStation, Saturn and N64.
@@ -56,12 +57,16 @@ Details: [variable refresh](VARIABLE_REFRESH.md), [console timing](CONSOLE_CLOCK
 * Reduced audio buffering: 8 ms RetroArch setting and a configured 3 ms PipeWire minimum.
 * DSP period lengths follow the sample rate, avoiding extra buffering at 32 kHz.
 
-Details: [audio latency](../docs/audio-latency.md),
+Details: [audio latency](AUDIO_LATENCY.md),
 [sample rates](PER_DEVICE_DOCUMENTATION/SM8550/AUDIO_SAMPLE_RATES.md).
 
 ## Games and everyday use
 
 * One selected emulator per system, with device-specific defaults.
+* CHD disc-library format; PlayStation, PS2, Dreamcast and Neo Geo CD enforce CHD-only images. Cartridge games keep their native ROM formats.
+* PortareOS tools / nova-push converts and verifies disc images during transfer over SSH.
+* Neo Geo CD tuned for full-screen 4:3, scanlines and one preemptive frame enabled by default.
+* PlayStation preemptive frames available as an option, off by default; CHDs are pre-cached in RAM.
 * Global, per-system and per-game configuration overrides.
 * PS2 blending accuracy automatically follows game-database recommendations.
 * Saturn controls mapped to the original controller's two button rows.
@@ -140,11 +145,11 @@ See the [debug tools guide](DEBUG_TOOLS.md) for setup, commands and interpretati
 Image size should be rechecked against the release being downloaded. The 200 Hz
 input rate and 8 ms audio setting are not end-to-end latency measurements.
 
-Details: [package inventory](PACKAGE_INVENTORY.md), [audio measurements](../docs/audio-latency.md).
+Details: [package inventory](PACKAGE_INVENTORY.md), [audio measurements](AUDIO_LATENCY.md).
 
 ## Experimental and incomplete
 
-* Preemptive frames and run-ahead: optional; compatibility and performance depend on the core.
+* Preemptive frames and run-ahead: compatibility and performance depend on the core; Neo Geo CD enables one preemptive frame by default, other systems keep it off.
 * sRGB/D65 color profiles: implemented, but currently crush dark greys.
 * Temperature-based charging-current reduction: implemented, awaiting device verification.
 * External displays and display-audio routing: incomplete.
