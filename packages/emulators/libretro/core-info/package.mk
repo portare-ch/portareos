@@ -23,6 +23,14 @@ makeinstall_target() {
     cp -a ${PKG_BUILD}/${core}_libretro.info ${INSTALL}/usr/lib/libretro/
   done
 
+  # Neo Geo CD games are CHD only (config/emulators/neocd.conf): nova-push
+  # converts before it copies, and one format is one set of behaviours to
+  # test. The pilot for the disc systems; the others follow later.
+  sed -i 's/^supported_extensions = "cue|chd"$/supported_extensions = "chd"/' \
+    ${INSTALL}/usr/lib/libretro/neocd_libretro.info
+  grep -q '^supported_extensions = "chd"$' \
+    ${INSTALL}/usr/lib/libretro/neocd_libretro.info
+
   # RetroArch allows run-ahead and preemptive frames only for a core whose
   # info file says "deterministic"; SwanStation's was lowered to "basic" in
   # libretro-core-info de2472e (July 2024) without a stated reason. The core
