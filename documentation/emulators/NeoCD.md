@@ -202,6 +202,28 @@ inside the fight, zero xruns, GPU 4 % at 401 MHz. The slowdown felt is the
 game's own (Metal Slug slows on hardware when sprites pile up); a 68000
 overclock would remove it and is parked as a per-game option.
 
+### 2026-10-18, read to first line, with and without lines-1x
+
+The LATENCY.md rig: a RetroArch with one trace marker at the input poll
+and one at the video callback (the `ralat` patch, test build), Mesa's
+commit markers, vblanks, flips and GPU submits traced; capture 002
+replayed, the window 45 to 105 s after the first flip, 3567 frames each.
+Two runs per setting, full-screen 4:3 with the mask, charger connected.
+
+| | read to first line, median / p95 | poll to video callback | video callback to commit | GPU busy per submit |
+|---|---|---|---|---|
+| no shader | 4.25 / 4.88 ms, 4.29 / 4.85 | 1.31 / 2.90 | 2.55 / 3.59 | 0.08 / 0.20 |
+| lines-1x | 4.83 / 5.46 ms, 4.85 / 5.52 | 1.29 / 2.83 | 3.14 / 4.20 | 0.24 / 0.73 |
+
+- The shader adds 0.6 ms, a thirtieth of a frame, all of it between the
+  video callback and the commit: 0.16 ms of GPU time and the rest in the
+  frame's wait. Repeatable to 0.05 ms between runs. The lag felt live is
+  not this; 0.6 ms is below what a hand can tell.
+- Without the shader, 4.25 ms from pad read to first line is the lowest of
+  any system in LATENCY.md (Genesis 4.9). The frame is ready 1.3 ms after
+  the poll and waits for its slot; the display adds 0.3 ms after the commit.
+- The maxima (150 to 159 ms) are the capture's load frames.
+
 ## What is already good
 
 - Audio runs at the CD's own rate with no conversion, 8 ms, no xruns.
@@ -225,6 +247,6 @@ overclock would remove it and is parked as a per-game option.
 
 ## Open questions
 
-- Is the lag felt with the shader real? Frame intervals say no; only the
-  read-to-first-line rig can say.
+- The lag felt with the shader: measured at 0.6 ms from pad read to first
+  line. If it is still felt, it is something other than frame delivery.
 - What keeps the GPU at 401 MHz, and is it wanted for this system?

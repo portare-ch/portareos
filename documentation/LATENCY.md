@@ -52,6 +52,8 @@ scenes, the image's cores.
 | Dreamcast (Flycast), Virtua Tennis | - | 13.12 / 17.44 | 0.95 | 4.57 | 11.7 | 112 late frames |
 | Nintendo 64 (parallel_n64), Super Mario 64 | - | 28.43 / 33.76 | 2.75 | 0.85 | 15.2 | read after the frame; 133 late frames |
 | PlayStation 2 (ARMSX2), NFSU | - | 2.80 / 3.00 | 0.02 | 0.67 | 2.2 | RetroArch's part only |
+| Neo Geo CD (NeoCD), Metal Slug, 2026-10-18 | off | 4.25 / 4.88 | 1.31 | 0.08 | - | capture replay, full-screen 4:3; budget not traced by this run's markers |
+| | off, lines-1x | 4.83 / 5.46 | 1.29 | 0.24 | - | the shader's 0.6 ms |
 
 Late frames are frames ready after their target, out of about 3590.
 
