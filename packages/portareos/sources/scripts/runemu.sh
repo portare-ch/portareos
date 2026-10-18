@@ -348,6 +348,44 @@ case ${EMULATOR} in
     ${VERBOSE} && log $0 "Execute setsettings (${PLATFORM} ${ROMNAME} ${CORE} --controllers=${CONTROLLERCONFIG} --autosave=${AUTOSAVE} --snapshot=${SNAPSHOT})"
     (/usr/bin/setsettings.sh "${PLATFORM}" "${ROMNAME}" "${CORE}" --controllers="${CONTROLLERCONFIG}" --autosave="${AUTOSAVE}" --snapshot="${SNAPSHOT}" >${SET_SETTINGS_TMP})
 
+    # Merge serial overrides into a session copy; the player's file wins.
+    if [[ "${ROMNAME,,}" == *.chd ]] &&
+       [[ -d "/storage/.config/games/${PLATFORM}" ||
+          -d "/usr/config/games/${PLATFORM}" ]] &&
+       [ -x /usr/bin/ps-chd-id ] &&
+       DISC_SERIAL="$(/usr/bin/ps-chd-id "${ROMNAME}" 2>/dev/null)"
+    then
+      for GAME_OPTS_DIR in /storage/.config/games /usr/config/games; do
+        GAME_OPTS_SRC="${GAME_OPTS_DIR}/${PLATFORM}/${DISC_SERIAL}.opt"
+        [ -n "${DISC_SERIAL}" ] && [ -f "${GAME_OPTS_SRC}" ] || continue
+        CORE_OPTS_SRC="/storage/.config/retroarch/retroarch-core-options.cfg"
+        [ -f "${CORE_OPTS_SRC}" ] || CORE_OPTS_SRC="/usr/config/retroarch/retroarch-core-options.cfg"
+        GAME_OPTS="/tmp/retroarch-core-options.cfg"
+        if awk -F= '
+          function key(line) {
+            sub(/=.*/, "", line)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+            return line
+          }
+          FILENAME == ARGV[1] {
+            if ($0 !~ /^[[:space:]]*#/ && NF > 1 && key($0) != "")
+              options[key($0)] = $0
+            next
+          }
+          !(key($0) in options) { print }
+          END { for (k in options) print options[k] }' \
+          "${GAME_OPTS_SRC}" "${CORE_OPTS_SRC}" > "${GAME_OPTS}"
+        then
+          printf 'core_options_path = "%s"\n' "${GAME_OPTS}" >> "${RETROARCH_APPEND_CONFIG}"
+          ${VERBOSE} && log $0 "Core options for ${DISC_SERIAL} from ${GAME_OPTS_SRC}"
+        else
+          rm -f "${GAME_OPTS}"
+          log $0 "Could not merge core options from ${GAME_OPTS_SRC}"
+        fi
+        break
+      done
+    fi
+
     ### Enable RetroArch Network Control for this session on dual-screen devices
     ### so the bottom-screen UI can forward save-state / load-state / resume commands.
     if [ "${DEVICE_HAS_DUAL_SCREEN}" = "true" ]; then

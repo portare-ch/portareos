@@ -1,0 +1,2 @@
+# Metal Slug 2: reduce the original game's 68000 slowdown.
+neocd_cpu_overclock = "150%"

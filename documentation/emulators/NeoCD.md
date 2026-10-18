@@ -59,7 +59,9 @@ policy is the fix, for every system at once; it is not NeoCD's to carry.
   `savestate_features = "deterministic"` to NeoCD's info file (#667).
   Upstream's file predates the keys, and without them RetroArch and
   gamecapture refuse run-ahead, preemptive frames and captures.
-- Games are `.chd` only (#669); `nova-push` converts on the way in.
+- Games are `.chd` only (#669). Prepare them with PortareOS tools and
+  transfer the CHD with `nova-push neocd`; automatic conversion currently
+  recognizes the older `neogeocd` name. See [installation](../INSTALLATION.md).
 - Build: the toolchain passes `-O2 -flto -march=armv9-a+... -mtune=cortex-x3`;
   NeoCD's Makefile appends `-Ofast -DNDEBUG` and `USE_LTO=1` on its own, and
   the last `-O` wins. The effective build is `-Ofast` with LTO. Enabling LTO
@@ -122,7 +124,7 @@ policy is the fix, for every system at once; it is not NeoCD's to carry.
 | `neocd_bios` | `neocd_z.rom (CDZ)` (#663) | Boots the game itself, loads at double speed. Redundant once #668 is in. |
 | `neocd_loadskip` | On | Skips the CD load wait; does not change the game's behaviour. |
 | `neocd_cdspeedhack` | Off | Guest unchanged for measurements. |
-| `neocd_cpu_overclock` | 100% | Same. |
+| `neocd_cpu_overclock` | 100% | Guest unchanged; Metal Slug 2 uses the exception below. |
 | `neocd_aspect_ratio` | 4:3 DAR | The tube's geometry; see Presentation. |
 | `neocd_overscan_h` | 8 (default) | The hardware's blanked columns; 0 showed them as black bands. |
 | `neocd.integerscale` | 0 | Full-screen 4:3. |
@@ -130,6 +132,10 @@ policy is the fix, for every system at once; it is not NeoCD's to carry.
 | `neocd_region` | Japan | |
 | `audio_out_rate` | 44100 | See Audio. |
 | `neocd.preempt` | 1 | On by default (user, 2026-10-18) after the A/B: 0.5 ms more path and a third more CPU for the game's frame of lag, zero xruns, and the console's own pause and RetroArch's survive it in Metal Slug and Metal Slug 2. Settings > Consoles switches it (portarelauncher 0.8.3). |
+
+Metal Slug 2 (`NGCD-00241`) uses a [per-disc override](README.md) to run its
+68000 at 150%, reducing the game's own slowdown. Other discs keep the 100%
+default, including the Metal Slug captures used for measurements here.
 
 ## Measurements
 
@@ -284,7 +290,6 @@ leaves this page.
 - Skip CD Loading runs a whole load inside one frontend frame (146 ms at
   Metal Slug's boss, 8-13 such frames in the capture): a per-frame budget in
   the core's skip loop would spread it. Parked; a later round if it bothers.
-- The 68000 overclock as a per-game option for the game's own slowdown.
 - Neo Drift Out and Pulstar as regression checks when something changes.
 
 ## Open questions
