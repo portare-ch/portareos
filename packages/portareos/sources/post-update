@@ -250,6 +250,12 @@ sed -i -e 's|^saturn\.shaderset=crt/crt-guest-advanced\.slangp$|saturn.shaderset
        -e 's|^saturn\.integerscale=1$|saturn.integerscale=0|' \
   /storage/.config/system/configs/system.cfg
 
+### Neo Geo CD fills the 4:3 panel the way its 320x224 filled a 4:3 tube
+### (documentation/emulators/NeoCD.md); the integer 4x left a bar top and
+### bottom and square pixels. Only the old default changes.
+sed -i -e 's|^neocd\.integerscale=1$|neocd.integerscale=0|' \
+  /storage/.config/system/configs/system.cfg
+
 ### The same for Nestopia, which MesenCE (mesen2) replaced for the NES.
 sed -i -e '/^nes\(\[.*\]\)\?\.core=nestopia$/d' \
        -e '/^famicom\(\[.*\]\)\?\.core=nestopia$/d' \

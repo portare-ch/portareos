@@ -49,8 +49,14 @@ Candidates that fail 1 are rejected whatever they gain elsewhere.
 - Core rate 59.5999 Hz (6042000 / 101376). VRR with kernel LFC; setsettings
   asks for the exact 119.1998 Hz mode (2 x 59.5999) and the panel repeats
   each frame twice.
-- Integer scaling on, aspect `core` (`neocd.integerscale=1`, `neocd.ratio=core`
-  in `system.cfg`), horizontal overscan mask 8.
+- Full-screen 4:3, decided 2026-10-18: the console's 320x224 filled a 4:3
+  tube, so the picture fills the 4:3 panel. Integer scaling off
+  (`neocd.integerscale=0`), aspect `core` with the core's `4:3 DAR`, overscan
+  mask 0 so the 320 columns are exactly 4 panel pixels each; the 224 lines
+  are 4.286 rows each, and the lines shader draws a beam per console line at
+  sub-pixel positions rather than darkening fixed rows. Integer 4x (1216x896
+  with the mask, square pixels, a 32-row bar top and bottom) was the
+  alternative; the faithful geometry won.
 - Open: a display trace of the fixed capture confirming 2x LFC with no late
   or single-refresh frames (goal 2). Not yet taken.
 
@@ -89,6 +95,9 @@ Candidates that fail 1 are rejected whatever they gain elsewhere.
 | `neocd_loadskip` | On | Skips the CD load wait; does not change the game's behaviour. |
 | `neocd_cdspeedhack` | Off | Guest unchanged for measurements. |
 | `neocd_cpu_overclock` | 100% | Same. |
+| `neocd_aspect_ratio` | 4:3 DAR | The tube's geometry; see Presentation. |
+| `neocd_overscan_h` | 0 | Exactly 4 panel pixels per column at full width. |
+| `neocd.integerscale` | 0 | Full-screen 4:3. |
 | `neocd_region` | Japan | |
 | `audio_out_rate` | 44100 | See Audio. |
 | run-ahead / preemptive frames | excluded (`NO_RUNAHEAD` in setsettings) | Predates #667; to be re-evaluated with the capture (goal 5 first). |
