@@ -119,6 +119,11 @@ makeinstall_target() {
   cp -a ${PKG_BUILD}/.${TARGET_NAME}/bin/armsx2_libretro.so ${INSTALL}/usr/lib/libretro
   # No info file in libretro-core-info for this core; upstream ships one.
   cp -a ${PKG_BUILD}/armsx2_libretro.info ${INSTALL}/usr/lib/libretro
+  # CHD only, as config/emulators/ps2.conf and core-info's other disc cores.
+  sed -i 's/^supported_extensions = "elf|iso|ciso|chd|cso|zso|bin|mdf|nrg|dump|gz|img|irx|m3u"$/supported_extensions = "chd|m3u"/' \
+    ${INSTALL}/usr/lib/libretro/armsx2_libretro.info
+  grep -q '^supported_extensions = "chd|m3u"$' \
+    ${INSTALL}/usr/lib/libretro/armsx2_libretro.info
 
   # GameDB, shaders, fonts and the patches archive. The core reads them from
   # <system>/pcsx2/resources, which is on /storage; tmpfiles.d links it here.

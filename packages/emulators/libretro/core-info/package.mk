@@ -35,10 +35,7 @@ makeinstall_target() {
     ${INSTALL}/usr/lib/libretro/swanstation_libretro.info
   grep -q '^supported_extensions = "chd|m3u"$' \
     ${INSTALL}/usr/lib/libretro/swanstation_libretro.info
-  sed -i 's/^supported_extensions = "elf|iso|ciso|chd|cso|zso|bin|mdf|nrg|dump|gz|img|irx|m3u"$/supported_extensions = "chd|m3u"/' \
-    ${INSTALL}/usr/lib/libretro/armsx2_libretro.info
-  grep -q '^supported_extensions = "chd|m3u"$' \
-    ${INSTALL}/usr/lib/libretro/armsx2_libretro.info
+  # ARMSX2's info file ships with the core (armsx2-lr does the same there).
   # Flycast's file is left alone: the same core runs Naomi and Atomiswave
   # from .zip and .lst, so its list cannot be CHD only; dreamcast.conf is.
 
