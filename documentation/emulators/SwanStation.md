@@ -60,7 +60,7 @@ so there is no pinning beyond that.
 | `video_scale_integer = "true"` | `SwanStation.cfg` | 320x240 at 4x is the panel exactly |
 | `run_ahead_enabled = "false"` | `SwanStation.cfg` | second-instance run-ahead would need a second Vulkan context; preemptive frames are the other flag |
 | `audio_out_rate = "44100"` | `SwanStation.cfg` | the SPU's rate; no resampler in the path |
-| `psx.preempt=0` | `system.cfg` | off by default like every console |
+| `psx.preempt=0` | `system.cfg` | off by default; optional PRMPT raises CPU/GPU clocks while enabled |
 | `performance` CPU and GPU with PRMPT on | `runemu.sh` | see Pacing |
 | `swanstation_CDROM_PreCacheCHD = "true"` | core options | the CHD stays in RAM, compressed: no SD card read mid-game; a slow card showed as audio and frame dips that this removed (user report, 2026-10-18) |
 

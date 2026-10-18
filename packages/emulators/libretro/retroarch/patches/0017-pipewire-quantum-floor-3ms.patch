@@ -5,7 +5,7 @@ Subject: [PATCH] pipewire: floor the requested quantum at 3 ms, not 128 frames
 stops at 2 ms at either rate. A sweep with clock.force-quantum found
 3 ms the lowest clean at both rates with RetroArch in the graph, ten
 minutes of play without an xrun. It takes the PCM's mean delay from
-6.5 to 4.9 ms at 32 kHz. docs/audio-latency.md has the tables.
+6.5 to 4.9 ms at 32 kHz. documentation/AUDIO_LATENCY.md has the tables.
 ---
 --- a/audio/drivers/pipewire.c
 +++ b/audio/drivers/pipewire.c

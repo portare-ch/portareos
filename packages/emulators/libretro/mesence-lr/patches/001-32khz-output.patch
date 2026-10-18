@@ -8,7 +8,7 @@ out 8.8% slow and flat.
 
 The reported rate is now the mixer's. 32000 is added to the options and
 made the default: it is the rate this device's audio path is measured
-at (docs/audio-latency.md), with a period step of exactly 10 ms. The
+at (documentation/AUDIO_LATENCY.md), with a period step of exactly 10 ms. The
 NES has no sample rate of its own - the APU's channels are mixed as
 analog signals - and the resampler lowpasses before it decimates.
 

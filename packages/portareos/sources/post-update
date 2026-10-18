@@ -460,7 +460,7 @@ migrate_snes_ratio_core() {
 # writes it when unset, so an install that has booted once keeps 32. 24 keeps
 # RetroArch's ring more than two graph quanta deep at every link rate this
 # device uses, and is worth 4 to 12 ms depending on the rate. Only the old
-# default is moved, so a value chosen since stays. docs/audio-latency.md.
+# default is moved, so a value chosen since stays. documentation/AUDIO_LATENCY.md.
 migrate_audiolatency_24() {
   [ "$(get_setting global.audiolatency)" = "32" ] || return 0
   set_setting global.audiolatency 24

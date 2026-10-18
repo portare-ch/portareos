@@ -2,7 +2,7 @@
 
 ## What runs
 
-- `armsx2-lr` 2.7.2, the ARMSX2 libretro core (`armsx2_libretro.so`), in
+- `armsx2-lr` 2.8.4, the ARMSX2 libretro core (`armsx2_libretro.so`), in
   RetroArch. It replaced the SDL standalone in #473.
 - Recipe: `packages/emulators/libretro/armsx2-lr/`.
 - Patches:

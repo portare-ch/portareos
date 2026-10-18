@@ -146,7 +146,7 @@ Frame-time summaries distinguish application and display intervals.
 The probe copies the newest non-summary CSV from `/storage/mangologs`; confirm
 that it belongs to this run. It does not start MangoHud logging. Without gawk,
 some percentile summaries are unavailable; retain the raw CSV. See the
-[performance notes](../docs/performance-plan.md) for comparison procedures.
+[performance notes](PERFORMANCE_PLAN.md) for comparison procedures.
 
 ### gamecapture: benchmark workloads
 
@@ -494,7 +494,7 @@ period, granted frames, buffer frames, sampled ALSA delay and underruns
 (`xruns`). The first sustained period is a useful starting point; longer
 runs under load are still needed. The printed latency is PCM queue delay,
 not application-to-speaker latency, and the floor may be imposed by driver
-parameters rather than the DSP. See [audio measurements](../docs/audio-latency.md).
+parameters rather than the DSP. See [audio measurements](AUDIO_LATENCY.md).
 
 For the live audio graph, `pw-top` shows rate, quantum and errors, while
 `wpctl status` shows devices and routing. A follower's requested quantum is

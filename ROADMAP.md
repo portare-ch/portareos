@@ -1,6 +1,6 @@
 # Roadmap
 
-Last revised 30 September 2026.
+Last revised 18 October 2026.
 
 The goal is a stock Android replacement for the Retroid Pocket Nova: write
 an image, add games and any required BIOS files, and play. Every included
@@ -17,11 +17,17 @@ completion criterion; there are no release dates attached.
 test results should record the image version, game, settings and logs so
 that a later image can be tested against the same baseline.
 
+Current baseline: Snes9x is the SNES core; NeoCD's device tuning is finished;
+PlayStation has an optional PRMPT switch again. VRR spans 65–120.198 Hz for
+RetroArch, the launcher and Steam's gamescope, with Steam capped at 60 fps.
+Platform sleep now works, measured at 23 mA over ten minutes. Black frame
+insertion was removed with vsync and is outside the plan.
+
 ## Every included emulator runs without crashes
 
-The README currently records successful tests for SwanStation (and did for
-Snes9x, which bsnes has since replaced),
-and a broken Dolphin path: hangs and no sound
+The README records successful tests for SwanStation, Snes9x and NeoCD,
+playable ARMSX2 with further work pending, and a broken Dolphin path:
+hangs and audio problems
 ([#463](https://github.com/portare-ch/portareos/issues/463)). The rest of the
 included systems need an explicit test record, not an assumption that a
 successful build means a working emulator.
@@ -55,6 +61,10 @@ require a trip through RetroArch or a standalone emulator's menus.
 - Make save/load, exit and game-guide controls consistent where the emulator
   permits it. Explain missing BIOS files and unsupported formats clearly.
 - Test both a clean installation and an update with existing user settings.
+- Keep the installation guide and format table aligned with the launcher.
+  CHD is the disc-library format; PlayStation, PS2, Dreamcast and Neo Geo CD
+  already enforce it. Recommend PortareOS tools / nova-push and document
+  cartridge formats and experimental emulator exceptions explicitly.
 
 **Complete when:** games launch with usable controls, correct geometry,
 clean audio and suitable performance without manual emulator configuration.
@@ -80,7 +90,9 @@ lower button-to-screen latency.
   Measure report jitter, lost inputs and end-to-end latency; check buttons
   and analog sticks separately.
 - Check the rest of the path through rsinput, InputPlumber and the emulator
-  to identify where additional delay is introduced.
+  to identify where additional delay is introduced. The existing
+  [per-system traces](documentation/LATENCY.md) measure pad polling to first
+  scanline, not physical button-to-screen latency or MCU improvement.
 - Extend the 200 Hz tests under load and through repeated suspend/resume;
   measure power cost and stick noise before further tuning.
 
@@ -92,7 +104,7 @@ results are published. Keep the vendor setting as the comparison baseline.
 
 RetroArch currently defaults to 8 ms. That setting is a buffer request, not
 end-to-end latency. Existing measurements and the limits encountered are in
-[the audio latency notes](docs/audio-latency.md).
+[the audio latency notes](documentation/AUDIO_LATENCY.md).
 
 - Measure end-to-end audio latency and audio/video alignment on the current
   image, rather than inferring them from the configured buffer size.
@@ -128,37 +140,38 @@ tweaks is an open question to test.
 reliably, and moving between them requires no manual service restart or
 configuration edits. Document Bluetooth's measured latency separately.
 
-## Black frame insertion
+## Reduce host cost without increasing latency
 
-BFI has worked in Snes9x experiments, but rolling black bands and the
-brightness tradeoff still prevent it from being a finished feature. Timing
-work and panel modes are recorded in
-[refresh rates](documentation/PER_DEVICE_DOCUMENTATION/SM8550/REFRESH_RATES.md).
+NeoCD's completed tuning exposed a system-wide cost: real-time audio and
+GPU threads keep the X3 at its maximum clock while using about 1% of a core.
+The global RT clamp at zero and two coarse placement changes were measured
+and rejected. See [NeoCD](documentation/emulators/NeoCD.md) and the
+[performance plan](documentation/PERFORMANCE_PLAN.md).
 
-- Reproduce and instrument the rolling band on the current image. Test flip
-  deadlines, vertical blanking and CPU scheduling with controlled settings.
-- Compare two- and three-image swapchains for stability and input latency.
-- Measure brightness loss and choose an appropriate brightness adjustment.
-- Test sustained play on each candidate core, including dropped frames,
-  audio stability and transitions back to the launcher. Keep BFI opt-in
-  and restrict it to configurations that pass.
+- Measure per-thread utilization clamping or a kernel policy against the
+  existing capture, keeping audio latency, xruns and frame delivery fixed.
+- Compare the 401 MHz gaming GPU floor with lower available frequencies on
+  light cores; include demanding games before changing a shared default.
+- Use validated captures, three repeated runs, separate intro/gameplay
+  windows and current configuration records for each candidate.
+- Validate Steam's VRR and 60 fps cap with a real game on the final kernel
+  and gamescope, including focus changes and return to the launcher.
 
-**Complete when:** supported configurations sustain the light/black cadence
-without rolling bands or missing content, with measured latency and
-brightness behavior. Heavy cores need their own evidence before inclusion.
+**Complete when:** a change reduces measured cost beyond run-to-run spread,
+with stable audio, frame delivery and latency across the affected systems.
 
 ## Reduce the image further
 
 Use the [package inventory](documentation/PACKAGE_INVENTORY.md) as the starting
-point ([#333](https://github.com/portare-ch/portareos/issues/333)). It lists
-roughly 100 MB of candidates: unused shader families, Python and GStreamer.
-Those are estimates of installed space, not promised compressed-image savings.
+point ([#333](https://github.com/portare-ch/portareos/issues/333)). Its size
+figures come from an older image. Recheck unused shader families, Python's
+remaining runtime users and GStreamer before treating them as savings.
 
 - Measure the current compressed image and installed package sizes.
 - Keep only the shaders in use and their transitive includes; launch every
   affected preset to check that the trimmed set is complete.
-- Remove Python only after replacing its runtime users, including Bluetooth
-  pairing, and checking the Steam dependency path.
+- The Bluetooth agent is already C. Check remaining Python users, including
+  `gamecapture` and Steam's dependency path, before proposing removal.
 - Trace GStreamer's users and remove it if the retained features can run
   without it. Continue removing unused packages.
 
@@ -215,9 +228,11 @@ crash or reboot. Publish tested adapters, displays and remaining limitations.
 
 ## Other work to retain
 
-- **Suspend and resume:** measure actual suspend current and overnight drain,
-  identify the remaining power holders, and reduce Wi-Fi reconnect time.
-  Verify repeated sleep/wake cycles with working controls and audio
+- **Suspend and resume:** #658 enables CX, AOSS and DDR sleep. The
+  18 October test measured 23 mA over ten minutes and Wi-Fi back within a
+  second. Measure an overnight run, repeated short cycles, an open playback
+  PCM at suspend, charger attachment asleep and working audio after wake;
+  retain sleep-ledger and counter evidence in [power notes](documentation/POWER.md)
   ([#62](https://github.com/portare-ch/portareos/issues/62)).
 - **Implement all remaining panel modes:** inventory the missing modes for
   supported systems, including 32X, Dreamcast 240p and arcade board rates.
@@ -225,9 +240,9 @@ crash or reboot. Publish tested adapters, displays and remaining limitations.
   verify every mode on hardware against the core's output, including switching
   between games and returning to the launcher
   ([#284](https://github.com/portare-ch/portareos/issues/284)).
-- **Launcher:** finish navigation and selection persistence, expose game
-  launch failures, and integrate M1/M2 controls. Coordinate implementation
-  with the portarelauncher repository.
+- **Launcher:** test current navigation and selection persistence, error
+  reporting, game-guide handover and update behavior. Coordinate changes
+  with portarelauncher; the image currently ships 0.8.3.
 - **Color profiles:** fix crushed dark greys and verify the result on the
   panel before recommending a calibrated profile again; see BUGS.md.
 - **A game session that is not root:** move game sessions to a dedicated user
@@ -238,5 +253,6 @@ crash or reboot. Publish tested adapters, displays and remaining limitations.
 ## Scope
 
 Retroid Pocket Nova only, NTSC focused, one emulator per system and direct
-KMS presentation. Other devices, PAL panel modes and a desktop compositor
+KMS presentation. Steam uses gamescope as its compositor exception. Other
+devices, PAL panel modes, black frame insertion and a desktop environment
 are not planned.
