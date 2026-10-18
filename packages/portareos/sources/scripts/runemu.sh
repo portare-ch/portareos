@@ -485,6 +485,13 @@ CPU_GOVERNOR=$(get_setting "cpugovernor" "${PLATFORM}" "${ROMNAME##*/}")
 ${VERBOSE} && log $0 "Set emulation performance mode to (${CPU_GOVERNOR})"
 ${CPU_GOVERNOR}
 
+### Latency trace markers (retroarch 0026): one per frame at the pad poll
+### and the video callback, for documentation/LATENCY.md's rig. Off unless
+### asked; costs nothing when unset.
+if [ "$(get_setting "portareos.ralat" "${PLATFORM}" "${ROMNAME##*/}")" = "1" ]; then
+  export RALAT=1
+fi
+
 ### Check whether MangoHud is supported and enabled
 if [ "${DEVICE_MANGOHUD_SUPPORT}" == "true" ]; then
   MANGOHUD_ENABLED=$(get_setting "portareos.mangohud.enabled"  "${PLATFORM}" "${ROMNAME##*/}")
