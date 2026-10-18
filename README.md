@@ -54,7 +54,7 @@ by game. Status notes below cover specific tests, not every included system.
 | System | Emulator / player | Status notes |
 | --- | --- | --- |
 | Arcade, Neo Geo | FBNeo | — |
-| Neo Geo CD | NeoCD | — |
+| Neo Geo CD | [NeoCD](documentation/emulators/NeoCD.md) | 🚧 Full speed; host-cost optimization in progress ([#666](https://github.com/portare-ch/portareos/issues/666)) |
 | Game Boy, Game Boy Color | Gambatte | — |
 | Game Boy Advance | mGBA | — |
 | NES, Famicom, Famicom Disk System | MesenCE | — |
