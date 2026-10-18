@@ -1,5 +1,2 @@
-# Metal Slug 2. The game's own slowdown is severe enough that SNK rewrote it
-# as Metal Slug X; the 68000 at 150 % removes most of it and the logic is
-# vblank-paced, so nothing else speeds up. The one overclock exception
-# (documentation/emulators/NeoCD.md).
+# Metal Slug 2: reduce the original game's 68000 slowdown.
 neocd_cpu_overclock = "150%"

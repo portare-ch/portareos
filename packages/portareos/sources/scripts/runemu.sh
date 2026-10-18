@@ -348,26 +348,40 @@ case ${EMULATOR} in
     ${VERBOSE} && log $0 "Execute setsettings (${PLATFORM} ${ROMNAME} ${CORE} --controllers=${CONTROLLERCONFIG} --autosave=${AUTOSAVE} --snapshot=${SNAPSHOT})"
     (/usr/bin/setsettings.sh "${PLATFORM}" "${ROMNAME}" "${CORE}" --controllers="${CONTROLLERCONFIG}" --autosave="${AUTOSAVE}" --snapshot="${SNAPSHOT}" >${SET_SETTINGS_TMP})
 
-    ### Per-disc core options, keyed by the disc's serial and not its file
-    ### name: ps-chd-id reads it from the CHD (the launcher's own title
-    ### lookup). /usr/config/games/<system>/<serial>.opt ships with the
-    ### image, /storage/.config/games/... is the player's and wins. The
-    ### global core options file is copied with the override's keys
-    ### replaced, and RetroArch is pointed at the copy, so the global file
-    ### is never written for one game.
-    if [ "${ROMNAME##*.}" = "chd" ] && [ -x /usr/bin/ps-chd-id ]; then
-      DISC_SERIAL="$(/usr/bin/ps-chd-id "${ROMNAME}" 2>/dev/null)"
-      for d in /storage/.config/games /usr/config/games; do
-        GAME_OPTS_SRC="${d}/${PLATFORM}/${DISC_SERIAL}.opt"
+    # Merge serial overrides into a session copy; the player's file wins.
+    if [[ "${ROMNAME,,}" == *.chd ]] &&
+       [[ -d "/storage/.config/games/${PLATFORM}" ||
+          -d "/usr/config/games/${PLATFORM}" ]] &&
+       [ -x /usr/bin/ps-chd-id ] &&
+       DISC_SERIAL="$(/usr/bin/ps-chd-id "${ROMNAME}" 2>/dev/null)"
+    then
+      for GAME_OPTS_DIR in /storage/.config/games /usr/config/games; do
+        GAME_OPTS_SRC="${GAME_OPTS_DIR}/${PLATFORM}/${DISC_SERIAL}.opt"
         [ -n "${DISC_SERIAL}" ] && [ -f "${GAME_OPTS_SRC}" ] || continue
+        CORE_OPTS_SRC="/storage/.config/retroarch/retroarch-core-options.cfg"
+        [ -f "${CORE_OPTS_SRC}" ] || CORE_OPTS_SRC="/usr/config/retroarch/retroarch-core-options.cfg"
         GAME_OPTS="/tmp/retroarch-core-options.cfg"
-        awk -F' = ' 'NR == FNR { if ($0 !~ /^#/ && NF > 1) o[$1] = $0; next }
-                     ($1 in o) { print o[$1]; delete o[$1]; next }
-                     { print }
-                     END { for (k in o) print o[k] }' \
-          "${GAME_OPTS_SRC}" /storage/.config/retroarch/retroarch-core-options.cfg > "${GAME_OPTS}"
-        echo "core_options_path = \"${GAME_OPTS}\"" >> "${RETROARCH_APPEND_CONFIG}"
-        ${VERBOSE} && log $0 "Core options for ${DISC_SERIAL} from ${GAME_OPTS_SRC}"
+        if awk -F= '
+          function key(line) {
+            sub(/=.*/, "", line)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+            return line
+          }
+          FILENAME == ARGV[1] {
+            if ($0 !~ /^[[:space:]]*#/ && NF > 1 && key($0) != "")
+              options[key($0)] = $0
+            next
+          }
+          !(key($0) in options) { print }
+          END { for (k in options) print options[k] }' \
+          "${GAME_OPTS_SRC}" "${CORE_OPTS_SRC}" > "${GAME_OPTS}"
+        then
+          printf 'core_options_path = "%s"\n' "${GAME_OPTS}" >> "${RETROARCH_APPEND_CONFIG}"
+          ${VERBOSE} && log $0 "Core options for ${DISC_SERIAL} from ${GAME_OPTS_SRC}"
+        else
+          rm -f "${GAME_OPTS}"
+          log $0 "Could not merge core options from ${GAME_OPTS_SRC}"
+        fi
         break
       done
     fi
