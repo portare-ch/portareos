@@ -34,4 +34,15 @@ makeinstall_target() {
     ${INSTALL}/usr/lib/libretro/swanstation_libretro.info
   grep -q '^savestate_features = "deterministic"$' \
     ${INSTALL}/usr/lib/libretro/swanstation_libretro.info
+
+  # NeoCD's file predates the savestate keys (display_version 2019) and
+  # says nothing about them, which RetroArch and gamecapture read as no
+  # savestates at all. The core serialises the whole machine and declares
+  # its states deterministic (RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS,
+  # none set), so say so; run-ahead, preemptive frames and captures gate
+  # on this.
+  sed -i '/^supports_no_game = "false"$/a savestate = "true"\nsavestate_features = "deterministic"' \
+    ${INSTALL}/usr/lib/libretro/neocd_libretro.info
+  grep -q '^savestate_features = "deterministic"$' \
+    ${INSTALL}/usr/lib/libretro/neocd_libretro.info
 }
