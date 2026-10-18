@@ -139,7 +139,6 @@ declare -a NO_RUNAHEAD=(    atomiswave
                             gamecube
                             n64
                             naomi
-                            neogeocd
                             ps2
                             psp
                             saturn
