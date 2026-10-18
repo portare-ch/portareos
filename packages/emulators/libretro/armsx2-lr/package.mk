@@ -22,7 +22,12 @@ PKG_DEPENDS_TARGET="toolchain llvm:host SDL3 libpng zlib libjpeg-turbo zstd lz4 
 PKG_TOOLCHAIN="manual"
 PKG_BUILD_FLAGS="speed"
 
-PATCHES_URL="https://github.com/PCSX2/pcsx2_patches/archive/refs/tags/latest.zip"
+# The release asset, not the source archive of the same tag: the core looks a
+# game up as SERIAL_CRC.pnach at the zip's root (Patch.cpp, ZipHelpers.h) and
+# the source archive nests everything under pcsx2_patches-latest/patches/,
+# so no bundled patch was ever found - and an archive that opens hides the
+# copy compiled into the core, so that fallback never ran either.
+PATCHES_URL="https://github.com/PCSX2/pcsx2_patches/releases/latest/download/patches.zip"
 
 pre_configure_target() {
   PCSX2_CMAKE_BASE=(
@@ -50,6 +55,9 @@ pre_configure_target() {
     # carrying its own glslang and SPIRV-Tools.
     -DSHADERC_LIBRARY=${SYSROOT_PREFIX}/usr/lib/libshaderc_shared.so
     -DENABLE_TESTS=OFF
+    # The archive above is the one the core reads; the copy it would otherwise
+    # fetch at configure time and compile in only duplicates it.
+    -DARMSX2_EMBED_PATCHES=OFF
     # No window system: the frontend owns the surface. WAYLAND_API=ON would
     # also make CMake require ECM, which nothing here provides.
     -DWAYLAND_API=OFF

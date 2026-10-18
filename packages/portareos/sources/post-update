@@ -211,6 +211,17 @@ for dir in /storage/roms/bios/armsx2 /storage/roms/bios/aethersx2/bios; do
   [ -d "${dir}" ] && rsync -a --ignore-existing "${dir}/" /storage/roms/bios/pcsx2/bios/
 done
 
+### The core reads its GameDB, shaders, armsx2_overrides.yaml and patches.zip
+### from bios/pcsx2/resources, which tmpfiles.d links to the image's copy -
+### only when the path does not exist, and the core had already created it
+### as an empty directory wherever it ran before the rule shipped. Left so,
+### the core falls back to what is compiled in, which has no overrides file
+### at all: desktop GS settings on an Adreno. rmdir only removes it empty;
+### a directory with content is someone's and stays. tmpfiles ran at boot
+### already, before this script, so make the link now.
+rmdir /storage/roms/bios/pcsx2/resources 2>/dev/null
+systemd-tmpfiles --create /usr/lib/tmpfiles.d/z_06_armsx2.conf
+
 ### And a system or game pinned to the standalone in system.cfg would
 ### launch a program that is no longer there, so those pins go and the
 ### core, es_systems' default, applies.
