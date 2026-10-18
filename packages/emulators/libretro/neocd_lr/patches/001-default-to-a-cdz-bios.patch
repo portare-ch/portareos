@@ -1,0 +1,95 @@
+Default to a CDZ BIOS when one is present
+
+The BIOS list is sorted by file name and index 0 is the default, so
+MAME's front-sp1.bin wins over its CDZ neocd.bin, and a configured
+value that matches no entry also falls back to index 0: every game then
+stops at the Front Loader's CD player until START is pressed. A CDZ
+boots the game itself and loads at double speed. The family comes from
+the file's contents, so any name (neocd_z.rom, neocd.bin, archive#file)
+is recognised.
+
+--- a/src/libretro_bios.cpp
++++ b/src/libretro_bios.cpp
+@@ -104,6 +104,8 @@
+     std::sort(globals.biosList.begin(), globals.biosList.end(), [](const BiosListEntry& a, const BiosListEntry& b) {
+         return strcmp(a.description.c_str(), b.description.c_str()) < 0;
+     });
++
++    globals.biosIndex = defaultIndex();
+ }
+ 
+ // Load, byte swap and patch BIOS
+@@ -143,6 +145,24 @@
+     return true;
+ }
+ 
++// The list is sorted by file name, so "first" is whichever BIOS sorts
++// lowest - front-sp1.bin among MAME's set - and the Front Loader stops
++// every game at its CD player until START is pressed. A CDZ boots the
++// game itself and loads at double speed, so when one is present it is
++// the default. Names vary too much to hard-code one (neocd_z.rom,
++// neocd.bin, a zip's archive#file): the family comes from the file's
++// contents.
++size_t Libretro::Bios::defaultIndex()
++{
++    for (size_t result = 0; result < globals.biosList.size(); ++result)
++    {
++        if (globals.biosList[result].type.first == ::Bios::Family::CDZ)
++            return result;
++    }
++
++    return 0;
++}
++
+ size_t Libretro::Bios::descriptionToIndex(const char* description)
+ {
+     for (size_t result = 0; result < globals.biosList.size(); ++result)
+@@ -151,5 +171,5 @@
+             return result;
+     }
+ 
+-    return 0;
++    return defaultIndex();
+ }
+--- a/src/libretro_bios.h
++++ b/src/libretro_bios.h
+@@ -11,6 +11,8 @@
+ 
+         bool load();
+ 
++        size_t defaultIndex();
++
+         size_t descriptionToIndex(const char* description);
+     } // namespace Bios
+ } // namespace Libretro
+--- a/src/libretro_variables.cpp
++++ b/src/libretro_variables.cpp
+@@ -99,11 +99,17 @@
+     if (globals.biosList.empty())
+         return;
+ 
++    // The legacy interface's default is the first choice listed.
++    const size_t first = Libretro::Bios::defaultIndex();
++
+     globals.biosChoices = "BIOS Select; ";
+-    globals.biosChoices.append(globals.biosList[0].description);
++    globals.biosChoices.append(globals.biosList[first].description);
+ 
+-    for (size_t i = 1; i < globals.biosList.size(); ++i)
++    for (size_t i = 0; i < globals.biosList.size(); ++i)
+     {
++        if (i == first)
++            continue;
++
+         globals.biosChoices.append("|");
+         globals.biosChoices.append(globals.biosList[i].description);
+     }
+@@ -159,7 +165,7 @@
+ 
+     option.values[count].value = NULL;
+     option.values[count].label = NULL;
+-    option.default_value = count ? option.values[0].value : NULL;
++    option.default_value = count ? option.values[Libretro::Bios::defaultIndex()].value : NULL;
+ }
+ 
+ static void buildLegacyVariables()
