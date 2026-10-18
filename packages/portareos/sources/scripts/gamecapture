@@ -597,7 +597,16 @@ def verify(d):
     result.update({"reached_end": ended, "checkpoints_matched": len(matched),
                    "diverged_by_frame": min(diverged) if diverged else None,
                    "checkpoints_unverified": len(unverified)})
-    if diverged:
+    # A capture compares only under the core build that recorded it: a
+    # different build of the same core can serialize differently (NeoCD
+    # under -Ofast against -O2, 2026-10-18: float state) and still be
+    # deterministic. Say so rather than call the core nondeterministic.
+    recorded_core = meta.get("core", {}).get("sha256")
+    if diverged and recorded_core and recorded_core != core_sha:
+        result["status"] = "diverged"
+        result["core_differs"] = True
+        result["reason"] = "the core is not the build that recorded the capture; record again with this one"
+    elif diverged:
         result["status"] = "diverged"
     elif ended and matched and not unverified:
         result["status"] = "validated"
