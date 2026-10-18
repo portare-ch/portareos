@@ -50,7 +50,7 @@ mkdir -p "${OUT}" || exit 1
   done
 } > "${OUT}/env.txt" 2>&1
 
-echo "t,cpu0_khz,cpu_big_khz,gpu_hz,temp_c,charge_uah,emu_pct,xruns" > "${OUT}/samples.csv"
+echo "t,cpu0_khz,cpu_big_khz,gpu_hz,temp_c,charge_uah,emu_pct,xruns,cpu_mid_khz" > "${OUT}/samples.csv"
 
 pid_of_emu() {
   for n in flycast dolphin-emu-nogui retroarch ppsspp; do
@@ -63,7 +63,7 @@ while [ "$(date +%s)" -lt "${END}" ]; do
   P="$(pid_of_emu)"
   # utime+stime in ticks, differenced against the previous sample below
   CPU_T=0; [ -n "${P:-}" ] && CPU_T=$(awk '{print $14+$15}' "/proc/${P}/stat" 2>/dev/null || echo 0)
-  printf '%s,%s,%s,%s,%s,%s,%s,%s\n' \
+  printf '%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
     "$(date +%s)" \
     "$(cat /sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq 2>/dev/null)" \
     "$(cat /sys/devices/system/cpu/cpufreq/policy7/scaling_cur_freq 2>/dev/null || cat /sys/devices/system/cpu/cpufreq/policy4/scaling_cur_freq 2>/dev/null)" \
@@ -72,6 +72,7 @@ while [ "$(date +%s)" -lt "${END}" ]; do
     "$(cat "${CHARGE}" 2>/dev/null)" \
     "${CPU_T}" \
     "$(pw-top -b -n 1 2>/dev/null | awk 'NR>1 {e+=$8} END {print e+0}')" \
+    "$(cat /sys/devices/system/cpu/cpufreq/policy3/scaling_cur_freq 2>/dev/null)" \
     >> "${OUT}/samples.csv"
   sleep 1
 done
