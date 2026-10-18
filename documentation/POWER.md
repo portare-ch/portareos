@@ -5,9 +5,9 @@ the panel blanked, and suspended. Measured on 2026-10-03, build `6f8d1b3`, on
 battery (the gauge reads 0 on a charger), with `idle-probe` and the battery's
 charge counter. #496 holds the discussion.
 
-## Suspend changes awaiting a Nova run (2026-10-18)
+## The SoC sleeps (2026-10-18)
 
-Patches 1114-1124 adapt the merged Armada sleep fixes
+Patches 1114-1124 (#658) adapt the merged Armada sleep fixes
 ([#746](https://github.com/armada-os/armada/pull/746),
 [#723](https://github.com/armada-os/armada/pull/723)):
 
@@ -27,25 +27,47 @@ nine affected driver objects and the Nova DTB compile with `W=1` without
 warnings. All 27 required kernel options survive `olddefconfig`; the
 config gate rejects a deliberately disabled `PM_CLK`.
 
-The results below predate these changes. They do not establish whether
-the Nova now resumes without the floor or reaches CX/DDR low-power states.
-Validate through `systemctl suspend`, with an RTC alarm and the sleep
-hooks running: compare `boot_id`, suspend failures, the sleep ledger and
-`qcom_stats`, then check Wi-Fi and speaker/headphone audio after wake.
-Include an open playback PCM at suspend, charger attach while asleep,
-repeated short cycles and an overnight battery run.
+Measured the same day on nightly 20261018 (`9d0a1c9`), on battery, through
+`systemctl suspend` with an RTC alarm and the sleep hooks running, from a
+fresh boot. For the first time on this device the platform powered down
+underneath the CPUs:
+
+| Suspend | `apss` | `cxsd` / `aosd` / `ddr` | Draw |
+|---|---|---|---|
+| 30 s | 1, 27 s | 1 each, 27 of 30 s | below the gauge's resolution |
+| 10 min | 1, 598 s | 4 each, 598 of 602 s | 3.8 mAh in 602 s, **23 mA** |
+| the night before, nightly 20261017, 5.9 h | 1 | 0 / 0 / 0 | 231 mAh, 39 mA |
+
+Both resumed on the alarm with no suspend failure counted, Wi-Fi back
+within a second, the launcher running and the panel on; ssh answered 37 s
+after the request. PCIe re-links on the way up (`PCIe Gen.2 x2 link up`).
+The 10-minute figure comes from the sleep ledger, which reads the charge
+counter in the last pre-sleep hook and the first post-sleep hook; the
+gauge refreshes every 20 to 30 s, so it is good to about one refresh and
+a 30 s sleep reads 0. The ledger's overnight entry from the previous
+nightly is the comparison, 39 mA with the SoC awake all night, so the
+collapse saves about 40 % of what was left and the Nova now sleeps at
+roughly a tenth of the panel-blanked idle (271 mA awake just before).
+
+One new line in the log at resume, `hwmon hwmon45: PM: parent phy0 should
+not be sleeping`: the Wi-Fi phy's hwmon child resumes before its parent.
+Harmless so far. Still to run from the validation list: an open playback
+PCM at suspend, charger attach while asleep, repeated short cycles and an
+overnight battery run with the collapse, plus speaker and headphone audio
+after wake.
 
 ## Summary
 
 | State | Draw |
 |---|---|
 | Launcher idle, panel blanked | 0.95-1.0 W, about 250 mA |
-| Suspended (s2idle) | 54-200 mA, about 60-80 mA overnight |
+| Suspended (s2idle), since 2026-10-18 | 23 mA over 10 minutes, CX, AOSS and DDR down |
+| Suspended before #658 | 54-200 mA, 39-80 mA overnight |
 
-Suspend saves between a quarter and three quarters, and the CPU settings below
-change nothing measurable. In these measurements the SoC never reaches its
-system-level low-power states, awake or suspended. See "The SoC never
-sleeps".
+Suspend now costs about a tenth of blanked idle, and the CPU settings below
+change nothing measurable. In the measurements before 2026-10-18 the SoC
+never reached its system-level low-power states, awake or suspended. See
+"The SoC sleeps" above and "The SoC never slept" for how it got there.
 
 ## CPU settings: no measurable effect
 
@@ -103,8 +125,9 @@ one line per suspend) shows the same kernel drawing 54 to 200 mA asleep: about
 60 mA overnight on 09-28 and 09-29, 69 mA over 5.5 hours on 10-03. What makes
 the difference is not known yet.
 
-## The SoC never sleeps
+## The SoC never slept, until #658
 
+History of the hunt; the result is under "The SoC sleeps" above.
 `/sys/kernel/debug/qcom_stats` counts how often the platform enters its
 low-power modes. After about three hours of uptime, including the 20-minute
 suspend:
