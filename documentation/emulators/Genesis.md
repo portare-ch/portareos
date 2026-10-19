@@ -11,7 +11,7 @@ cost is.
 
 The capture validates, three replays agree within 5 %, and every frame of
 the four minutes reaches the panel twice. Two decisions are the user's
-before this moves on: scanlines (Genesis ships none today) and the
+before this moves on: the scanline preset to keep (crt-240-1x for now) and the
 reference recording (the attract loop stands in until a human-played Strite
 segment exists). Nothing has been tuned yet; nothing measured so far says
 anything needs to be.
@@ -72,12 +72,14 @@ emulation and not for the X3's clock, the system-wide RT clamp issue
 - Scaling as shipped: `genesis.integerscale=1`, `genesis.ratio=4/3`: 4x
   down (896 of 960 lines), 3.74x across (1196 of 1280), a 32-row bar top
   and bottom.
-- Scanlines: none today (no `genesis.shaderset`), unlike NES, SNES, Saturn,
-  PlayStation and NeoCD. Four candidates were captured from the GPU output
-  during the Strite demo for the user to choose from: none, `portare/lines-1x`
-  (NeoCD's), `portare/crt-240-1x` (Saturn's), `crt/crt-guest-advanced`
-  (NES/SNES's). Main-thread cost 10.2 / 10.7 / 11.2 / 12.0 ticks/s; the GPU
-  stays at its 401 MHz floor for all four.
+- Scanlines: `portare/crt-240-1x.slangp` (Saturn's preset: lines, a light
+  aperture mask, a little glow), chosen 2026-10-19 "for now, we can evaluate
+  later" from four candidates captured from the GPU output during the Strite
+  demo: none (what Genesis had until then), `portare/lines-1x` (NeoCD's),
+  `crt-240-1x`, `crt/crt-guest-advanced` (NES/SNES's). Main-thread cost
+  10.2 / 10.7 / 11.2 / 12.0 ticks/s; the GPU stays at its 401 MHz floor for
+  all four. Set for `genesis`, `megadrive` and `megadrive-japan`; post-update
+  adds the key where it is absent and keeps a chosen value.
 
 ## Audio
 
@@ -105,7 +107,7 @@ emulation and not for the X3's clock, the system-wide RT clamp issue
 | `genesis.integerscale` | 1 | As shipped; see Presentation. |
 | `genesis.ratio` | 4/3 | As shipped. |
 | `genesis.preempt` | 0 shipped | Measured at 0 and 1: 7.7 vs 8.0 ticks/s on the main thread, the capture validates either way. |
-| `genesis.shaderset` | (none) | Decision pending; see Presentation. |
+| `genesis.shaderset` | portare/crt-240-1x.slangp | For now; see Presentation. The baseline above ran without it; the next round measures it. |
 
 ## Measurements
 
@@ -136,7 +138,7 @@ differed from each other only in the 112 bytes of the pointers.
 
 ## Open
 
-- Scanline preset: the user's pick from the four candidates.
+- Scanlines: measure crt-240-1x against the no-shader baseline (three replays), then evaluate the look again.
 - Human-played Strite reference, from a savestate at the stage start, 240 s.
 - Section 9 of #691: uclamp alternative, Nuked FM comparison, background
   interference. None started.

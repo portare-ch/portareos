@@ -269,6 +269,13 @@ grep -q "^neocd\.preempt=" /storage/.config/system/configs/system.cfg ||
 grep -q "^neocd\.shaderset=" /storage/.config/system/configs/system.cfg ||
     sed -i '$ a\neocd.shaderset=portare/lines-1x.slangp' /storage/.config/system/configs/system.cfg
 
+### Mega Drive scanlines (portare/crt-240-1x, chosen 2026-10-19 for now,
+### #691): new keys, added when absent; a chosen value stays.
+for S in genesis megadrive megadrive-japan; do
+    grep -q "^${S}\.shaderset=" /storage/.config/system/configs/system.cfg ||
+        sed -i "\$ a\\${S}.shaderset=portare/crt-240-1x.slangp" /storage/.config/system/configs/system.cfg
+done
+
 ### The same for Nestopia, which MesenCE (mesen2) replaced for the NES.
 sed -i -e '/^nes\(\[.*\]\)\?\.core=nestopia$/d' \
        -e '/^famicom\(\[.*\]\)\?\.core=nestopia$/d' \
