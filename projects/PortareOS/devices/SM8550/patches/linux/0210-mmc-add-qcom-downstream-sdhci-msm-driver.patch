@@ -3172,7 +3172,7 @@ diff -rupbN linux.orig/drivers/mmc/host/sdhci-msm-downstream.c linux/drivers/mmc
 +	if (!sdhci_cqe_irq(host, intmask, &cmd_error, &data_error))
 +		return intmask;
 +
-+	cqhci_irq(host->mmc, intmask, cmd_error, data_error);
++	cqhci_irq(host->mmc, cmd_error, data_error);
 +	return 0;
 +}
 +

@@ -24,6 +24,8 @@
 /delete-node/ &q6_mpss_dtb_mem;
 
 /delete-node/ &remoteproc_mpss;
+/* 7.3's IPA node references the deleted ipa_fw_mem; no modem, no IPA. */
+/delete-node/ &ipa;
 
 / {
 	chassis-type = "handset";
@@ -1126,7 +1128,7 @@
 	status = "okay";
 };
 
-&pcieport0 {
+&pcie0_port0 {
 	/* WAKE# is active-low per PCIe CEM; ACTIVE_HIGH reads as permanently
 	 * asserted, so the WLAN endpoint could never signal wake cleanly. */
 	wake-gpios = <&tlmm 96 GPIO_ACTIVE_LOW>;
