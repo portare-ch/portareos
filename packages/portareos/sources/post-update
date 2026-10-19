@@ -269,11 +269,13 @@ grep -q "^neocd\.preempt=" /storage/.config/system/configs/system.cfg ||
 grep -q "^neocd\.shaderset=" /storage/.config/system/configs/system.cfg ||
     sed -i '$ a\neocd.shaderset=portare/lines-1x.slangp' /storage/.config/system/configs/system.cfg
 
-### Mega Drive scanlines (portare/crt-240-1x, chosen 2026-10-19 for now,
-### #691): new keys, added when absent; a chosen value stays.
+### Mega Drive scanlines (crt/crt-guest-advanced, chosen 2026-10-19, #691):
+### new keys, added when absent; a chosen value stays. Full-screen 4:3 as
+### NeoCD: integer scaling off, only where it is still the old default.
 for S in genesis megadrive megadrive-japan; do
     grep -q "^${S}\.shaderset=" /storage/.config/system/configs/system.cfg ||
-        sed -i "\$ a\\${S}.shaderset=portare/crt-240-1x.slangp" /storage/.config/system/configs/system.cfg
+        sed -i "\$ a\\${S}.shaderset=crt/crt-guest-advanced.slangp" /storage/.config/system/configs/system.cfg
+    sed -i "s|^${S}\.integerscale=1$|${S}.integerscale=0|" /storage/.config/system/configs/system.cfg
 done
 
 ### The same for Nestopia, which MesenCE (mesen2) replaced for the NES.
