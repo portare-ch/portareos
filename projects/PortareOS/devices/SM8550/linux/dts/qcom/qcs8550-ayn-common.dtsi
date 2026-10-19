@@ -346,12 +346,6 @@
 		pinctrl-0 = <&lpi_i2s3_active>;
 		pinctrl-names = "default";
 
-		clocks = <&q6prmcc LPASS_CLK_ID_SEN_MI2S_IBIT LPASS_CLK_ATTRIBUTE_COUPLE_NO>;
-		clock-names = "i2s_clk";
-
-		assigned-clocks = <&q6prmcc LPASS_CLK_ID_SEN_MI2S_IBIT LPASS_CLK_ATTRIBUTE_COUPLE_NO>;
-		assigned-clock-rates = <1536000>;
-
 		model = "AYN-Odin2";
 		audio-routing =
 				"IN1_HPHL", "HPHL_OUT",
@@ -1119,6 +1113,22 @@
 &mdss_dsi1_phy {
 	vdds-supply = <&vreg_l1e_0p88>;
 	status = "okay";
+};
+
+/*
+ * The speaker amps take their bit clock from the DAI, which votes it from
+ * the stream at hw_params and releases it at shutdown. 7.3's
+ * q6apm-lpass-dais reads it from here; the card no longer holds one.
+ */
+&q6apmbedai {
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	dai@10 {
+		reg = <PRIMARY_MI2S_RX>;
+		clocks = <&q6prmcc LPASS_CLK_ID_SEN_MI2S_IBIT LPASS_CLK_ATTRIBUTE_COUPLE_NO>;
+		clock-names = "bclk";
+	};
 };
 
 &pcie0 {

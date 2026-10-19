@@ -13,10 +13,11 @@ link could only carry 48000 and 44100. This adds 32000 the same way
   through on PRIMARY_MI2S_RX and RX_CODEC_DMA_RX_0, as it does 44100.
   Every other backend keeps the 48000 pin.
 
-The bit clock needs no change: 1054 derives it from the stream, and
-32000 x 2 x 16 = 1024000, which is 24.576 MHz / 24 and so in the same
-clock family as 48000. If q6prm refuses it, 1054 warns
-"could not set i2s bit clock to 1024000".
+The bit clock needs no change: the DAI votes it from the stream at
+hw_params (q6apm-lpass-dais MI2S clock control, with "bclk" on the
+PRIMARY_MI2S_RX node), and 32000 x 2 x 16 = 1024000, which is
+24.576 MHz / 24 and so in the same clock family as 48000. If q6prm
+refuses it, the DAI logs "Unable to set rate".
 
 The rest of the path already takes 32000: lpass-rx-macro (sr_val_tbl
 {32000, 0x3}) for the headphones, and the aw88166 amps
