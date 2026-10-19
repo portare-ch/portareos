@@ -1,0 +1,100 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] ASoC: qcom: q6apm-lpass-dais: release the MI2S clocks across system suspend
+
+An open PCM holds its port's q6prm clocks until shutdown, including
+through system sleep, and with them LPASS and CX stay powered. Since
+7.3 the DAI owns those clocks (MI2S clock control, cc8495c1d45a) and
+the board's bit clock is "bclk" on the PRIMARY_MI2S_RX node, so this
+is where they are released: with the graph in the component's suspend,
+and taken back in resume before the port is restored.
+
+Unprepare and prepare are also what make the restored port start on
+the right rate: a q6prm clock reports its rate to the DSP when it is
+prepared, which is what the earlier card-level version of this learned
+by re-voting at prepare.
+
+Replaces the card-level release that rode on the card's own "i2s_clk"
+(Armada b81df790, our 1115 before 7.3).
+---
+diff --git a/sound/soc/qcom/qdsp6/q6apm-lpass-dais.c b/sound/soc/qcom/qdsp6/q6apm-lpass-dais.c
+index 6a705fd94..4118df19e 100644
+--- a/sound/soc/qcom/qdsp6/q6apm-lpass-dais.c
++++ b/sound/soc/qcom/qdsp6/q6apm-lpass-dais.c
+@@ -25,6 +25,7 @@ struct q6apm_dai_priv_data {
+ 	struct clk *mclk;
+ 	struct clk *bclk;
+ 	bool mclk_enabled, bclk_enabled;
++	bool mclk_suspended, bclk_suspended;
+ };
+ 
+ struct q6apm_lpass_dai_data {
+@@ -47,6 +48,50 @@ static void q6apm_lpass_dai_disable_clocks(struct q6apm_lpass_dai_data *dai_data
+ 		clk_disable_unprepare(dai_data->priv[id].bclk);
+ 		dai_data->priv[id].bclk_enabled = false;
+ 	}
++
++	dai_data->priv[id].mclk_suspended = false;
++	dai_data->priv[id].bclk_suspended = false;
++}
++
++/*
++ * An open PCM holds the port's q6prm clocks through system sleep, and
++ * with them LPASS and CX. Release them with the graph and take them
++ * back before the port is restored: a q6prm clock reports its rate to
++ * the DSP when it is prepared, so unprepare/prepare is also what makes
++ * the restored port start on the rate the stream had.
++ */
++static void q6apm_lpass_dai_suspend_clocks(struct q6apm_lpass_dai_data *dai_data, int id)
++{
++	struct q6apm_dai_priv_data *priv = &dai_data->priv[id];
++	bool mclk = priv->mclk_enabled, bclk = priv->bclk_enabled;
++
++	q6apm_lpass_dai_disable_clocks(dai_data, id);
++	priv->mclk_suspended = mclk;
++	priv->bclk_suspended = bclk;
++}
++
++static int q6apm_lpass_dai_resume_clocks(struct q6apm_lpass_dai_data *dai_data, int id)
++{
++	struct q6apm_dai_priv_data *priv = &dai_data->priv[id];
++	int ret;
++
++	if (priv->mclk_suspended) {
++		priv->mclk_suspended = false;
++		ret = clk_prepare_enable(priv->mclk);
++		if (ret)
++			return ret;
++		priv->mclk_enabled = true;
++	}
++
++	if (priv->bclk_suspended) {
++		priv->bclk_suspended = false;
++		ret = clk_prepare_enable(priv->bclk);
++		if (ret)
++			return ret;
++		priv->bclk_enabled = true;
++	}
++
++	return 0;
+ }
+ 
+ static void q6apm_lpass_dai_put_clocks(struct q6apm_lpass_dai_data *dai_data)
+@@ -512,6 +557,7 @@ static int q6apm_lpass_dai_suspend(struct snd_soc_component *component)
+ 			q6apm_graph_stop(dai_data->graph[i]);
+ 			dai_data->is_port_started[i] = false;
+ 		}
++		q6apm_lpass_dai_suspend_clocks(dai_data, i);
+ 		q6apm_graph_close(dai_data->graph[i]);
+ 		dai_data->graph[i] = NULL;
+ 		dai_data->is_restored[i] = false;
+@@ -533,6 +579,10 @@ static int q6apm_lpass_dai_resume(struct snd_soc_component *component)
+ 			continue;
+ 		dai_data->is_prepared[i] = false;
+ 		stream = dai_data->module_config[i].direction;
++		if (q6apm_lpass_dai_resume_clocks(dai_data, i)) {
++			dev_err(dev, "Failed to restore the clocks of port %d\n", i);
++			continue;
++		}
+ 		graph = q6apm_graph_open(dev, NULL, dev, i, stream);
+ 		if (IS_ERR(graph)) {
+ 			dev_err(dev, "Failed to restore graph %d (%ld)\n", i, PTR_ERR(graph));

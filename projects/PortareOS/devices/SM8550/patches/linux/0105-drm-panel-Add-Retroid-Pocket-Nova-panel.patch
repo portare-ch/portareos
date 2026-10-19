@@ -35,7 +35,7 @@ new file mode 100644
 index 000000000000..1c8ed849edbf
 --- /dev/null
 +++ b/drivers/gpu/drm/panel/panel-ilitek-il97680a.c
-@@ -0,0 +1,702 @@
+@@ -0,0 +1,703 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * Ilitek IL97680A panels driver
@@ -57,6 +57,7 @@ index 000000000000..1c8ed849edbf
 +#include <drm/drm_crtc.h>
 +#include <drm/drm_mipi_dsi.h>
 +#include <drm/drm_modes.h>
++#include <drm/drm_of.h>
 +#include <drm/drm_panel.h>
 +
 +struct panel_info {
@@ -690,7 +691,7 @@ index 000000000000..1c8ed849edbf
 +	pinfo->dsi = dsi;
 +	mipi_dsi_set_drvdata(dsi, pinfo);
 +
-+	ret = of_drm_get_panel_orientation(dev->of_node, &pinfo->orientation);
++	ret = drm_of_get_panel_orientation(dev->of_node, &pinfo->orientation);
 +	if (ret < 0) {
 +		dev_err(dev, "%pOF: failed to get orientation %d\n", dev->of_node, ret);
 +		return ret;

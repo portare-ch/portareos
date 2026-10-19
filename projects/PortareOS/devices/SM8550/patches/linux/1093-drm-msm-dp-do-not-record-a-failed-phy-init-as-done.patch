@@ -15,21 +15,11 @@ the PHY initialised when it succeeded. A failed probe then reports the
 connector disconnected and leaves the PHY in a state the next probe can
 initialise.
 ---
-
---- a/drivers/gpu/drm/msm/dp/dp_ctrl.h
-+++ b/drivers/gpu/drm/msm/dp/dp_ctrl.h
-@@ -32,7 +32,7 @@
- 				    void __iomem *link_base);
- 
- void msm_dp_ctrl_reset(struct msm_dp_ctrl *msm_dp_ctrl);
--void msm_dp_ctrl_phy_init(struct msm_dp_ctrl *msm_dp_ctrl);
-+int msm_dp_ctrl_phy_init(struct msm_dp_ctrl *msm_dp_ctrl);
- void msm_dp_ctrl_phy_exit(struct msm_dp_ctrl *msm_dp_ctrl);
- void msm_dp_ctrl_irq_phy_exit(struct msm_dp_ctrl *msm_dp_ctrl);
- 
+diff --git a/drivers/gpu/drm/msm/dp/dp_ctrl.c b/drivers/gpu/drm/msm/dp/dp_ctrl.c
+index 59070f399..a20d1e1e8 100644
 --- a/drivers/gpu/drm/msm/dp/dp_ctrl.c
 +++ b/drivers/gpu/drm/msm/dp/dp_ctrl.c
-@@ -1918,7 +1918,7 @@
+@@ -1955,7 +1955,7 @@ static void msm_dp_ctrl_phy_reset(struct msm_dp_ctrl_private *ctrl)
  	msm_dp_write_ahb(ctrl, REG_DP_PHY_CTRL, 0x0);
  }
  
@@ -38,7 +28,7 @@ initialise.
  {
  	struct msm_dp_ctrl_private *ctrl;
  	struct phy *phy;
-@@ -1927,7 +1927,7 @@
+@@ -1964,7 +1964,7 @@ void msm_dp_ctrl_phy_init(struct msm_dp_ctrl *msm_dp_ctrl)
  	phy = ctrl->phy;
  
  	msm_dp_ctrl_phy_reset(ctrl);
@@ -47,9 +37,24 @@ initialise.
  }
  
  void msm_dp_ctrl_phy_exit(struct msm_dp_ctrl *msm_dp_ctrl)
+diff --git a/drivers/gpu/drm/msm/dp/dp_ctrl.h b/drivers/gpu/drm/msm/dp/dp_ctrl.h
+index 5902cf7e7..42c5f847c 100644
+--- a/drivers/gpu/drm/msm/dp/dp_ctrl.h
++++ b/drivers/gpu/drm/msm/dp/dp_ctrl.h
+@@ -39,7 +39,7 @@ struct msm_dp_ctrl *msm_dp_ctrl_get(struct device *dev,
+ 
+ void msm_dp_ctrl_reset(struct msm_dp_ctrl *msm_dp_ctrl,
+ 		       struct msm_dp_panel *panel);
+-void msm_dp_ctrl_phy_init(struct msm_dp_ctrl *msm_dp_ctrl);
++int msm_dp_ctrl_phy_init(struct msm_dp_ctrl *msm_dp_ctrl);
+ void msm_dp_ctrl_phy_exit(struct msm_dp_ctrl *msm_dp_ctrl);
+ void msm_dp_ctrl_irq_phy_exit(struct msm_dp_ctrl *msm_dp_ctrl);
+ 
+diff --git a/drivers/gpu/drm/msm/dp/dp_display.c b/drivers/gpu/drm/msm/dp/dp_display.c
+index 4dcbd9b99..cfa34e055 100644
 --- a/drivers/gpu/drm/msm/dp/dp_display.c
 +++ b/drivers/gpu/drm/msm/dp/dp_display.c
-@@ -321,7 +321,14 @@
+@@ -332,7 +332,14 @@ static bool msm_dp_display_host_phy_init(struct msm_dp_display_private *dp)
  		dp->phy_initialized);
  
  	if (!dp->phy_initialized) {
