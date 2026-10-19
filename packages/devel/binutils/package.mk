@@ -3,6 +3,7 @@
 # Copyright (C) 2018-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="binutils"
+# bump-ignore: toolchain: moves with gcc and glibc, and every package rebuilds
 PKG_VERSION="2.47"
 PKG_SHA256="154ab23b60070e8f27013c22977f1129425d67d1e8acd6e13010e617811e4cff"
 PKG_LICENSE="GPL-3.0-or-later"

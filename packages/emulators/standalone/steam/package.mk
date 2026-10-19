@@ -2,6 +2,7 @@
 # Copyright (C) 2026 ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="steam"
+# bump-ignore: Valve's bootstrap tarball has no version feed to follow
 PKG_VERSION="1.0.0.85"
 PKG_SHA256="b44634a6a604ca7c8b23809d0f2a921a0348bb2081c8cb8944116d0799872b70"
 PKG_LICENSE="proprietary"

@@ -3,6 +3,7 @@
 # Copyright (C) 2018-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="systemd"
+# bump-ignore: the init system: a major move changes units, udev rules and the image layout
 PKG_VERSION="255.22"
 PKG_SHA256="182468df5d115075116341d3a668498a109bec722d782b0610263ff8c2dd3475"
 PKG_LICENSE="LGPL2.1+"

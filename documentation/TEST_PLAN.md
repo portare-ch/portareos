@@ -434,10 +434,11 @@ plays, MIDI music sounds through FluidLite, a save and load cycle works.
 
 Game running: `savestate_auto_load = "false"` in `/tmp/.retroarch.cfg`.
 
-### E10 Emulator pins bumped daily (auto, GitHub)
+### E10 Packages bumped automatically (auto, GitHub)
 
-Actions > bump-emulator-pins has a run for each of the last three days and
-a PR exists for any pin that moved. Checked from the repository, not the
+Actions > Bump packages has an emulators run for each of the last three days
+and a packages run for the last Monday, and a PR exists for any pin that
+moved. Checked from the repository, not the
 device.
 
 ### E11 Core options from the shipped file (auto)

@@ -4,6 +4,7 @@
 # Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="gcc"
+# bump-ignore: toolchain: moves with binutils and glibc, and every package rebuilds
 PKG_VERSION="16.2.0"
 PKG_SHA256="e6738e29597f733270731aa90600f37ffdc045079dfc27ec7e8192cc81085c3e"
 PKG_LICENSE="GPL-3.0-or-later"

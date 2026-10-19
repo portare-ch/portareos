@@ -66,11 +66,17 @@ this tree.
 * **DO** remove dead packages from `packages/`. Reducing the maintenance
   surface of the fork is the point.
 * **DO** isolate device-specific runtime behaviour in quirk files.
-* **DO** bump a package by hand: read what upstream released, set
-  `PKG_VERSION` and `PKG_SHA256`, build it. Nothing imports upstream's
-  recipes any more, so a version left behind stays behind until someone
-  moves it. Keep the ROCKNIX copyright headers and the `PKG_URL`/`PKG_SITE`
-  lines as they are.
+* **DO** let `tools/bump-packages` move versions. Nothing imports
+  upstream's recipes any more, so `.github/workflows/bump-packages.yml`
+  runs it: the emulators daily, every other recipe weekly, each tier as
+  one rolling pull request whose checksums it computed itself. Assign the
+  pull request to build it before merging.
+* **DO** hold a package with `# bump-ignore: <reason>` in its package.mk
+  when a move is a project rather than a line in that pull request. The
+  toolchain, glibc, the kernel, mesa, systemd and Python are held that
+  way and move by hand: read what upstream released, set `PKG_VERSION`
+  and `PKG_SHA256`, build it. Keep the ROCKNIX copyright headers and the
+  `PKG_URL`/`PKG_SITE` lines as they are.
 
 ## 5. Kernel
 
