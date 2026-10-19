@@ -38,6 +38,7 @@ layout(push_constant) uniform Push
 	float GLOW;
 	float MASK;
 	float BOOST;
+	float SAT;
 } params;
 
 #pragma parameter UPSCALE "Source lines per console line (0: use LINES)" 4.0 0.0 8.0 1.0
@@ -48,6 +49,7 @@ layout(push_constant) uniform Push
 #pragma parameter GLOW "Glow" 0.10 0.0 0.5 0.01
 #pragma parameter MASK "Mask strength" 0.25 0.0 1.0 0.05
 #pragma parameter BOOST "Brightness boost" 1.30 1.0 2.0 0.05
+#pragma parameter SAT "Saturation" 1.00 0.0 1.5 0.05
 
 layout(std140, set = 0, binding = 0) uniform UBO
 {
@@ -138,5 +140,7 @@ void main()
 	col *= mask;
 
 	col *= params.BOOST;
+	/* Saturation, in linear light: 1 leaves the colours alone, 0 is luma. */
+	col = mix(vec3(dot(col, vec3(0.2126, 0.7152, 0.0722))), col, params.SAT);
 	FragColor = vec4(sqrt(clamp(col, 0.0, 1.0)), 1.0);
 }
