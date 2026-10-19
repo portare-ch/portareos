@@ -1,0 +1,90 @@
+savestates: deterministic across processes and loads
+
+A Mega Drive state saved and loaded did not give back the same machine:
+
+- YM2612SaveContext and the Z80 part dumped whole structs, host pointers
+  included (24 slot DT pointers, 30 channel output connections, the Z80
+  irq callback and daisy chain). The load path recomputes or restores
+  every one of them, so they only made two states of one machine differ
+  between processes, which defeats byte comparison of savestates
+  (RetroArch replay checkpoints). They are cleared in the saved copy.
+- state_load() calls system_reset(), which synchronizes the 68k bus
+  refresh phase to the cycle count of whatever ran before the load, and
+  then restores the saved cycle count without redoing it. The VDP FIFO
+  read-out timestamps are neither saved nor reset. Both leaked the
+  pre-load machine's timing into the loaded one; a game polling in its
+  idle loop then advances its RNG differently (Thunder Force IV).
+
+No state format change.
+
+--- a/core/sound/ym2612.c	2026-10-19 03:21:09
++++ b/core/sound/ym2612.c	2026-10-19 03:21:32
+@@ -2251,9 +2251,21 @@
+   int c,s;
+   uint8 index;
+   int bufferptr = 0;
++  YM2612 copy;
+ 
+-  /* save YM2612 context */
+-  save_param(&ym2612, sizeof(ym2612));
++  /* save YM2612 context without the host pointers the load path
++     recomputes (slot DT tables, channel output connections) */
++  memcpy(&copy, &ym2612, sizeof(copy));
++  for (c=0; c<6; c++)
++  {
++    for (s=0; s<4; s++) copy.CH[c].SLOT[s].DT = NULL;
++    copy.CH[c].connect1 = NULL;
++    copy.CH[c].connect2 = NULL;
++    copy.CH[c].connect3 = NULL;
++    copy.CH[c].connect4 = NULL;
++    copy.CH[c].mem_connect = NULL;
++  }
++  save_param(&copy, sizeof(copy));
+ 
+   /* save DT table index for each channel slots */
+   for (c=0; c<6; c++)
+--- a/core/state.c	2026-10-19 03:21:09
++++ b/core/state.c	2026-10-19 03:48:40
+@@ -157,6 +157,11 @@
+     load_param(&m68k.cycles, sizeof(m68k.cycles));
+     load_param(&m68k.int_level, sizeof(m68k.int_level));
+     load_param(&m68k.stopped, sizeof(m68k.stopped));
++
++    /* system_reset() above synchronized the bus refresh mechanism to the
++       cycle count of whatever ran before this load; redo it for the
++       loaded one, or the loaded machine keeps the other's timing */
++    m68k.refresh_cycles = ((m68k.cycles / (128*7)) * (128*7)) + 128*7;
+   }
+ 
+   /* Z80 */ 
+@@ -258,8 +263,14 @@
+     save_param(&m68k.stopped, sizeof(m68k.stopped));
+   }
+ 
+-  /* Z80 */ 
+-  save_param(&Z80, sizeof(Z80_Regs));
++  /* Z80, without the host pointers the load path restores */
++  {
++    Z80_Regs copy;
++    memcpy(&copy, &Z80, sizeof(copy));
++    copy.daisy = NULL;
++    copy.irq_callback = NULL;
++    save_param(&copy, sizeof(copy));
++  }
+ 
+   /* External HW */
+   if (system_hw == SYSTEM_MCD)
+--- a/core/vdp_ctrl.c	2026-10-19 03:21:09
++++ b/core/vdp_ctrl.c	2026-10-19 03:48:40
+@@ -576,6 +576,11 @@
+   /* restore FIFO byte access flag */
+   fifo_byte_access = ((code & 0x0F) < 0x03);
+ 
++  /* FIFO read-out timestamps are not saved and vdp_reset() does not clear
++     them: without this a loaded machine waits on the FIFO of whatever ran
++     before the load */
++  memset(fifo_cycles, 0, sizeof(fifo_cycles));
++
+   /* restore current NTSC/PAL mode */
+   if (system_hw & SYSTEM_MD)
+   {

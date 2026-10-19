@@ -69,7 +69,7 @@ by game. Status notes below cover specific tests, not every included system.
 | Super Nintendo | Snes9x | ✅ Tested; bsnes was too costly |
 | Nintendo 64 | ParaLLEl N64 with ParaLLEl-RDP on Vulkan | — |
 | GameCube, Wii | Dolphin (libretro) | ❌ GameCube: hangs, no sound ([#463](https://github.com/portare-ch/portareos/issues/463)) |
-| Master System, Game Gear, Mega Drive, Sega CD | Genesis Plus GX | — |
+| Master System, Game Gear, Mega Drive, Sega CD | [Genesis Plus GX](documentation/emulators/Genesis.md) | 🚧 Mega Drive baseline measured on Thunder Force IV; savestates made deterministic; scanlines undecided ([#691](https://github.com/portare-ch/portareos/issues/691)) |
 | 32X | PicoDrive | — |
 | Dreamcast, NAOMI, Atomiswave | Flycast | — |
 | PlayStation | [SwanStation](documentation/emulators/SwanStation.md) | ✅ Tested |

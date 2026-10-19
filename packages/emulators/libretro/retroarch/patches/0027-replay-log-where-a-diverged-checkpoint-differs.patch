@@ -1,0 +1,41 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] replay: log where a diverged checkpoint differs
+
+"Diverged by frame N from byte M" names one byte. Which fields differ,
+and how many, is what tells a host pointer in the state (two bytes at
+an 8-byte stride) from an emulation divergence (RAM all over) from a
+timing leak (a sound chip's counters). Log the first eight differing
+ranges with both sides' bytes, and the total.
+
+Signed-off-by: PortareOS <hello@portare.org>
+---
+--- a/input/bsv/bsvmovie.c
++++ b/input/bsv/bsvmovie.c
+@@ -838,8 +838,27 @@
+          while (i < size && state[i] == handle->cur_save[i])
+             i++;
+          if (i < size)
++         {
++            size_t j = i, n = 0, total = 0;
+             RARCH_WARN("[Replay] Diverged by frame %lld: the state differs from the checkpoint from byte %zu of %zu.\n",
+                   (long long)handle->frame_counter, i, size);
++            while (j < size)
++            {
++               if (state[j] != handle->cur_save[j])
++               {
++                  size_t k = j;
++                  while (k < size && state[k] != handle->cur_save[k]) k++;
++                  total += k - j;
++                  if (n < 8)
++                     RARCH_WARN("[Replay]   [%zu,%zu) state %02x%02x%02x%02x checkpoint %02x%02x%02x%02x\n",
++                           j, k, state[j], state[j+1], state[j+2], state[j+3],
++                           handle->cur_save[j], handle->cur_save[j+1], handle->cur_save[j+2], handle->cur_save[j+3]);
++                  n++; j = k;
++               }
++               else j++;
++            }
++            RARCH_WARN("[Replay]   %zu differing bytes in %zu ranges\n", total, n);
++         }
+          else
+             RARCH_LOG("[Replay] Checkpoint at frame %lld matches.\n",
+                   (long long)handle->frame_counter);
