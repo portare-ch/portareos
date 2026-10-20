@@ -12,15 +12,6 @@ PKG_DEPENDS_TARGET="toolchain cairo freetype fontconfig fribidi glib json-glib h
 PKG_DEPENDS_CONFIG="cairo"
 PKG_LONGDESC="The Pango library for layout and rendering of internationalized text."
 
-configure_package() {
-  # Build with X11 support
-  if [ ${DISPLAYSERVER} = "x11" ]; then
-    PKG_DEPENDS_TARGET+=" libX11 libXft"
-    PKG_DEPENDS_CONFIG+=" libXft"
-    PKG_BUILD_FLAGS="-sysroot"
-  fi
-}
-
 pre_configure_target() {
   PKG_MESON_OPTS_TARGET="-Ddocumentation=false \
                          -Dintrospection=disabled"

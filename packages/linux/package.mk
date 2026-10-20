@@ -79,10 +79,6 @@ for pkg in $(get_pkg_variable initramfs PKG_DEPENDS_TARGET); do
   ! listcontains "${PKG_DEPENDS_TARGET}" "${pkg}" && PKG_DEPENDS_TARGET+=" ${pkg}" || true
 done
 
-if [ "${DEVICE}" = "RK3326" -o "${DEVICE}" = "RK3566" ]; then
-  PKG_DEPENDS_UNPACK+=" generic-dsi"
-fi
-
 # A built-in cfg80211 needs regulatory.db inside the kernel image (see
 # pre_make_target), so unpack wireless-regdb before the kernel is built.
 if grep -q '^CONFIG_CFG80211=y' ${PKG_KERNEL_CFG_FILE}; then
@@ -97,11 +93,6 @@ post_patch() {
 
     # restore the required Module.symvers from an earlier build
     cp -p ${PKG_INSTALL}/.image/Module.symvers ${PKG_BUILD}
-  fi
-
-  if [ "${DEVICE}" = "RK3326" -o "${DEVICE}" = "RK3566" -o "${DEVICE}" = "RK3576" ]; then
-    cp -v $(get_pkg_directory generic-dsi)/sources/panel-generic-dsi.c ${PKG_BUILD}/drivers/gpu/drm/panel/
-    echo "obj-y" += panel-generic-dsi.o >> ${PKG_BUILD}/drivers/gpu/drm/panel/Makefile
   fi
 
   DTS_SOURCE_DIR="${PROJECT_DIR}/${PROJECT}/devices/${DEVICE}/linux/dts"
@@ -157,10 +148,8 @@ pre_make_target() {
     ${PKG_BUILD}/scripts/config --disable CONFIG_SWAP
   fi
 
-  # disable nfs support if not enabled
-  if [ "${NFS_SUPPORT}" = no ]; then
-    ${PKG_BUILD}/scripts/config --disable CONFIG_NFS_FS
-  fi
+  # the device config has it on; nothing on the device mounts a share
+  ${PKG_BUILD}/scripts/config --disable CONFIG_NFS_FS
 
   # disable cifs support if not enabled
   if [ ! "${SAMBA_SUPPORT}" = yes ]; then

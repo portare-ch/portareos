@@ -49,10 +49,6 @@ case ${ARCH} in
   aarch64) PKG_CONFIGURE_OPTS_TARGET+=" --disable-neon" ;;
 esac
 
-case ${DEVICE} in
-  RK*) PKG_DEPENDS_TARGET+=" librga" ;;
-esac
-
 if [ "${DISPLAYSERVER}" = "wl" ]; then
   PKG_DEPENDS_TARGET+=" wayland"
   PKG_CONFIGURE_OPTS_TARGET+=" --enable-wayland"

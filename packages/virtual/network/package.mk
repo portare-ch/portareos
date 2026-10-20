@@ -15,16 +15,8 @@ if [ "${BLUETOOTH_SUPPORT}" = "yes" ]; then
   PKG_DEPENDS_TARGET="${PKG_DEPENDS_TARGET} bluez bluetooth-agent"
 fi
 
-if [ "${OPENVPN_SUPPORT}" = "yes" ]; then
-  PKG_DEPENDS_TARGET="${PKG_DEPENDS_TARGET} openvpn"
-fi
-
 if [ "${WIREGUARD_SUPPORT}" = "yes" ]; then
   PKG_DEPENDS_TARGET="${PKG_DEPENDS_TARGET} wireguard-tools"
-fi
-
-if [ "${ZEROTIER_SUPPORT}" = "yes" ]; then
-  PKG_DEPENDS_TARGET="${PKG_DEPENDS_TARGET} zerotier-one"
 fi
 
 # nss needed by inputstream.adaptive, chromium etc.

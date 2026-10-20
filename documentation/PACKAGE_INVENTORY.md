@@ -27,7 +27,6 @@ The rule this applies is the README's: if it is not needed for a smooth game, it
 | **kernel-overlays** | 59 | Not what it looked like: 16 MB of modules, the rest the Nova's own firmware, already trimmed to this device's DSP, GPU, Wi-Fi and Bluetooth blobs. Nothing worth cutting. |
 | **slang-shaders** — trim, not drop | 70 → ~10 | We use `crt/crt-guest-advanced`, `handheld/lcd-grid-v2` and our own `portare/`. Keep those families and what they include; drop the other 60 MB. |
 | **renderdoc, apitrace (with glretrace, eglretrace), gdb, gdbserver, perf, vulkan-tools, glslc, binutils (strings, readelf), v4l-utils, edid-decode, cec-ctl, plplay, gltrim, wflinfo** | ~55 | Debugging and GPU tracing tools, in a release image. `DEBUG_PACKAGES` is off, so they arrive as somebody's dependency; find whose. |
-| **gstreamer, gst-plugins-base, gst-plugins-good, gst-libav** | 8 | No binary links it. qt6 pulled it and is gone, PortMaster listed `gst-plugins-base` and is gone too; three recipes still name it. Worth the same check. |
 | The sqlite3 CLI, nano and dialog, bluez's btmon | ~1 | Duplicates and unused command-line tools. |
 | **iwd_get-networks, ukify, spit** | – | Leftover scripts. |
 
@@ -99,9 +98,31 @@ Done in #429:
 | mkcontroller and its autostart | 0 | wrote 27 `DEVICE_BTN_*` variables nothing reads. `control-gen` stopped printing a `DEVICE` line, so the GUID was empty and every value came out blank; the only consumer anywhere is a template for standalone Mednafen, which is not installed. |
 | six AYANEO and Thor inputplumber configs | 0 | other handhelds' input maps in a one-device tree. The Nova's was the file named `02-ayn-controller.yaml`. |
 
+Done in #701: 253 recipes no stage of the build reaches - toolchain, base,
+either emulator stage, image or kernel. `genbuildplan.py` plans every stage
+at `ae8b932a05` step for step the same without them, so no image loses
+anything.
+
+| Package | MB | How |
+|---|---|---|
+| docker, moby, cli, containerd, runc, tini, docker-compose, ctop | 0 | `CONTAINER_SUPPORT` gone, with the Kodi-era docker addon template |
+| nfs-utils, rpcbind, libnfs | 0 | `NFS_SUPPORT` gone; the kernel keeps `CONFIG_NFS_FS` off as before |
+| openvpn, zerotier-one, tailscale | 0 | `OPENVPN_SUPPORT` and `ZEROTIER_SUPPORT` gone |
+| lirc, libirman, eventlircd, ir-bpf-decoders, evrepeat, v4l-utils | 0 | `REMOTE_SUPPORT`, which nothing read any more |
+| installer, oem, testing, driverselect, device-tree-overlays, tm16xx-display | 0 | their switches gone, and the `modules` entry that ran the installer |
+| xorg-server, the xf86-video and xf86-input drivers, fluxbox, the X core fonts, xcb-util | 0 | the image runs Wayland; xwayland stays |
+| u-boot, atf, crust, rkbin, syslinux, grub, the Amlogic, Exynos and Raspberry Pi boot blobs | 0 | the Nova boots through qcom-abl |
+| gcc-aarch64, gcc-arm-none-eabi, gcc-bpf, gcc-or1k, the Linaro compilers, their binutils, go | 0 | cross compilers nothing builds with |
+| mold | 0 | out of the linker choice with `MOLD_SUPPORT` |
+| gstreamer and its plugins, libmpeg2, x264, x265 | 0 | the reserve #351 kept; nothing asked for it since |
+| the rest | 0 | other boards' drivers (librga, generic-dsi, RTW88, nvidia), benchmarks and tracers (glmark2, vkmark, apitrace, renderdoc, valgrind), mesa's panfrost host build with libclc, libraries nothing links and Python build tools nothing builds with |
+
+quilt stays: `tools/refresh-patches` builds it on demand. Twelve license
+texts went with the recipes that were the only ones to declare them.
+
 ## The sum
 
-Still on the table: slang-shaders ~60 + Python 34 + GStreamer 8: **about 100 MB**, without touching a supported system. Locales, gconv, p7zip and btrfs-progs came out for about 31 MB; see "Trimmed in place" below. About 250 MB is out already (above); gdb, strace, vblank-rate and pcm-flags, 12 MB, come only with an unofficial build.
+Still on the table: slang-shaders ~60 + Python 34: **about 95 MB**, without touching a supported system. Locales, gconv, p7zip and btrfs-progs came out for about 31 MB; see "Trimmed in place" below. About 250 MB is out already (above); gdb, strace, vblank-rate and pcm-flags, 12 MB, come only with an unofficial build.
 
 ## Method
 
