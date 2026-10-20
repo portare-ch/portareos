@@ -1,0 +1,43 @@
+#!/bin/bash
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
+
+# One display at a time. While a monitor is on the USB-C port the panel's
+# connector is forced off, so the launcher, every emulator and Steam find
+# the monitor as the only connected output and use it with no setting of
+# their own. Pulled, the panel is detected again and they come back to it.
+#
+#   external-display connected   exit 0 while a monitor is connected
+#   external-display apply       force the panel off, or back, to match
+#
+# The udev rule runs "apply" on every hotplug of the display card. Forcing
+# the panel sends one more hotplug, which finds nothing left to change; the
+# launcher moves to the new output on that one.
+
+# A connector's status is its own detection unless it is forced, and only
+# the panel's is: a forced-off panel is the one that reads disconnected.
+external() {
+  local s
+  for s in /sys/class/drm/card*-DP-*/status /sys/class/drm/card*-HDMI-A-*/status; do
+    [ "$(cat "${s}" 2>/dev/null)" = connected ] && return 0
+  done
+  return 1
+}
+
+apply() {
+  local s want
+  external && want=off || want=detect
+  for s in /sys/class/drm/card*-DSI-*/status /sys/class/drm/card*-eDP-*/status; do
+    [ -w "${s}" ] || continue
+    case "${want}:$(cat "${s}")" in
+      off:connected|detect:disconnected) echo "${want}" > "${s}" ;;
+    esac
+  done
+}
+
+case "$1" in
+  connected) external ;;
+  apply)     apply ;;
+  *)         echo "usage: $0 connected|apply" >&2; exit 2 ;;
+esac

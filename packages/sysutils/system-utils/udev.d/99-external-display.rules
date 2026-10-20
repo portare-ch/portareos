@@ -1,0 +1,3 @@
+# A monitor plugged into or pulled from the USB-C port: it replaces the
+# panel while it is there. See /usr/bin/external-display.
+ACTION=="add|change", SUBSYSTEM=="drm", KERNEL=="card[0-9]", RUN+="/usr/bin/external-display apply"
