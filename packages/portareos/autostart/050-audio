@@ -15,12 +15,8 @@ fi
 
 ### Auto switch between internal and bluetooth devices is wireplumber's job
 ### now. 89-bluez-auto-connect.conf gives bluetooth sinks priority 2000 so a
-### headset takes the default when it connects, and 89-external-display-audio
-### drops DP and HDMI sinks below the speaker so they never take it on their
-### own. hdmi_sense below is what moves audio to a display, deliberately.
-
-### Set up audio routing (Internal or HDMI)
-/usr/bin/hdmi_sense 2>/dev/null
+### headset takes the default when it connects. A display carries no sound:
+### the device tree has no DisplayPort DAI link.
 
 ### Set the default audio path, needed for some devices
 if [ ! -z "${DEVICE_PLAYBACK_PATH_SPK}" ]

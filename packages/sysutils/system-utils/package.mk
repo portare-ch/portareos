@@ -22,7 +22,6 @@ makeinstall_target() {
   cp ${PKG_DIR}/sources/scripts/fancontrol ${INSTALL}/usr/bin
   cp ${PKG_DIR}/sources/scripts/headphone_sense ${INSTALL}/usr/bin
   cp ${PKG_DIR}/sources/scripts/output_monitor ${INSTALL}/usr/bin
-  cp ${PKG_DIR}/sources/scripts/hdmi_sense ${INSTALL}/usr/bin
   cp ${PKG_BUILD}/portsense/portsense ${INSTALL}/usr/bin
   cp ${PKG_DIR}/sources/scripts/ledcontrol ${INSTALL}/usr/bin
   cp ${PKG_DIR}/sources/scripts/analog_sticks_ledcontrol ${INSTALL}/usr/bin

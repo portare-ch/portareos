@@ -43,7 +43,7 @@ The rule this applies is the README's: if it is not needed for a smooth game, it
 
 ## Services that start at boot and deserve a look
 
-`batteryledstatus` (idle unless `led.color=battery`), `hdmi-sense` (runs on a display plug; the sway-era `hdmi-hotplug` is gone), `debug-shell`, `debugconfig`. `input` runs `portsense`, which replaced a shell script that ran an evtest per device.
+`batteryledstatus` (idle unless `led.color=battery`), `debug-shell`, `debugconfig`. `input` runs `portsense`, which replaced a shell script that ran an evtest per device.
 
 ## Removed
 

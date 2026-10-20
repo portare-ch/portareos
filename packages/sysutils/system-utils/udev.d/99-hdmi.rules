@@ -1,4 +1,0 @@
-# A connector change on the display card: the USB-C DisplayPort plugged or
-# unplugged. hdmi_sense switches the audio profile and waits for the sink
-# that creates, which is too long for udev, so it runs as a service.
-ACTION=="change", SUBSYSTEM=="drm", KERNEL=="card[0-9]", RUN+="/usr/bin/systemctl --no-block start hdmi-sense.service"
