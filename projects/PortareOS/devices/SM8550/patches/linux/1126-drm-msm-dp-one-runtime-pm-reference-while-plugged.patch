@@ -1,0 +1,85 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] drm/msm/dp: one runtime PM reference while plugged
+
+Since the HPD state machine went, being plugged holds the controller on
+with the runtime PM reference of the call that found the sink, and the
+unplug drops one. But msm_dp_bridge_detect() takes a reference on every
+call and keeps it whenever the sink is plugged, and
+msm_dp_hpd_plug_handle() takes another even when detect found the sink
+first. Every connector probe with a monitor attached leaked one, so
+after the unplug the controller never suspended: its interrupts stayed
+enabled, and once the link was torn down IDLE_PATTERN_SENT fired some
+60000 times a second until the next plug, enough to stall the Nova.
+
+Give back the extra references. A detect that loses the sink also drops
+the one being plugged held, since the unplug handler then sees nothing
+to drop.
+
+Reported in review of the series as merged: "Each call to detect() when
+plugged increments the PM refcount without a corresponding put"
+(drm-ai-reviews, hpd-refactor v6 patch 9, 2026-05-25).
+---
+--- a/drivers/gpu/drm/msm/dp/dp_display.c
++++ b/drivers/gpu/drm/msm/dp/dp_display.c
+@@ -410,6 +410,7 @@
+ static int msm_dp_hpd_plug_handle(struct msm_dp_display_private *dp)
+ {
+ 	int ret;
++	bool was_plugged;
+ 	struct platform_device *pdev = dp->msm_dp_display.pdev;
+ 
+ 	drm_dbg_dp(dp->drm_dev, "Before, type=%d sink_count=%d\n",
+@@ -417,6 +418,7 @@
+ 			dp->link->sink_count);
+ 
+ 	guard(mutex)(&dp->plugged_lock);
++	was_plugged = dp->plugged;
+ 
+ 	ret = pm_runtime_resume_and_get(&pdev->dev);
+ 	if (ret) {
+@@ -436,6 +438,13 @@
+ 
+ 	dp->plugged = true;
+ 
++	/*
++	 * Being plugged holds the controller on with one reference, which
++	 * the unplug drops. Detect may have taken it already.
++	 */
++	if (was_plugged)
++		pm_runtime_put_sync(&pdev->dev);
++
+ 	return ret;
+ };
+ 
+@@ -902,7 +911,7 @@
+ 	struct msm_dp_display_private *priv;
+ 	u8 dpcd[DP_RECEIVER_CAP_SIZE];
+ 	struct drm_dp_desc desc;
+-	bool phy_deinit;
++	bool phy_deinit, was_plugged;
+ 	int ret;
+ 
+ 	dp = to_dp_bridge(bridge)->msm_dp_display;
+@@ -910,6 +919,7 @@
+ 	priv = container_of(dp, struct msm_dp_display_private, msm_dp_display);
+ 
+ 	guard(mutex)(&priv->plugged_lock);
++	was_plugged = priv->plugged;
+ 	ret = pm_runtime_resume_and_get(&dp->pdev->dev);
+ 	if (ret) {
+ 		DRM_ERROR("failed to pm_runtime_resume\n");
+@@ -968,6 +978,14 @@
+ 		pm_runtime_put_sync(&dp->pdev->dev);
+ 	}
+ 
++	/*
++	 * Being plugged holds one reference, kept by whichever call found
++	 * the sink. Every later detect gives its own back, or the controller
++	 * never suspends again; one that lost the sink drops that one too.
++	 */
++	if (was_plugged)
++		pm_runtime_put_sync(&dp->pdev->dev);
++
+ 	return status;
+ }
+ 
