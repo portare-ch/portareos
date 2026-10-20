@@ -11,9 +11,6 @@ release:
 image:
 	./scripts/image mkimage
 
-noobs:
-	./scripts/image noobs
-
 clean:
 	./scripts/makefile_helper --clean
 

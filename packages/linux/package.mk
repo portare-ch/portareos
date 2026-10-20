@@ -277,51 +277,23 @@ makeinstall_target() {
   mkdir -p ${INSTALL}/.image
   cp -p System.map .config Module.symvers ${INSTALL}/.image/
 
-  if [ "${BOOTLOADER}" != "qcom-abl" ]; then
-  	cp -p arch/${TARGET_KERNEL_ARCH}/boot/${KERNEL_TARGET} ${INSTALL}/.image/
-  else
-
-    gzip -c "arch/${TARGET_KERNEL_ARCH}/boot/${KERNEL_TARGET}" > "${INSTALL}/.image/kernel.gz"
-    for dtb in "arch/${TARGET_KERNEL_ARCH}/boot/dts/"**/*.dtb; do
-      if [ -f ${dtb} ]; then
-        cat "$dtb" >> "${INSTALL}/.image/kernel.gz"
-      fi
-    done
-    echo -n "dummy" > "${INSTALL}/.image/ramdisk"
-    python3 "${TOOLCHAIN}/mkbootimg/mkbootimg.py" \
-      --kernel "${INSTALL}/.image/kernel.gz" --ramdisk "${INSTALL}/.image/ramdisk" \
-	  --kernel_offset 0x00000000 --ramdisk_offset 0x00000000 --tags_offset 0x00000000 \
-	  --os_version 12.0.0 --os_patch_level "$(date '+%Y-%m')" --header_version 0 \
-	  --cmdline "boot=LABEL=${DISTRO_BOOTLABEL} disk=LABEL=${DISTRO_DISKLABEL} ${EXTRA_CMDLINE}" \
-	  -o "${INSTALL}/.image/${KERNEL_TARGET}" || { exit 1; }
-  fi
+  gzip -c "arch/${TARGET_KERNEL_ARCH}/boot/${KERNEL_TARGET}" > "${INSTALL}/.image/kernel.gz"
+  for dtb in "arch/${TARGET_KERNEL_ARCH}/boot/dts/"**/*.dtb; do
+    if [ -f ${dtb} ]; then
+      cat "$dtb" >> "${INSTALL}/.image/kernel.gz"
+    fi
+  done
+  echo -n "dummy" > "${INSTALL}/.image/ramdisk"
+  python3 "${TOOLCHAIN}/mkbootimg/mkbootimg.py" \
+    --kernel "${INSTALL}/.image/kernel.gz" --ramdisk "${INSTALL}/.image/ramdisk" \
+    --kernel_offset 0x00000000 --ramdisk_offset 0x00000000 --tags_offset 0x00000000 \
+    --os_version 12.0.0 --os_patch_level "$(date '+%Y-%m')" --header_version 0 \
+    --cmdline "boot=LABEL=${DISTRO_BOOTLABEL} disk=LABEL=${DISTRO_DISKLABEL} ${EXTRA_CMDLINE}" \
+    -o "${INSTALL}/.image/${KERNEL_TARGET}" || { exit 1; }
 
   kernel_make INSTALL_MOD_PATH=${INSTALL}/$(get_kernel_overlay_dir) modules_install
   rm -f ${INSTALL}/$(get_kernel_overlay_dir)/lib/modules/*/build
   rm -f ${INSTALL}/$(get_kernel_overlay_dir)/lib/modules/*/source
-
-  if [ "${BOOTLOADER}" = "arm-efi" ]; then
-    mkdir -p ${INSTALL}/usr/share/bootloader/boot/grub
-    for dtb in arch/${TARGET_KERNEL_ARCH}/boot/dts/**/*.dtb; do
-      if [ -f ${dtb} ]; then
-          cp -v ${dtb} ${INSTALL}/usr/share/bootloader/boot/grub
-      fi
-    done
-  fi
-
-  if [ "${BOOTLOADER}" = "u-boot" ]; then
-    mkdir -p ${INSTALL}/usr/share/bootloader
-    for dtb in arch/${TARGET_KERNEL_ARCH}/boot/dts/**/*.dtb; do
-      if [ -f ${dtb} ]; then
-        if [ "${DEVICE}" = "H700" -o "${DEVICE}" = "RK3326" -o "${DEVICE}" = "RK3399" -o "${DEVICE}" = "RK3566" -o "${DEVICE}" = "RK3576" -o "${DEVICE}" = "RK3588" ]; then
-          mkdir -p ${INSTALL}/usr/share/bootloader/device_trees
-          cp -v ${dtb} ${INSTALL}/usr/share/bootloader/device_trees
-        else
-          cp -v ${dtb} ${INSTALL}/usr/share/bootloader
-        fi
-      fi
-    done
-  fi
 
   makeinstall_host
 }
