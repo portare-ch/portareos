@@ -95,11 +95,9 @@ De-gamma and 8bpc dithering also need device checks. See
 Its fallback blanks the launcher's CRTC, but external-display detection
 answers false. The intended docked power-key policy therefore needs work.
 
-`hdmi_sense` scans DisplayPort connectors and matches sinks named `hdmi`,
-`displayport` or `dp`; nobody has recorded `wpctl status` while docked to
-confirm the match. Test display ownership, hotplug, audio routing and return
-to the panel together. The historical monitor-source behavior dropped with
-`pactl` also needs a decision if a retained client needs it.
+A display carries no sound: there is no DisplayPort DAI link, and audio
+stays on the speakers or line-out. Test display ownership, hotplug and
+return to the panel together.
 
 ### VRR and Steam validation
 

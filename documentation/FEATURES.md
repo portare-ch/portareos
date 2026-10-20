@@ -38,7 +38,7 @@ see the test plan before interpreting its results.
 | RetroArch picks the output rate from the core | `audio_out_rate = 0`: the rate is chosen from the core's at every audio init, so N64 games at 22.05, 32 or 44.1 kHz each get a matching link. | RetroArch patch 0015 | unverified | auto: `[Audio] Output rate picked` log line and `hw_params` on an N64 game |
 | Per-core output rates | 44.1 kHz for PlayStation, Saturn, Dreamcast, PSP, Neo Geo CD and the Sega cores through their own configs, SNES 32 kHz, the rest 48. | per-core `.cfg`, `retroarch.cfg` | verified | auto: `hw_params` per system |
 | PipeWire with a 3 ms quantum floor | Native PipeWire playback; 144-frame minimum at the 48 kHz reference rate, scaled by rate, without power-of-two rounding. PulseAudio compatibility is provided by pipewire-pulse. | PipeWire patch 002; RetroArch patch 0017 | verified in recorded 32/44.1/48 kHz sessions; wider coverage pending | auto: running sink quantum and xruns; see AUDIO_LATENCY.md |
-| HDMI audio sink switch | `hdmi_sense` moves the sound to a USB-C DisplayPort display when it is plugged, and back when it is pulled; plugged-in headphones win over the display. | `99-hdmi.rules`, `hdmi-sense.service`, `hdmi-headphones.service`, `hdmi_sense` | unverified sink match (BUGS) | human: plug HDMI, sound follows |
+| No display audio | Sound stays on the speakers or line-out whatever display is attached, so it is the same everywhere. | no DisplayPort DAI link in the device tree, UCM patch 0006 | unverified | auto: no DisplayPort sink with a display plugged |
 
 ## Emulation
 

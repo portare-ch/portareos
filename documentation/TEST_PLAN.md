@@ -265,24 +265,6 @@ rates, retain before/after ERR counters and listen for crackle. A follower's
 QUANT column may show its request rather than the running sink's quantum.
 See [audio latency](AUDIO_LATENCY.md) for measured limits and open coverage.
 
-### A5 Display audio switch (auto+human)
-
-Auto, idle: a change event on the display card
-(`udevadm trigger --action=change /sys/class/drm/card0`) runs
-`hdmi-sense.service` to success, and `hdmi-headphones.service` runs only
-while a display is attached.
-
-Human, with a game or mpv playing:
-
-1. Plug a USB-C DisplayPort display: within two seconds sound moves to it
-   and `wpctl status` marks the DisplayPort sink default.
-2. Plug headphones: sound moves to them. Pull them: back to the display.
-3. Unplug the display: sound returns to the speaker, or to the headphones
-   if they are in.
-
-`journalctl -u hdmi-sense` shows a run per change. Fail if sound stays on
-the device with a display and no headphones, or comes from two places.
-
 ## Emulation
 
 ### E1 One emulator per system (auto)

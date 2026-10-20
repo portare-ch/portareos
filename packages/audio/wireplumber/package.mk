@@ -95,28 +95,6 @@ monitor.bluez.rules = [
 ]
 EOF
 
-  # module-switch-on-connect carried blocklist="...|hdmi" so an external
-  # display never stole the default sink. Priority is how wireplumber says the
-  # same thing: below the internal speaker, so only hdmi_sense moves audio to a
-  # display, on a real plug event. Covers DP too, which is what USB-C alt mode
-  # gives this platform.
-  cat >${INSTALL}/usr/share/wireplumber/wireplumber.conf.d/89-external-display-audio.conf <<EOF
-monitor.alsa.rules = [
-  {
-    matches = [
-      { node.name = "~alsa_output.*[Hh][Dd][Mm][Ii].*" }
-      { node.name = "~alsa_output.*[Dd]isplay[Pp]ort.*" }
-    ]
-    actions = {
-      update-props = {
-        priority.driver = 100
-        priority.session = 100
-      }
-    }
-  }
-]
-EOF
-
 # Platform-specific config files
 if [ -d "${PKG_DIR}/config/${DEVICE}" ]; then 
   cp -f ${PKG_DIR}/config/${DEVICE}/*.conf ${INSTALL}/usr/share/wireplumber/wireplumber.conf.d/
