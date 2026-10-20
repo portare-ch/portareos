@@ -15,21 +15,5 @@ NEW=$(cryptpw -m sha512 "${ROOTPASS}" 2>/dev/null)
 # Set the root password.
 sed -i "s#root:${CURRENT}:${LPC}::::::#root:${NEW}:${LPC}::::::#g" /storage/.cache/shadow 2>/dev/null
 
-# Create a root user and set the password.
-echo -ne "${ROOTPASS}\n${ROOTPASS}\n" | smbpasswd -sa root 2>/dev/null
-
-# Set the root user and password for SyncThing, where it is still installed.
-command -v syncthing >/dev/null && \
-  syncthing generate --gui-user "root" --gui-password "${ROOTPASS}" >/dev/null 2>&1
-
-# Save the password so we can display it in ES
+# Save the password so Settings > About can show it.
 set_setting root.password "${ROOTPASS}"
-
-# Restart syncthing if it was enabled.
-SYNCSTATUS=$(get_setting syncthing.enabled)
-SYNCACTIVE=$(systemctl status syncthing 2>/dev/null | awk '/active/ {print $2}')
-if [ "${SYNCSTATUS}" = "1" ] &&
-   [ "${SYNCACTIVE}" = "active" ]
-then
-  systemctl restart syncthing >/dev/null 2>&1
-fi

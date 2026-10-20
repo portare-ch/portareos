@@ -109,7 +109,6 @@ makeinstall_host() {
 
 makeinstall_target() {
   mkdir -p ${INSTALL}/usr/bin
-    [ ${TARGET_ARCH} = x86_64 ] && cp ${PKG_DIR}/scripts/getedid ${INSTALL}/usr/bin
     cp ${PKG_DIR}/scripts/dthelper ${INSTALL}/usr/bin
       ln -sf dthelper ${INSTALL}/usr/bin/dtfile
       ln -sf dthelper ${INSTALL}/usr/bin/dtflag
