@@ -1,0 +1,82 @@
+site_name: PortareOS
+site_description: Documentation for PortareOS on the Retroid Pocket Nova
+site_url: https://docs.portareos.org/
+repo_url: https://github.com/portare-ch/portareos
+repo_name: portare-ch/portareos
+edit_uri: blob/next/
+use_directory_urls: false
+
+theme:
+  name: material
+  font: false
+  logo: distributions/PortareOS/logos/portareos-logo.png
+  favicon: distributions/PortareOS/logos/portareos-logo.png
+  palette:
+    scheme: slate
+    primary: black
+    accent: orange
+  features:
+    - navigation.sections
+    - navigation.top
+    - search.highlight
+    - content.code.copy
+
+plugins:
+  - search
+
+markdown_extensions:
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+validation:
+  nav:
+    omitted_files: warn
+  links:
+    not_found: warn
+    unrecognized_links: warn
+    anchors: warn
+
+nav:
+  - Getting started:
+      - About PortareOS: README.md
+      - Documentation: documentation/README.md
+      - Installation: documentation/INSTALLATION.md
+      - Features: documentation/FEATURE_OVERVIEW.md
+      - Systems and cores: documentation/PER_DEVICE_DOCUMENTATION/SM8550/SUPPORTED_EMULATORS_AND_CORES.md
+      - Known issues: BUGS.md
+      - Roadmap: ROADMAP.md
+  - Emulators:
+      - Overview: documentation/emulators/README.md
+      - Genesis Plus GX: documentation/emulators/Genesis.md
+      - NeoCD: documentation/emulators/NeoCD.md
+      - SwanStation: documentation/emulators/SwanStation.md
+      - ARMSX2: documentation/emulators/ARMSX2.md
+  - Display and latency:
+      - Variable refresh: documentation/VARIABLE_REFRESH.md
+      - Fixed refresh modes: documentation/PER_DEVICE_DOCUMENTATION/SM8550/REFRESH_RATES.md
+      - Console clocks: documentation/CONSOLE_CLOCKS.md
+      - Mode status: documentation/PortareOS_Modelines.md
+      - Latency measurements: documentation/LATENCY.md
+      - Color calibration: documentation/PER_DEVICE_DOCUMENTATION/SM8550/COLOR_PROFILE.md
+  - Audio:
+      - Latency: documentation/AUDIO_LATENCY.md
+      - Sample rates: documentation/PER_DEVICE_DOCUMENTATION/SM8550/AUDIO_SAMPLE_RATES.md
+  - Development:
+      - Debug tools: documentation/DEBUG_TOOLS.md
+      - Test plan: documentation/TEST_PLAN.md
+      - Feature verification: documentation/FEATURES.md
+      - Performance plan: documentation/PERFORMANCE_PLAN.md
+      - CPU placement: documentation/CPU_ISOLATION.md
+      - Power and suspend: documentation/POWER.md
+      - Package inventory: documentation/PACKAGE_INVENTORY.md
+      - Removed packages: documentation/REMOVED_PACKAGES.md
+      - Investigation history: documentation/BUG_HISTORY.md
+      - Armada references: documentation/ARMADA_NOTES.md
+      - Device tree comparison: documentation/PER_DEVICE_DOCUMENTATION/SM8550/RB5GEN2_DT_COMPARISON.md
+      - Licences: LICENSE.md

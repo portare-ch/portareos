@@ -1,0 +1,69 @@
+name: Documentation
+
+on:
+  push:
+    branches: [next]
+    paths:
+      - 'documentation/**'
+      - 'docs/**'
+      - 'README.md'
+      - 'BUGS.md'
+      - 'ROADMAP.md'
+      - 'LICENSE.md'
+      - 'distributions/PortareOS/logos/portareos-logo.png'
+      - 'tools/build-docs.py'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    branches: [next]
+    paths:
+      - 'documentation/**'
+      - 'docs/**'
+      - 'README.md'
+      - 'BUGS.md'
+      - 'ROADMAP.md'
+      - 'LICENSE.md'
+      - 'distributions/PortareOS/logos/portareos-logo.png'
+      - 'tools/build-docs.py'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: docs/requirements.txt
+      - name: Install documentation dependencies
+        run: python -m pip install -r docs/requirements.txt
+      - name: Build and check documentation
+        run: python tools/build-docs.py
+      - uses: actions/upload-pages-artifact@v4
+        if: github.event_name != 'pull_request'
+        with:
+          path: site
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/next'
+    needs: build
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy documentation
+        id: deployment
+        uses: actions/deploy-pages@v4

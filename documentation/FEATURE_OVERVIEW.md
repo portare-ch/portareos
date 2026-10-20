@@ -113,7 +113,7 @@ Details: [installation and updates](INSTALLATION.md),
 * PORTAMP music player with a Winamp-inspired interface, playlist and spectrum display.
 
 Details: [screenshots](../README.md#what-it-looks-like),
-[video controls](../packages/multimedia/mpv/config/input.conf).
+[video controls](https://github.com/portare-ch/portareos/blob/next/packages/multimedia/mpv/config/input.conf).
 
 ## Debugging and measurement
 
