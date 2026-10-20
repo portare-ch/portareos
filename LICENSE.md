@@ -20,7 +20,7 @@ PortareOS software and scripts are provided under the licenses stated in their s
 
 Copyright 2024 ROCKNIX (https://github.com/ROCKNIX)
 
-Original software and scripts developed by the ROCKNIX team are licensed under the terms of the GNU GPL Version 2. The full license can be found in [licenses/GPL-2.0-only.txt](licenses/GPL-2.0-only.txt).
+Original software and scripts developed by the ROCKNIX team are licensed under the terms of the GNU GPL Version 2. The full license can be found in [licenses/GPL-2.0-only.txt](https://github.com/portare-ch/portareos/blob/next/licenses/GPL-2.0-only.txt).
 
 ### Bundled Works
-All other software is provided under each component's respective license. These licenses can be found in the software sources or in this project's [licenses folder](licenses/). Modifications to bundled software and scripts by PortareOS or the ROCKNIX team are licensed under the terms of the software being modified.
+All other software is provided under each component's respective license. These licenses can be found in the software sources or in this project's [licenses folder](https://github.com/portare-ch/portareos/tree/next/licenses/). Modifications to bundled software and scripts by PortareOS or the ROCKNIX team are licensed under the terms of the software being modified.

@@ -1,8 +1,8 @@
 # Game folders, formats and emulators
 
 Reviewed 18 October 2026 against the
-[system definitions](../../../config/emulators) and
-[emulator selection](../../../packages/virtual/emulators/package.mk).
+[system definitions](https://github.com/portare-ch/portareos/tree/next/config/emulators) and
+[emulator selection](https://github.com/portare-ch/portareos/blob/next/packages/virtual/emulators/package.mk).
 Folder names below are relative to `/storage/roms/` unless an absolute path
 is shown. Required BIOS files go under `/storage/roms/bios/` in the layout
 the emulator expects.

@@ -19,9 +19,9 @@ Other applications and outputs can negotiate larger buffers. RetroArch's
 ring, the running graph quantum, PCM queue and physical speaker latency are
 separate quantities.
 
-Sources: [RetroArch's quantum patch](../packages/emulators/libretro/retroarch/patches/0017-pipewire-quantum-floor-3ms.patch),
-[PipeWire graph configuration](../packages/audio/pipewire/patches/SM8550/002-graph-quantum.patch),
-and the [default latency setting](../packages/hardware/quirks/autostart/020-set_audio_latency).
+Sources: [RetroArch's quantum patch](https://github.com/portare-ch/portareos/blob/next/packages/emulators/libretro/retroarch/patches/0017-pipewire-quantum-floor-3ms.patch),
+[PipeWire graph configuration](https://github.com/portare-ch/portareos/blob/next/packages/audio/pipewire/patches/SM8550/002-graph-quantum.patch),
+and the [default latency setting](https://github.com/portare-ch/portareos/blob/next/packages/hardware/quirks/autostart/020-set_audio_latency).
 See [sample rates](PER_DEVICE_DOCUMENTATION/SM8550/AUDIO_SAMPLE_RATES.md) for
 which rates the cores and physical links can carry.
 

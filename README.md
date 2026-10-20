@@ -4,7 +4,7 @@
 
 **For Retroid Pocket Nova owners who care about every frame and millisecond.**
 
-[Home](https://os.portare.org) · **[Features](documentation/FEATURE_OVERVIEW.md)** · **[Installation guide](documentation/INSTALLATION.md)** · [Documentation](documentation/README.md) · [Known issues](BUGS.md) · [Roadmap](ROADMAP.md)
+[Home](https://os.portare.org) · **[Features](documentation/FEATURE_OVERVIEW.md)** · **[Installation guide](documentation/INSTALLATION.md)** · [Documentation](https://docs.portareos.org/documentation/) · [Known issues](BUGS.md) · [Roadmap](ROADMAP.md)
 
 > Black coffee without sugar and milk. With the right amount of beans and water.
 

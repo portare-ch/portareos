@@ -17,7 +17,7 @@ In host examples, replace `nova` with that address or your SSH host alias.
 SSH/SCP; `display-check` also needs Python 3. Use a unique run name each time:
 the recording tools reuse or overwrite files with the same name.
 
-The [debug package](../packages/virtual/debug/package.mk) installs the eight
+The [debug package](https://github.com/portare-ch/portareos/blob/next/packages/virtual/debug/package.mk) installs the eight
 tools in the first group below. Unofficial builds include it by default;
 official builds, including official nightlies, omit it by default.
 `DEBUG_PACKAGES=yes` overrides that choice. For a local image build:

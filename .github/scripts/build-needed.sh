@@ -58,7 +58,8 @@ fi
 while IFS= read -r f; do
   [ -n "${f}" ] || continue
   case "${f}" in
-    documentation/*|*.md|.github/ISSUE_TEMPLATE/*|LICENSE.md|.gitignore)
+    documentation/*|docs/*|*.md|.github/ISSUE_TEMPLATE/*|LICENSE.md|.gitignore|\
+    tools/build-docs.py|.github/workflows/docs.yml)
       continue ;;
     *)
       echo "build-needed: ${f} affects the build." >&2
