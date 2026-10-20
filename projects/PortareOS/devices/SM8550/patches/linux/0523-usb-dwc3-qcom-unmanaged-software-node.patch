@@ -1,0 +1,89 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] usb: dwc3: qcom: keep the quirk node off the root hubs
+
+0522 attaches xhci-skip-phy-init-quirk as a managed software node on
+the flattened dwc3 device. The xHCI root hubs reuse that device's OF
+node, so they see the node too, and software_node_notify_remove()
+drops the owner's managed reference for each of them as well as their
+own. The first host-mode exit freed the node while dwc3 still had it
+as its secondary fwnode; dwc3_gadget_init() then read freed memory
+and oopsed, and pmic_glink stalled behind the dead role-switch worker.
+
+Register a per-instance node that is not managed, as dwc3-imx does,
+and remove it on probe failure and on remove.
+---
+--- a/drivers/usb/dwc3/dwc3-qcom.c
++++ b/drivers/usb/dwc3/dwc3-qcom.c
+@@ -86,6 +86,8 @@
+ 	struct icc_path		*icc_path_apps;
+ 
+ 	enum usb_role		current_role;
++
++	struct software_node	swnode;
+ };
+ 
+ #define to_dwc3_qcom(d) container_of((d), struct dwc3_qcom, dwc)
+@@ -420,14 +422,22 @@
+ 	return IRQ_HANDLED;
+ }
+ 
+-static int dwc3_qcom_set_swnode(struct device *dev)
++static const struct property_entry dwc3_qcom_properties[] = {
++	PROPERTY_ENTRY_BOOL("xhci-skip-phy-init-quirk"),
++	{}
++};
++
++/*
++ * Not a managed node: the root hubs reuse this device's OF node, and
++ * removing a device that only shares a managed node drops the owner's
++ * reference too. Every host-mode exit would then free the node while
++ * it is still this device's secondary fwnode.
++ */
++static int dwc3_qcom_set_swnode(struct dwc3_qcom *qcom)
+ {
+-	const struct property_entry props[] = {
+-		PROPERTY_ENTRY_BOOL("xhci-skip-phy-init-quirk"),
+-		{}
+-	};
++	qcom->swnode.properties = dwc3_qcom_properties;
+ 
+-	return device_create_managed_software_node(dev, props, NULL);
++	return device_add_software_node(qcom->dev, &qcom->swnode);
+ }
+ 
+ static void dwc3_qcom_select_utmi_clk(struct dwc3_qcom *qcom)
+@@ -694,7 +704,7 @@
+ 	if (ignore_pipe_clk)
+ 		dwc3_qcom_select_utmi_clk(qcom);
+ 
+-	ret = dwc3_qcom_set_swnode(dev);
++	ret = dwc3_qcom_set_swnode(qcom);
+ 	if (ret)
+ 		goto clk_disable;
+ 
+@@ -723,7 +733,7 @@
+ 	ret = dwc3_core_probe(&probe_data);
+ 	if (ret)  {
+ 		ret = dev_err_probe(dev, ret, "failed to register DWC3 Core\n");
+-		goto clk_disable;
++		goto remove_swnode;
+ 	}
+ 
+ 	ret = dwc3_qcom_interconnect_init(qcom);
+@@ -739,6 +749,8 @@
+ 
+ remove_core:
+ 	dwc3_core_remove(&qcom->dwc);
++remove_swnode:
++	device_remove_software_node(dev);
+ clk_disable:
+ 	clk_bulk_disable_unprepare(qcom->num_clocks, qcom->clks);
+ 
+@@ -754,6 +766,7 @@
+ 		return;
+ 
+ 	dwc3_core_remove(&qcom->dwc);
++	device_remove_software_node(qcom->dev);
+ 	clk_bulk_disable_unprepare(qcom->num_clocks, qcom->clks);
+ 	dwc3_qcom_interconnect_exit(qcom);
+ 
