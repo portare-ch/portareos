@@ -53,32 +53,11 @@
 # e.g. ADDITIONAL_DRIVERS="DRIVER1 DRIVER2"
   ADDITIONAL_DRIVERS=""
 
-# build and install driver addons (yes / no)
-  DRIVER_ADDONS_SUPPORT="no"
-
-# driver addons to install:
-# for a list of additinoal drivers see packages/linux-driver-addons
-# Space separated list is supported,
-  DRIVER_ADDONS=""
-
 # build and install bluetooth support (yes / no)
   BLUETOOTH_SUPPORT="yes"
 
-# build with NFS support (mounting nfs shares via the OS) (yes / no)
-# Off: the package installs mount.nfs and nothing in the image ever calls it.
-# Nothing under packages/portareos/sources mounts an NFS share, the front-end
-# has no UI for one, and there is no fstab entry. Turning this back on is one
-# word here, and brings back nfs-utils, rpcbind and libevent with it.
-  NFS_SUPPORT="no"
-
 # build and install SFTP Server (yes / no)
   SFTP_SERVER="yes"
-
-# build and install OpenVPN support (yes / no)
-  OPENVPN_SUPPORT="no"
-
-# build and install ZeroTier support (yes / no)
-  ZEROTIER_SUPPORT="no"
 
 # build and install WireGuard support (yes / no)
   WIREGUARD_SUPPORT="yes"
@@ -96,9 +75,6 @@
 
 # Target an emulation device
   EMULATION_DEVICE="${EMULATION_DEVICE:-yes}"
-
-# Add support for containers
-  CONTAINER_SUPPORT="${CONTAINER_SUPPORT:-no}"
 
 # Build modules packages
   MODULES_PKG="${MODULES_PKG:-yes}"
@@ -120,14 +96,6 @@
 # Space separated list is supported,
 # e.g. GRAPHIC_DRIVERS="i915 i965 r300 r600 radeonsi nvidia"
   GRAPHIC_DRIVERS=""
-
-# build and install remote support (yes / no)
-# Off: this is infrared remote control and Video4Linux tooling - lirc,
-# libirman, v4l-utils and evrepeat. The Nova has no IR receiver, no IR
-# blaster, no camera and no tuner, and nothing in the tree drives any of
-# them. Game input is evdev through SDL and inputplumber, which is
-# unrelated.
-  REMOTE_SUPPORT="no"
 
 # build and install Joystick support (yes / no)
   JOYSTICK_SUPPORT="yes"
@@ -151,15 +119,6 @@
 # additional packages to install:
 # Space separated list is supported,
 # e.g. ADDITIONAL_PACKAGES="PACKAGE1 PACKAGE2"
-
-# build with installer (yes / no)
-  INSTALLER_SUPPORT="no"
-
-# Testpackages for development (yes / no)
-  TESTING="no"
-
-# OEM packages for OEM's (yes / no)
-  OEM_SUPPORT="no"
 
 # build and install nano text editor (yes / no)
   NANO_EDITOR="yes"

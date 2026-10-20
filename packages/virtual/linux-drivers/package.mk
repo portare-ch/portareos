@@ -10,11 +10,3 @@ PKG_DEPENDS_TARGET="toolchain $ADDITIONAL_DRIVERS"
 PKG_SECTION="virtual"
 PKG_LONGDESC="linux-drivers is a Meta package to install additional drivers"
 
-if [ "$DRIVER_ADDONS_SUPPORT" = "yes" ]; then
-  PKG_DEPENDS_TARGET="${PKG_DEPENDS_TARGET} $DRIVER_ADDONS driverselect"
-fi
-
-if [ "${PORTAREOS_DEVICE_TREE_OVERLAYS}" = "yes" ]; then
-  PKG_DEPENDS_TARGET+=" device-tree-overlays"
-fi
-

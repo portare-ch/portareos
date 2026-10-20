@@ -22,15 +22,6 @@ if [ "${NANO_EDITOR}" = "yes" ]; then
   PKG_DEPENDS_TARGET="${PKG_DEPENDS_TARGET} nano"
 fi
 
-# nfs support
-if [ "${NFS_SUPPORT}" = yes ]; then
-  PKG_DEPENDS_TARGET="${PKG_DEPENDS_TARGET} rpcbind"
-fi
-
-if [ "${TARGET_ARCH}" = "x86_64" ]; then
-  PKG_DEPENDS_TARGET+=" pciutils"
-fi
-
 pre_build_target() {
   PKG_MAKE_OPTS_TARGET="ARCH=${TARGET_ARCH} \
                         HOSTCC=${HOST_CC} \

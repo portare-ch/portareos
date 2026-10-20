@@ -12,7 +12,6 @@ PKG_SITE="http://www.mesa3d.org/"
 # 2026-10-20 and took the nightly with it - while archive.mesa3d.org
 # keeps every tarball it has published.
 PKG_URL="https://archive.mesa3d.org/mesa-${PKG_VERSION}.tar.xz"
-PKG_DEPENDS_HOST="toolchain:host expat:host libclc:host libdrm:host llvm:host Mako:host pyyaml:host spirv-tools:host"
 PKG_DEPENDS_TARGET="toolchain expat libdrm Mako:host pyyaml:host"
 PKG_LONGDESC="Mesa is a 3-D graphics library with an API."
 PKG_PATCH_DIRS+=" ${DEVICE}"
@@ -25,25 +24,6 @@ PKG_PATCH_DIRS+=" ${DEVICE}"
 export PYTHONHASHSEED=0
 
 get_graphicdrivers
-
-if listcontains "${GRAPHIC_DRIVERS}" "panfrost"; then
-  PKG_DEPENDS_TARGET+=" mesa:host"
-fi
-
-PKG_MESON_OPTS_HOST="-Dglvnd=disabled \
-                     -Dgallium-drivers= \
-                     -Dplatforms= \
-                     -Dglx=disabled \
-                     -Dvulkan-drivers= \
-                     -Dshared-llvm=disabled \
-                     -Dtools=panfrost \
-                     -Dvideo-codecs= \
-                     -Dbuild-tests=false \
-                     -Denable-glcpp-tests=false \
-                     -Dmesa-clc=enabled \
-                     -Dinstall-mesa-clc=true \
-                     -Dprecomp-compiler=enabled \
-                     -Dinstall-precomp-compiler=true"
 
 PKG_MESON_OPTS_TARGET="-Dc_link_args=-lgcc \
                        -Dcpp_link_args=-lgcc \
@@ -59,12 +39,6 @@ PKG_MESON_OPTS_TARGET="-Dc_link_args=-lgcc \
                        -Dlmsensors=disabled \
                        -Dbuild-tests=false \
                        -Dmicrosoft-clc=disabled"
-
-if listcontains "${GRAPHIC_DRIVERS}" "panfrost"; then
-  # These options require that we have built mesa host as specified above
-  PKG_MESON_OPTS_TARGET+=" -Dmesa-clc=system \
-                           -Dprecomp-compiler=system"
-fi
 
 if [ "${DISPLAYSERVER}" = "x11" ]; then
   PKG_DEPENDS_TARGET+=" xorgproto libXext libXdamage libXfixes libXxf86vm libxcb libX11 libxshmfence libXrandr libglvnd glfw"

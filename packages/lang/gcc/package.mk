@@ -16,10 +16,6 @@ PKG_DEPENDS_INIT="toolchain"
 PKG_LONGDESC="This package contains the GNU Compiler Collection."
 PKG_BUILD_FLAGS="-cfg-libs:host"
 
-if [ "${MOLD_SUPPORT}" = "yes" ]; then
-  PKG_DEPENDS_HOST+=" mold:host"
-fi
-
 case ${TARGET_ARCH} in
   arm | riscv64)
     OPTS_LIBATOMIC="--enable-libatomic"

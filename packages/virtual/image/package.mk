@@ -76,9 +76,6 @@ fi
 # Device is an emulation focused device
 [ "${EMULATION_DEVICE}" = "yes" ] && PKG_DEPENDS_TARGET+=" emulators gamesupport"
 
-# Add support for containers
-[ "${CONTAINER_SUPPORT}" = "yes" ] && PKG_DEPENDS_TARGET+=" ${PKG_TOOLS} docker"
-
 [ "${DEBUG_PACKAGES}" = "yes" ] && PKG_DEPENDS_TARGET+=" ${PKG_DEBUG}"
 
 # 32Bit package support
@@ -89,18 +86,6 @@ fi
 
 # EXFAT support
 [ "${EXFAT}" = "yes" ] && PKG_DEPENDS_TARGET+=" exfatprogs"
-
-# NFS support
-[ "${NFS_SUPPORT}" = "yes" ] && PKG_DEPENDS_TARGET+=" nfs-utils"
-
-# Installer support
-[ "${INSTALLER_SUPPORT}" = "yes" ] && PKG_DEPENDS_TARGET+=" installer"
-
-# Devtools... (not for Release)
-[ "${TESTING}" = "yes" ] && PKG_DEPENDS_TARGET+=" testing"
-
-# OEM packages
-[ "${OEM_SUPPORT}" = "yes" ] && PKG_DEPENDS_TARGET+=" oem"
 
 # htop
 [ "${HTOP_TOOL}" = "yes" ] && PKG_DEPENDS_TARGET+=" htop"

@@ -106,9 +106,6 @@ check_for_update() {
           krb5)
             upstream_version=${upstream_version//-final/}
             ;;
-          lm_sensors)
-            upstream_version=${upstream_version//-/.}
-            ;;
         esac
         ;;
     esac

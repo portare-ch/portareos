@@ -80,25 +80,7 @@ else
                            -DSDL_WAYLAND_SHARED=OFF"
 fi
 
-case ${DEVICE} in
-  RK*)
-    PKG_DEPENDS_TARGET+=" librga"
-    PKG_PATCH_DIRS_TARGET+="${DEVICE}"
-    PKG_CMAKE_OPTS_TARGET+=" -DSDL_ROCKCHIP=ON"
-  ;;
-esac
-
 pre_configure_target() {
-  if [ -n "${PKG_PATCH_DIRS_TARGET}" ]; then
-    if [ -d "${PKG_DIR}/patches/${PKG_PATCH_DIRS_TARGET}" ]; then
-      cd $(get_build_dir SDL3)
-      for PATCH in ${PKG_DIR}/patches/${PKG_PATCH_DIRS_TARGET}/*; do
-        patch -p1 <${PATCH}
-      done
-      cd -
-    fi
-  fi
-
   export LDFLAGS="${LDFLAGS} -ludev"
 
   PKG_CMAKE_OPTS_TARGET+=" -DBUILD_SHARED_LIBS=ON \

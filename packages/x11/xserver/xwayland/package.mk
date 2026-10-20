@@ -11,7 +11,6 @@ PKG_SITE="https://gitlab.freedesktop.org/xorg/xserver"
 #PKG_GIT_CLONE_BRANCH="xwayland-24.1"
 PKG_URL="https://www.x.org/releases/individual/xserver/${PKG_NAME}-${PKG_VERSION}.tar.xz"
 PKG_DEPENDS_TARGET="toolchain util-macros font-util xorgproto libpciaccess libX11 libXfont2 libXinerama libxcvt libxshmfence libxkbfile libdrm openssl freetype pixman systemd wayland libglvnd"
-PKG_NEED_UNPACK="$(get_pkg_directory xf86-video-nvidia)"
 PKG_LONGDESC="X.Org Server is the free and open-source implementation of the X Window System display server."
 
 get_graphicdrivers

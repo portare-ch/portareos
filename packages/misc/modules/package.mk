@@ -23,9 +23,3 @@ makeinstall_target() {
   mkdir -p ${INSTALL}/usr/config/modules
     cp -rf ${PKG_DIR}/sources/* ${INSTALL}/usr/config/modules
 }
-
-post_makeinstall_target() {
-  if [[ "${INSTALLER_SUPPORT}" != "yes" || "${DISPLAYSERVER}" != "wl" ]]; then
-    rm -f ${INSTALL}/usr/config/modules/Install*
-  fi
-}

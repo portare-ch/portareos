@@ -1,18 +1,6 @@
 <?xml version="1.0"?>
 <gameList>
     <game>
-        <path>./Install PortareOS.sh</path>
-        <name>Install PortareOS</name>
-        <desc>Installs PortareOS to the internal storage. Wipes the drive you choose.</desc>
-        <developer>PortareOS</developer>
-        <publisher>PortareOS</publisher>
-        <rating>5.0</rating>
-        <releasedate>2022</releasedate>
-        <genre>Tool</genre>
-        <players>1</players>
-        <image>./images/install-portareos.svg</image>
-    </game>
-    <game>
         <path>./Remove ._ Files.sh</path>
         <name>Remove ._ Files</name>
         <desc>Deletes the hidden ._ files macOS leaves next to every file it copies.</desc>

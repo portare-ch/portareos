@@ -10,7 +10,7 @@ PKG_URL="https://www.kernel.org/pub/linux/utils/kernel/kmod/${PKG_NAME}-${PKG_VE
 PKG_DEPENDS_HOST="meson:host ninja:host openssl"
 PKG_DEPENDS_TARGET="meson:host gcc:host openssl"
 PKG_LONGDESC="kmod offers the needed flexibility and fine grained control over insertion, removal, configuration and listing of kernel modules."
-PKG_BUILD_FLAGS="-gold -mold"
+PKG_BUILD_FLAGS="-gold"
 
 PKG_MESON_OPTS_COMMON="-Dbashcompletiondir=no \
                        -Dfishcompletiondir=no \
