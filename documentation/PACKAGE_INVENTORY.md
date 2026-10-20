@@ -100,8 +100,9 @@ Done in #429:
 
 Done in #701: 253 recipes no stage of the build reaches - toolchain, base,
 either emulator stage, image or kernel. `genbuildplan.py` plans every stage
-at `ae8b932a05` step for step the same without them, so no image loses
-anything.
+at `ae8b932a05` step for step the same without them. The image loses only
+the installer's entry in `modules`, which pointed at a script it never
+shipped.
 
 | Package | MB | How |
 |---|---|---|
