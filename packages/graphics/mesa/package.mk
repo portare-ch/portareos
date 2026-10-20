@@ -4,10 +4,14 @@
 
 PKG_NAME="mesa"
 PKG_VERSION="26.3.0-rc1"
-PKG_SHA256="fb3fca2a55922e7df26fa95678521f5f65bdd17b968be890adab8bf153356d8d"
+PKG_SHA256="63327d58a51d189c1d1600746c505609bba5c495123b4e51de4e0c038b745542"
 PKG_LICENSE="OSS"
 PKG_SITE="http://www.mesa3d.org/"
-PKG_URL="https://gitlab.freedesktop.org/mesa/mesa/-/archive/mesa-${PKG_VERSION}/mesa-mesa-${PKG_VERSION}.tar.gz"
+# Release candidates come from mesa's own archive. The gitlab tag a
+# candidate is cut from can go away again - mesa-26.3.0-rc1 did on
+# 2026-10-20 and took the nightly with it - while archive.mesa3d.org
+# keeps every tarball it has published.
+PKG_URL="https://archive.mesa3d.org/mesa-${PKG_VERSION}.tar.xz"
 PKG_DEPENDS_HOST="toolchain:host expat:host libclc:host libdrm:host llvm:host Mako:host pyyaml:host spirv-tools:host"
 PKG_DEPENDS_TARGET="toolchain expat libdrm Mako:host pyyaml:host"
 PKG_LONGDESC="Mesa is a 3-D graphics library with an API."
