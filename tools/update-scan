@@ -54,62 +54,17 @@ check_for_update() {
   # source variables from package.mk
   PKG_NAME="$(grep -oP -m 1 '(?<=PKG_NAME=\").*(?=\")' ${1} || true)"
   eval PKG_URL="$(grep -oP -m 1 '(?<=PKG_URL=\").*(?=\")' ${1} || true)"
-  case ${PKG_NAME} in
-    jellyfin)
-      PKG_VERSION="$(grep -oP -m 1 '(?<=PKG_VERSION_NUMBER=\").*(?=\")' ${1} || true)"
-      ;;
-    *)
-      PKG_VERSION="$(grep -oP -m 1 '(?<=PKG_VERSION=\").*(?=\")' ${1} || true)"
-      ;;
-  esac
+  PKG_VERSION="$(grep -oP -m 1 '(?<=PKG_VERSION=\").*(?=\")' ${1} || true)"
 
-  # check the version of some packages even if they do not have a PKG_URL
-  # the PKG_WITHOUT_URLS is space separated
-  PKGS_WITHOUT_URLS="jellyfin"
-  if [[ ! " ${PKG_NAME} " == *" ${PKGS_WITHOUT_URLS} "* ]]; then
-    # check if version and url are empty or self hosted by us and ignore those packages
-    if [ -z "${PKG_VERSION}" ] || [[ ${PKG_VERSION} == '$(get_pkg_version '* ]] || [ -z "${PKG_URL}" ] || [[ "${PKG_URL}" == "$DISTRO_SRC"* ]]; then
-      PACKAGES_IGNORED+="${PKG_NAME} "
-      return
-    fi
+  # check if version and url are empty or self hosted by us and ignore those packages
+  if [ -z "${PKG_VERSION}" ] || [[ ${PKG_VERSION} == '$(get_pkg_version '* ]] || [ -z "${PKG_URL}" ] || [[ "${PKG_URL}" == "$DISTRO_SRC"* ]]; then
+    PACKAGES_IGNORED+="${PKG_NAME} "
+    return
   fi
 
-  upstream_version=""
-
-  if [[ "${github_api}" = "yes" ]]; then
-    # get aspnet??-runtime version from github (not Anitya)
-    aspnet_ver=$(echo ${PKG_NAME} | sed -n 's/aspnet\(.*\)-runtime/\1/p')
-    if [[ ! -z "${aspnet_ver}" ]]; then
-      page_num=1
-      while [ ${page_num} -le 10 ]; do
-        curl_output="$(curl -m 5 -sL ${github_api_token} https://api.github.com/repos/dotnet/runtime/releases?per_page=100\&page=${page_num})"
-        upstream_version="$(echo ${curl_output} | jq -r "[.[] | select(.prerelease==false) | select(.tag_name | match(\"v${aspnet_ver}.0\")) | .tag_name][0] | sub(\"v\";\"\")?")"
-        [[ $(echo "${curl_output}" | jq 'length == 0') ]] && break
-        [[ -z "${upstream_version}" ]] && ((page_num++)) || break
-      done
-    fi
-  fi
-
-  if [ -z "${upstream_version}" ]; then
-    case ${PKG_NAME} in
-      tvheadend43)
-        upstream_version=$(curl -m 5 -sL "${github_api_token}" "https://api.github.com/repos/tvheadend/tvheadend/git/refs/heads/master" | jq -r '.object.sha' || true)
-        [[ -z "${upstream_version}" || "${upstream_version}" = "null" ]] && upstream_version="! unable to read github head !"
-        ;;
-      *)
-        # check if package exists at tracker
-        RMO_API_RESPONSE=$(curl -m 5 -sL "https://release-monitoring.org/api/v2/packages/?name=${PKG_NAME}&distribution=LibreELEC" || true)
-        upstream_version=$(echo "${RMO_API_RESPONSE}" | jq -r '.items[0].version' || true)
-
-        # special handling based on release-monitoring formatting
-        case ${PKG_NAME} in
-          krb5)
-            upstream_version=${upstream_version//-final/}
-            ;;
-        esac
-        ;;
-    esac
-  fi
+  # check if package exists at tracker
+  RMO_API_RESPONSE=$(curl -m 5 -sL "https://release-monitoring.org/api/v2/packages/?name=${PKG_NAME}&distribution=LibreELEC" || true)
+  upstream_version=$(echo "${RMO_API_RESPONSE}" | jq -r '.items[0].version' || true)
 
   # if pkg_version is a githash on github and github api available - always check against latest
   if [[ ${PKG_VERSION} =~ ^[a-z0-9]{40} ]] &&
@@ -180,10 +135,7 @@ if [ $# -gt 0 ]; then
 else
   PACKAGE_LIST="$(
     find packages/ -type f -name package.mk \
-      ! -path "packages/addons/addon-depends/adafruit-libraries-depends/*" \
-      ! -path "packages/emulation/*" \
-      ! -path "packages/linux/*" \
-      ! -path "packages/mediacenter/*" |
+      ! -path "packages/linux/*" |
       awk '{FS="/" ; $0=$0 ; print $(NF-1)"|"$0}' | sort | cut -d"|" -f2
   )"
 fi
