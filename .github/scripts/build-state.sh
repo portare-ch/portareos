@@ -272,9 +272,9 @@ recipe_paths() {
 }
 
 # Always folded in, whichever packages a stage built. config/ and scripts/ are
-# the buildsystem itself, and the options files carry the variables the seven
-# packages that set PKG_STAMP interpolate into their stamps (KERNEL_TARGET,
-# UBOOT_SYSTEM), which recipe_paths alone would not see.
+# the buildsystem itself, and the options files carry the variables linux
+# interpolates into its PKG_STAMP (KERNEL_TARGET, KERNEL_MAKE_EXTRACMD), which
+# recipe_paths alone would not see.
 #
 # Except config/emulators/, which recipe_digest leaves out: it is not
 # buildsystem but the data es_systems.cfg is generated from, read by one

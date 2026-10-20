@@ -43,8 +43,6 @@ BOOT_STEP="start"
 MD5_FAILED="0"
 RUN_FSCK="yes"
 RUN_FSCK_DISKS=""
-SYSLINUX_DEFAULT=""
-GRUB_DEFAULT=""
 
 NBD_DEVS="0"
 FLASH_FREE_MIN="5"
@@ -814,40 +812,6 @@ mount_storage() {
   fi
 }
 
-# Make last bootloader label (installer, live, run etc.) as the new default
-update_bootmenu() {
-  local crnt_default
-
-  if [ -n "${SYSLINUX_DEFAULT}" -a -f /flash/syslinux.cfg ]; then
-    if grep -q "^LABEL ${SYSLINUX_DEFAULT}\$" /flash/syslinux.cfg 2>/dev/null; then
-      crnt_default="$(awk '/^DEFAULT/ {print $2}' /flash/syslinux.cfg)"
-      if [ ! "$crnt_default" = "${SYSLINUX_DEFAULT}" ]; then
-        progress "Updating /flash/syslinux.cfg [$crnt_default -> ${SYSLINUX_DEFAULT}]"
-
-        mount -o remount,rw /flash
-        sed -e "s/^SAY Wait for .* mode/SAY Wait for ${SYSLINUX_DEFAULT} mode/" -i /flash/syslinux.cfg
-        sed -e "s/^DEFAULT .*/DEFAULT ${SYSLINUX_DEFAULT}/" -i /flash/syslinux.cfg
-        rm -f /flash/EFI/BOOT/syslinux.cfg
-        mount -o remount,ro /flash
-      fi
-    fi
-  fi
-
-  if [ -n "${GRUB_DEFAULT}" -a -f /flash/EFI/BOOT/grub.cfg ]; then
-    if grep -q "^menuentry \"${GRUB_DEFAULT}\"" /flash/EFI/BOOT/grub.cfg 2>/dev/null; then
-      crnt_default="$(awk '/^set default/ {print substr($2,9,19)}' /flash/EFI/BOOT/grub.cfg)"
-      if [ ! "$crnt_default" = "\"${GRUB_DEFAULT}\"" ]; then
-        progress "Updating /flash/EFI/BOOT/grub.cfg [$crnt_default -> \"${GRUB_DEFAULT}\"]"
-
-        mount -o remount,rw /flash
-        sed -e "s/^set default=.*/set default=\"${GRUB_DEFAULT}\"/" -i /flash/EFI/BOOT/grub.cfg
-        rm -f /flash/grub.cfg
-        mount -o remount,ro /flash
-      fi
-    fi
-  fi
-}
-
 check_out_of_space() {
   if [ "$(df /storage | awk '/[0-9]%/{print $4}')" -eq "0" ]; then
     echo ""
@@ -1188,7 +1152,7 @@ prepare_sysroot() {
 
   if [ ! -d "/sysroot/usr/lib/kernel-overlays/base/lib/modules/$(uname -r)/" -a -f "/sysroot/usr/lib/systemd/systemd" ]; then
     echo ""
-    echo "NEVER TOUCH boot= in syslinux.conf / cmdline.txt!"
+    echo "NEVER TOUCH boot= on the kernel command line!"
     echo "If you don't know what you are doing,"
     echo "your installation is now broken."
     echo ""
@@ -1259,10 +1223,6 @@ for arg in $(cat /proc/cmdline); do
     textmode)
       INIT_UNIT="--unit=textmode.target"
       ;;
-    installer)
-      INIT_UNIT="--unit=installer.target"
-      SYSLINUX_DEFAULT="installer"
-      ;;
     debugging)
       DEBUG=yes
       ;;
@@ -1284,17 +1244,6 @@ for arg in $(cat /proc/cmdline); do
       ;;
     live)
       LIVE=yes
-      SYSLINUX_DEFAULT="live"
-      ;;
-    portable)
-      SYSLINUX_DEFAULT="run"
-      ;;
-    grub_live)
-      LIVE=yes
-      GRUB_DEFAULT="Live"
-      ;;
-    grub_portable)
-      GRUB_DEFAULT="Run"
       ;;
     overlay)
       OVERLAY=yes
@@ -1345,7 +1294,6 @@ for BOOT_STEP in \
     mount_flash \
     set_consolefont \
     cleanup_flash \
-    update_bootmenu \
     mount_sysroot \
     mount_storage \
     load_splash \

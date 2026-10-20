@@ -24,7 +24,7 @@
   # Kernel target
     KERNEL_TARGET="Image"
 
-  # Additional kernel make parameters (for example to specify the u-boot loadaddress)
+  # Additional kernel make parameters: the device tree targets in config.xml
     KERNEL_MAKE_EXTRACMD=" $(get_kernel_make_extracmd)"
 
   # Kernel cmdline
@@ -39,7 +39,7 @@
   # event in 5 s at rest. The driver re-sends it to the MCU on resume.
     EXTRA_CMDLINE="quiet rootwait console=tty0 allow_mismatched_32bit_el0 fw_devlink.strict=1 pcie_ports=compat irqaffinity=0-2 cgroup.memory=nokmem,nosocket nosoftlockup usbcore.interrupt_interval_override=045e:028e:2 ufshcd_core.uic_cmd_timeout=3000 mem_sleep_default=s2idle cpuidle.governor=teo rsinput.frame_rate=3 rsinput.stick_deadband=8"
 
-  # Bootloader to use (syslinux / u-boot)
+  # Bootloader: Qualcomm's ABL, which loads the boot image linux builds
     BOOTLOADER="qcom-abl"
 
   # Adreno GPU family

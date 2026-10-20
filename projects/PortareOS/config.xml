@@ -1,10 +1,10 @@
 <portareos>
   <!--
     One entry, because there is one device. Each <file> here becomes a dtb
-    make target, a GRUB menu entry, a matching RECOVERY entry, and a line in
-    the fdtdump model-detection block, so seven entries meant seven device
-    trees built and fourteen boot menu entries shipped on a handheld that can
-    only be a Nova.
+    make target, so seven entries meant seven device trees built for a
+    handheld that can only be a Nova. mkimage_options names the
+    mkimage_<step> functions that fill the boot partition; abl is the only
+    one there is.
 
     qcs8550-retroidpocket-rp6.dts and qcs8550-ayn-common.dtsi stay in
     devices/SM8550/linux/dts/qcom even though neither is listed here: the Nova
