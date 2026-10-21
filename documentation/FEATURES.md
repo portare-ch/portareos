@@ -4,7 +4,7 @@ What PortareOS ships, one line each, with where it lives and whether a
 device has confirmed it. This is the inventory the
 test plan is written against: every row here gets a test, automatic on the
 device where a script can read the answer, human where only eyes or ears
-can. Configuration reviewed 18 October 2026. Verification records include
+can. Configuration reviewed 21 October 2026. Verification records include
 older builds; a row is not a new test of the current image.
 
 Status: **verified** means someone ran it on a Nova and it did what the row
@@ -26,7 +26,8 @@ see the test plan before interpreting its results.
 | Integer scaling per system | GB 960×864, N64 2× on ParaLLEl-RDP, PSX 4× with the 240-line CRT shader, GBA 5× under lcd-grid-v2, SNES 4× under crt-guest-advanced; 32-pixel bars kept where the lines do not divide. | `system.cfg`, per-core `.cfg` and `.opt` | verified | human: screenshot per system against the expected geometry |
 | Color profile (Gamma 2.2, sRGB) | A matrix and output curve in the display controller correct the panel to sRGB and D65. | `config/color/*.profile`, launcher `color.c`, `kms.c` | partial: applies; crushes dark greys | human: 16-step grey ramp, saturated patches |
 | Stock as the default profile | Both profiles crush greys, so nothing is applied unless chosen; a one-shot migration moves devices back. | `system.cfg`, `post-update` `colorprofile-stock` | unverified | auto: `display.colorprofile` after update; marker file |
-| External monitor replaces the panel | While a monitor is connected to the USB-C port the panel's connector reads disconnected, so the launcher, emulators and Steam use the monitor; pulled, everything returns to the panel. The launcher shows its 4:3 screen at a whole-number zoom, boxed, in the monitor's preferred mode. | `external-display`, `99-external-display.rules`, launcher `kms.c`, `fit.c` | unverified; no Adaptive-Sync on DP yet (#707) | human: plug and pull a monitor at the menu |
+| External monitor replaces the panel | While a monitor is connected to USB-C the panel's connector reads disconnected. New launches select the monitor; the launcher fits its 4:3 screen into the monitor's mode. Running games retain their original output until exit. | `external-display`, `99-external-display.rules`, launcher `kms.c`, `fit.c`; #710 | broader hotplug and emulator coverage pending | human: D11 |
+| Adaptive-Sync over DisplayPort | Capable DP sinks get DPU AVR and integer-multiple repeats. The EDID minimum is raised to at least 65 Hz; the usable maximum depends on the sink and selected mode. Branch devices are excluded. DP output is at most 8 bpc. | kernel patches 1127–1129; #713, #714, #716 | partial: NeoCD 59.62 fps / 119.24 Hz on LG UltraGear+ with the #714 test kernel; later floor change unverified | auto+human: D12 |
 | De-gamma stage through the LUTDMA | Kernel patches 1070/1071 drive the third color block so pippopapera's three-table profiles can be used as they were measured. | kernel patches, `make-igc-profile.py` | unverified, never run | human, with SSH open: the kernel alone, then a bind-mounted profile |
 | 8bpc output dither | The DPU leaves output dithering off at 8bpc, so a colour profile's 10-bit result is truncated onto the panel; the Nova panel opts in to the static ordered dither matrix. | kernel patch 0049, `rpnova.dts` | unverified | human: 16-step grey ramp with a profile on; auto: property in the live device tree |
 | Lowest GPU operating point | 124.8 MHz idle so a menu or film keeps the fan off. | device quirks | verified | auto: `devfreq` cur_freq at the launcher |
@@ -37,9 +38,9 @@ see the test plan before interpreting its results.
 |---|---|---|---|---|
 | Link rate follows the stream | 48, 44.1 or 32 kHz on the I2S link, no resampling where the console's rate can be carried. | kernel patches 1052 to 1055, DSP topology, PipeWire `allowed-rates` | verified (44.1); 32 by ear | auto: `hw_params` rate per system; human: pitch check |
 | RetroArch picks the output rate from the core | `audio_out_rate = 0`: the rate is chosen from the core's at every audio init, so N64 games at 22.05, 32 or 44.1 kHz each get a matching link. | RetroArch patch 0015 | unverified | auto: `[Audio] Output rate picked` log line and `hw_params` on an N64 game |
-| Per-core output rates | 44.1 kHz for PlayStation, Saturn, Dreamcast, PSP, Neo Geo CD and the Sega cores through their own configs, SNES 32 kHz, the rest 48. | per-core `.cfg`, `retroarch.cfg` | verified | auto: `hw_params` per system |
+| Per-core output rates | 44.1 kHz overrides for PlayStation, Saturn, Dreamcast, PSP, Neo Geo CD and the Sega cores. Other cores use automatic selection: SNES/NES 32 kHz, MSU-1 enhanced audio and GB/GBC 44.1 kHz, GBA 48 kHz; N64 varies by game. | per-core `.cfg`, `retroarch.cfg` | fixed overrides verified; automatic selection needs wider coverage | auto: A1–A3, log and `hw_params` per system |
 | PipeWire with a 3 ms quantum floor | Native PipeWire playback; 144-frame minimum at the 48 kHz reference rate, scaled by rate, without power-of-two rounding. PulseAudio compatibility is provided by pipewire-pulse. | PipeWire patch 002; RetroArch patch 0017 | verified in recorded 32/44.1/48 kHz sessions; wider coverage pending | auto: running sink quantum and xruns; see AUDIO_LATENCY.md |
-| No display audio | Sound stays on the speakers or line-out whatever display is attached, so it is the same everywhere. | no DisplayPort DAI link in the device tree, UCM patch 0006 | unverified | auto: no DisplayPort sink with a display plugged |
+| No display audio | DisplayPort is video only; connecting a monitor leaves sound on the local outputs. | no DisplayPort DAI link in the device tree, UCM patch 0006; #709 | configured; wider output tests pending | auto: no DisplayPort sink with a display plugged; human: local playback through D11 hotplug |
 
 ## Emulation
 
@@ -54,13 +55,13 @@ see the test plan before interpreting its results.
 | GBC hardware and palette for GBC games | Gambatte given the GBC model and its color correction. | `Gambatte/gbc.opt` | verified | human: a GBC game's colors |
 | ScummVM as a libretro core | LITE build with our engine list, FluidLite synth, data bundle to the system directory. | `scummvm-lr` | unverified | human: a game starts, music plays |
 | No automatic savestate load | Deliberate. | `setsettings.sh` | verified | auto: `savestate_auto_load = "false"` |
-| Emulator pins bumped daily | A workflow opens a PR per upstream move. | `bump-emulator-pins.yml` | verified | auto: the workflow runs |
+| Emulator pins bumped daily | A workflow opens or refreshes one rolling PR containing upstream commit-pin changes. | `bump-emulator-pins.yml` | verified | auto: the workflow runs |
 
 ## Launcher and system
 
 | Feature | What it does | Where | Status | Test |
 |---|---|---|---|---|
-| portarelauncher | KMS launcher on a dumb buffer: consoles, games, Tools, Settings; VRR keeps each menu frame doubled. | `ui/portarelauncher` 0.8.3 | navigation verified on earlier builds; VRR probe record in VARIABLE_REFRESH.md | human: navigation and game return; auto: DRM ownership and repeat cadence |
+| portarelauncher | KMS launcher on a dumb buffer: consoles, games, Tools, Settings; VRR keeps each menu frame doubled on the built-in panel. | `ui/portarelauncher` 0.8.4 | navigation verified on earlier builds; VRR probe record in VARIABLE_REFRESH.md | human: navigation and game return; auto: DRM ownership and repeat cadence |
 | Quick Access: Recently played, Favourites, scrolling titles | The last ten launches under their day, a favourites list toggled with the left face button, and a selected long title that scrolls to its end. | `ui/portarelauncher` 0.5.1 | unverified | human: play, mark, scroll; portarelauncher#42 |
 | PortScope | Settings > Diagnostics: every button, stick and trigger as the kernel reports it, the report rate measured, the last two events. Holding SELECT switches to the MCU and gpio-keys as they are before InputPlumber, which is stopped while that layer is shown. Replaces the SDL gamepad tester. | `ui/portarelauncher` 0.6.0, `/usr/bin/portscope` | unverified | human: each control lights, SELECT held switches layers, Home + START leaves; auto: `inputplumber` active after leaving |
 | Shape marks | With Button style set to Shapes, every hint, the Button style diagram and PortScope draw the face buttons as outlined triangle, square, circle and cross. | `ui/portarelauncher` 0.6.0 | unverified | human: Settings, a games list and the Wi-Fi keyboard in both styles |
@@ -84,7 +85,7 @@ see the test plan before interpreting its results.
 | Gamepad MCU and stick LED rails off in suspend | rsinput and the HTR3212 LED driver release `vdd_mcu_3v3` across suspend, so the rail switches off instead of feeding a quiesced MCU. | kernel patches 1014 and 0033, `qcs8550-ayn-common.dtsi` | unverified | auto: regulator users at idle, sticks and LEDs back after resume; human: overnight drain against #62 |
 | microSD at SDR104 | UHS-I high speed. | kernel config | verified | auto: `/sys` bus speed |
 | 1000 Hz tick, teo, schedutil with the energy model | Latency-oriented scheduler and idle choices. | kernel config, `008-perfmode` | verified as configured, not measured | auto: `scaling_governor`, `current_governor` |
-| Debug tools only outside official releases | gdb, strace and display/audio probes are selected for unofficial builds. | `virtual/debug`, build options | configuration recorded; binary availability must be checked on the image under test | auto: debug binaries present when enabled and absent in official images |
+| Optional debug tools | gdb, strace and display/audio probes default on for unofficial builds and off for official builds; `DEBUG_PACKAGES=yes` enables them explicitly. | `virtual/debug`, build options | configuration recorded; binary availability must be checked on the image under test | auto: P6, binaries match the build's `DEBUG_PACKAGES` selection |
 
 ## Media
 

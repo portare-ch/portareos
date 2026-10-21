@@ -1,12 +1,18 @@
 # Variable refresh on the Nova
 
-The goal is integer-multiple variable refresh. Every game frame is
-scanned exactly twice, and the panel follows the game at twice its rate:
-PAL at 100 Hz, NTSC at 119.88 Hz, SwanStation's 59.826 at 119.652 Hz.
-That needs no panel mode per console, and nothing outside 100 to 121 Hz.
-The panel takes a frame length that changes every frame inside that range
-(measured below), and patch 1097 exposes it through DRM's standard
-variable-refresh properties.
+PortareOS uses integer-multiple variable refresh: each game frame is
+submitted once, and the display driver repeats scanout at evenly spaced
+intervals. The built-in panel uses its fastest 120.198 Hz mode and a 65 Hz
+floor. Typical NTSC content is scanned twice, for example SwanStation's
+59.826 fps at 119.652 Hz; lower rates can need three or more scans.
+Dedicated console modes remain for fixed-refresh operation. PAL is outside
+the project's scope.
+
+Current configuration reviewed 21 October 2026. The dated investigations
+below retain earlier floors, timings and rejected approaches. They are
+measurements of those builds, not instructions to restore their settings.
+DisplayPort Adaptive-Sync is also implemented; its separate test coverage
+is recorded under [External displays](#external-displays).
 
 ## What the hardware offers
 
@@ -26,7 +32,7 @@ variable-refresh properties.
   (`DSI_VIDEO_MODE_CTRL`, mainline's `REG_DSI_VID_CFG0` plus the 6G
   shift, 0xae94010 on the Nova), when it switches Qsync on.
 - **Kernel patch 1097** adds it as DRM's standard interface:
-  - The panel driver declares its range, 60 Hz up to its fastest mode,
+  - The panel driver declares its current range, 65 Hz up to its fastest mode,
     120.198 Hz rounded up to 121, in the connector's
     `display_info.monitor_range` and sets `vrr_capable`, which DSI
     connectors now carry.
@@ -176,7 +182,7 @@ vrr-probe /dev/null 6 idle vrr &
 sleep 2
 devmem 0xae36270 32          # 0x80000001: AVR active
 F=0xae360ac; a=$(devmem $F 32); sleep 2; b=$(devmem $F 32)
-echo $(( (b - a) / 2 )) frames/s   # about 60, not 120
+echo $(( (b - a) / 2 )) frames/s   # about 65 on the current kernel, not 120
 wait
 ```
 
@@ -765,12 +771,12 @@ shown twice, the savestate load's pause left out.
 
 ## The launch
 
-Every RetroArch game runs with variable refresh, with no setting to get
-right. runemu decides it per launch and exports
+RetroArch enables variable refresh automatically where the output supports
+it. runemu decides it per launch and exports
 `MESA_VK_WSI_DISPLAY_VRR`, which Mesa and setsettings both read. It is 1
-on KMS, on a panel that says `vrr_capable` and is the only output (a dock
-brings a fixed-rate one), unless the game pins a `display_mode`.
-Otherwise it is 0.
+on KMS when exactly one connector is connected and says `vrr_capable`,
+unless the game pins a `display_mode` or sets `vrr=0`. This includes the
+built-in panel and supported Adaptive-Sync DP monitors. Otherwise it is 0.
 
 - Mesa (`mesa-006`) sets `VRR_ENABLED` in its first mode set, and clears
   it when it lets the CRTC go. 0 clears one left on by a run that
@@ -811,6 +817,8 @@ only gap.
 
 ## Steam
 
+This section's rates and measurements describe the built-in panel.
+
 Steam's gamescope runs with `--adaptive-sync --framerate-limit 60`: it
 sets `VRR_ENABLED`, flips each frame as the game delivers it, one flip in
 flight, and holds the game to 60 fps. The kernel treats it as every other
@@ -847,6 +855,36 @@ limit a ceiling: Steam's own frame rate setting and the refresh cycle
 override lower it, never lift it, where before the first focus change
 replaced it with the override, 0 without one. Not measured yet: a real game
 on the final kernel and gamescope.
+
+## External displays
+
+`external-display` forces the panel connector off while a USB-C monitor is
+connected (#710). The launcher and new game launches then see that monitor
+as the only connected output. A running game keeps its original output
+until exit; hotplug recovery across all renderers remains open.
+
+Kernel patch 1128 detects Adaptive-Sync from the sink's DPCD capability to
+ignore MSA timing and its EDID range. Branch devices are excluded. The
+minimum is raised to `max(EDID minimum, 65 Hz)`, and the resulting range
+must span more than 10 Hz for `vrr_capable` to be set. Link training enables
+MSA timing ignore. Patch 1129 enables the DPU's AVR on DP interfaces for
+capable sinks, counting wide-bus timing in the timing engine's clock. The
+selected mode determines the fastest scanout; the internal panel's
+120.198 Hz ceiling does not describe an external monitor. Patch 1127 caps
+DP output at 8 bpc.
+
+On the #714 test kernel, NeoCD on an LG UltraGear+ measured 59.62 fps content
+and 119.24 Hz refresh, with every frame doubled, as recorded in
+[#716](https://github.com/portare-ch/portareos/pull/716). That run used the
+earlier 60 Hz floor. The subsequent 65 Hz floor change and broader
+emulator, adapter, monitor and hotplug coverage still need device tests.
+Check the sink's own refresh readout as well as DRM traces; controller
+events alone do not prove what the monitor shows.
+
+DisplayPort audio was removed (#709). Sound stays on the local outputs.
+The planned [RetroTINK 4K Direct Video path](../ROADMAP.md#direct-video-output-for-retrotink-4k)
+is separate work: raw source pixels and DV1 metadata over HDMI are not
+provided by ordinary external-display support.
 
 ## The panel's porches
 

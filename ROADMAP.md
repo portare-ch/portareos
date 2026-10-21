@@ -1,6 +1,6 @@
 # Roadmap
 
-Last revised 18 October 2026.
+Last revised 21 October 2026.
 
 The goal is a stock Android replacement for the Retroid Pocket Nova: write
 an image, add games and any required BIOS files, and play. Every included
@@ -19,7 +19,9 @@ that a later image can be tested against the same baseline.
 
 Current baseline: Snes9x is the SNES core; NeoCD's device tuning is finished;
 PlayStation has an optional PRMPT switch again. VRR spans 65–120.198 Hz for
-RetroArch, the launcher and Steam's gamescope, with Steam capped at 60 fps.
+RetroArch, the launcher and Steam's gamescope on the built-in panel, with
+Steam capped at 60 fps. DisplayPort Adaptive-Sync is implemented, with
+broader display and hotplug validation pending.
 Platform sleep now works, measured at 23 mA over ten minutes. Black frame
 insertion was removed with vsync and is outside the plan.
 
@@ -165,15 +167,17 @@ with stable audio, frame delivery and latency across the affected systems.
 Use the [package inventory](documentation/PACKAGE_INVENTORY.md) as the starting
 point ([#333](https://github.com/portare-ch/portareos/issues/333)). Its size
 figures come from an older image. Recheck unused shader families, Python's
-remaining runtime users and GStreamer before treating them as savings.
+remaining runtime users before treating them as savings. GStreamer and its
+plugins, libmpeg2, x264 and x265 were removed as unreachable recipes in #701;
+they were not installed in the image, so that removal saved no image space.
 
 - Measure the current compressed image and installed package sizes.
 - Keep only the shaders in use and their transitive includes; launch every
   affected preset to check that the trimmed set is complete.
 - The Bluetooth agent is already C. Check remaining Python users, including
   `gamecapture` and Steam's dependency path, before proposing removal.
-- Trace GStreamer's users and remove it if the retained features can run
-  without it. Continue removing unused packages.
+- Continue removing unused packages after checking every build stage;
+  distinguish recipe maintenance reductions from installed-size savings.
 
 **Complete when:** each removal has a measured before/after size and passes
 its affected runtime checks. Publish the resulting image size; do not trade
@@ -185,25 +189,26 @@ PS2 runs ARMSX2's libretro core in RetroArch; the standalone SDL frontend
 is gone. BIOS images in `bios/armsx2` are copied to `bios/pcsx2/bios` on
 update, and the memory cards stay in the `ps2` folder.
 
-- Get back what the standalone had. The first Nova test (Time Crisis II,
-  upstream's generic CI build of the core) ran slower and with more
-  visible glitches. Leads, from the two configurations side by side:
-  - Texture barriers: the standalone forced them off
-    (`OverrideTextureBarriers = 0`); the core's automatic turns them on,
-    and a barrier is expensive on a tiler.
+- Recheck the first Nova test's gaps: Time Crisis II on upstream's generic
+  CI core ran slower and with more visible glitches than the standalone.
+  Several changes are already in the image:
+  - Feedback-loop ordering: Mesa patch 009 and core patch 005 carry the
+    ARMSX2 Turnip fix in the system driver. NFSU savestate tests held
+    59.9–60.0 fps; driven races and read-back-heavy games still need tests.
   - Pacing, done: the core now takes RetroArch's frame rate as the host
     refresh rate and lets the hand-off to `retro_run` pace it, one clock
-    (patch 001).
+    (patches 001 and 006).
   - `VsyncQueueSize`, done: 0 as in the standalone (patch 001). Step to 1
     only if 0 cannot hold full speed.
   - Clocks and core layout: schedutil clocked the big cores down because
     the core's threads take turns within a frame (40 fps against 59.7 on
     performance). PS2 now runs on performance, with EE pinned to the X3 and
     VU and GS to the A715s. Research and measurements in
-    `documentation/emulators/ARMSX2.md`.
+    [ARMSX2 notes](documentation/emulators/ARMSX2.md).
 
-  Texture barriers are not a core option; the core keeps them in
-  `<system>/pcsx2/inis/armsx2-libretro.ini`. Measure on its own.
+  Any further texture-barrier experiment must compare against this driver
+  path, keeping rendering correctness and the scene fixed. The override
+  lives in `<system>/pcsx2/inis/armsx2-libretro.ini`, not a core option.
 - Compare it with what the standalone did on the same games: compatibility,
   speed, frame pacing, input/audio latency, controls and save behavior.
 - RetroAchievements: the core exposes no memory to RetroArch, so PS2 has
@@ -214,17 +219,61 @@ gap has an issue.
 
 ## Fix external display support
 
-- Reproduce the current failures with USB-C displays and adapters. Record
+The monitor now replaces the internal panel (#710). Kernel fixes address
+USB host-mode teardown and the DisplayPort unplug interrupt storm (#708,
+#711), cap DP output at 8 bpc (#713), and add Adaptive-Sync with an effective
+floor of at least 65 Hz (#714, #716). NeoCD was measured at 59.62 fps and
+119.24 Hz on the LG UltraGear+ using the #714 test kernel; that does not
+verify every rendering path or the later floor change.
+
+- Validate USB-C displays and adapters on the current image. Record
   connector detection, available modes, DRM ownership and emulator logs.
-- Make the launcher and each rendering path select and release the external
-  output correctly, with suitable resolution, refresh rate and aspect ratio.
+- Check output selection and release on the launcher and each rendering
+  path, with suitable resolution, refresh rate and aspect ratio.
+- Verify Adaptive-Sync detection, the effective VRR range and integer-multiple
+  repeats on the monitor itself; check fixed refresh on unsupported sinks.
 - Test connection before boot, connection during use, disconnection during
   a game and return to the internal panel. Handle unsupported modes cleanly.
-- Verify external audio routing where available and recovery to local audio.
+- Confirm sound stays on the local outputs when connecting or disconnecting
+  a display. DisplayPort audio was deliberately removed (#709).
 
 **Complete when:** the launcher and included emulators work on tested external
 outputs, and connection/disconnection recovers without a black screen,
 crash or reboot. Publish tested adapters, displays and remaining limitations.
+
+## Direct Video Output for RetroTINK 4K
+
+**Planned; extensive work.** Send the emulator's native video directly to
+a RetroTINK 4K over HDMI, bypassing PortareOS video scaling, filtering and
+added frame buffering. Send DV1 metadata with the signal so the RetroTINK
+can recover the source geometry and perform pixel-perfect scaling and
+filtering itself. RetroTINK's
+[firmware notes](https://retrotink-llc.github.io/firmware/4k.html)
+describe DV1 auto-cropping, auto-decimation and profile loading by core name.
+
+- Establish the output path from each emulator through DRM/KMS and the
+  Nova's USB-C DisplayPort-to-HDMI adapter. Verify that the adapter carries
+  the required timings and DV1 metadata to the RetroTINK.
+- Bypass shaders, display scaling and extra video queues in PortareOS.
+  Preserve native pixels, aspect information and console timing, including
+  resolution and progressive/interlaced changes during a game. Measure the
+  remaining rendering and scanout latency.
+- Implement DV1 metadata generation and HDMI transmission using the existing
+  protocol as the reference. Verify source dimensions, crop and pixel
+  repetition information, and core identification for automatic profiles.
+- Validate on a real RetroTINK 4K with pixel patterns and representative
+  games: correct detection, geometry, scaling, filtering, mode transitions
+  and stable frame delivery. Record firmware, adapter, timings and latency.
+- Test launcher handover, hotplug and return to the built-in panel, and
+  document which emulators and adapters support Direct Video.
+
+**Complete when:** supported emulators deliver unscaled source pixels and
+correct DV1 metadata over HDMI, the RetroTINK applies the intended scaling
+and filtering, and measurements confirm that PortareOS adds no video
+scaling or avoidable frame queue. Hardware results and limitations are
+published.
+
+<!-- Tracking issue to be linked once opened. -->
 
 ## Other work to retain
 
@@ -242,7 +291,7 @@ crash or reboot. Publish tested adapters, displays and remaining limitations.
   ([#284](https://github.com/portare-ch/portareos/issues/284)).
 - **Launcher:** test current navigation and selection persistence, error
   reporting, game-guide handover and update behavior. Coordinate changes
-  with portarelauncher; the image currently ships 0.8.3.
+  with portarelauncher; the image currently ships 0.8.4.
 - **Color profiles:** fix crushed dark greys and verify the result on the
   panel before recommending a calibrated profile again; see BUGS.md.
 - **A game session that is not root:** move game sessions to a dedicated user

@@ -44,9 +44,10 @@ which rates the cores and physical links can carry.
 - NeoCD's 18 October capture tests also recorded zero xruns at the shipped
   44.1 kHz / 8 ms setting; see [NeoCD](emulators/NeoCD.md).
 
-These tests do not establish stability for every core, wired headphones,
-Bluetooth or external displays. An absolute camera result for the complete
-current configuration is still needed.
+These tests do not establish stability for every core, wired headphones
+or Bluetooth. DisplayPort audio has since been removed (#709); an external
+display does not change the local audio path. An absolute camera result for
+the complete current configuration is still needed.
 
 ## Checking a current image
 

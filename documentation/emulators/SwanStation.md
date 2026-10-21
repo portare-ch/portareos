@@ -4,7 +4,8 @@ PlayStation. Measured on the Retroid Pocket Nova; #495 holds the discussion.
 
 ## What runs
 
-- Package `swanstation-lr`, libretro/swanstation at `b6c30a7`, under RetroArch.
+- Package `swanstation-lr`, libretro/swanstation under RetroArch. The recipe
+  carries the current commit pin; measurements below retain their build IDs.
 - Patches:
   - `001`: an NTSC line is 3412.5 ticks.
   - `002`: frontend run-ahead states keep VRAM on the GPU (see Pacing).
@@ -12,15 +13,19 @@ PlayStation. Measured on the Retroid Pocket Nova; #495 holds the discussion.
 
 ## Presentation
 
-The 119.652 Hz mode, two swapchain images, swap interval 2: one present a
-frame, 16.715 ms apart, timed by the driver (RetroArch patch 0014). Integer
+Two swapchain images, one timed present per frame, about 16.715 ms apart.
+RetroArch keeps vsync off and Sync to Exact Content Framerate on. The
+built-in panel uses the 120.198 Hz VRR base with integer-multiple repeats;
+the 119.653 Hz mode is the fixed-refresh fallback. Integer
 scaling for this core only (`SwanStation.cfg`): with overscan cropping the
 active area is 320x240, so 4x fills the 1280x960 panel exactly.
 
 ## Pacing
 
-Without a preemptive frame the core holds every frame on its vblank (E3 in
-the test plan).
+The recorded fixed-refresh baseline without a preemptive frame had no
+missed-refresh-sized frame (E3 in the test plan). Current VRR measurements
+are recorded in [variable refresh](../VARIABLE_REFRESH.md) and
+[latency per system](../LATENCY.md).
 
 **Preemptive frames** (PRMPT in Settings > Consoles, `psx.preempt=1`, off by
 default). RetroArch saves a state every frame and, when the input changed,
@@ -59,7 +64,7 @@ so there is no pinning beyond that.
 | Vulkan, 4x | `retroarch-core-options.cfg` | the upscale; costs nothing measurable here |
 | `video_scale_integer = "true"` | `SwanStation.cfg` | 320x240 at 4x is the panel exactly |
 | `run_ahead_enabled = "false"` | `SwanStation.cfg` | second-instance run-ahead would need a second Vulkan context; preemptive frames are the other flag |
-| `audio_out_rate = "44100"` | `SwanStation.cfg` | the SPU's rate; no resampler in the path |
+| `audio_out_rate = "44100"` | `SwanStation.cfg` | the SPU's rate; avoids a 44.1-to-48 kHz conversion, while RetroArch's rate control can still adjust the resampling ratio |
 | `psx.preempt=0` | `system.cfg` | off by default; optional PRMPT raises CPU/GPU clocks while enabled |
 | `performance` CPU and GPU with PRMPT on | `runemu.sh` | see Pacing |
 | `swanstation_CDROM_PreCacheCHD = "true"` | core options | the CHD stays in RAM, compressed: no SD card read mid-game; a slow card showed as audio and frame dips that this removed (user report, 2026-10-18) |

@@ -4,7 +4,7 @@ Built for the Retroid Pocket Nova, with low latency and faithful console timing
 as priorities. One line per feature; implementation and device verification
 vary. Experimental work and known limitations are listed separately below.
 
-Reviewed 18 October 2026. See the [supported systems](../README.md#systems-and-status),
+Reviewed 21 October 2026. See the [supported systems](../README.md#systems-and-status),
 [verification inventory](FEATURES.md) and [known issues](../BUGS.md) for coverage
 and test status.
 
@@ -31,9 +31,10 @@ Details: [CPU isolation](CPU_ISOLATION.md), [power measurements](POWER.md).
 ## Display and console timing
 
 * Direct KMS presentation for emulators, without a desktop compositor.
-* Automatic integer-multiple VRR for RetroArch on the built-in display.
+* Automatic integer-multiple VRR for RetroArch on the built-in display and supported Adaptive-Sync DisplayPort monitors.
 * Launcher and Steam gamescope use VRR too; Steam is capped at 60 fps, with final game-level validation pending.
-* Variable refresh currently spans 65–120.198 Hz.
+* Built-in-panel variable refresh spans 65–120.198 Hz; external ranges follow the sink and selected mode, with a floor of at least 65 Hz.
+* A connected external monitor replaces the internal panel; output is capped at 8 bpc.
 * The display driver repeats frames to keep lower frame rates within the panel's refresh range, without a commit or rendering again.
 * Dedicated fixed-refresh modes matched to console families.
 * Corrected frame-rate calculations for NES, SNES, PlayStation, Saturn and N64.
@@ -56,6 +57,7 @@ Details: [variable refresh](VARIABLE_REFRESH.md), [console timing](CONSOLE_CLOCK
 * RetroArch selects the audio output rate from the emulated core.
 * Reduced audio buffering: 8 ms RetroArch setting and a configured 3 ms PipeWire minimum.
 * DSP period lengths follow the sample rate, avoiding extra buffering at 32 kHz.
+* DisplayPort carries video only; connecting a monitor leaves sound on the local outputs.
 
 Details: [audio latency](AUDIO_LATENCY.md),
 [sample rates](PER_DEVICE_DOCUMENTATION/SM8550/AUDIO_SAMPLE_RATES.md).
@@ -152,7 +154,8 @@ Details: [package inventory](PACKAGE_INVENTORY.md), [audio measurements](AUDIO_L
 * Preemptive frames and run-ahead: compatibility and performance depend on the core; Neo Geo CD enables one preemptive frame by default, other systems keep it off.
 * sRGB/D65 color profiles: implemented, but currently crush dark greys.
 * Temperature-based charging-current reduction: implemented, awaiting device verification.
-* External displays and display-audio routing: incomplete.
+* External displays: basic NeoCD Adaptive-Sync playback measured on an LG UltraGear+; wider hotplug, emulator and adapter coverage remains open.
+* [Direct Video Output for RetroTINK 4K](../ROADMAP.md#direct-video-output-for-retrotink-4k): planned, bypassing PortareOS scaling and added frame buffering and sending DV1 metadata over HDMI.
 * Bluetooth audio: implemented, but compatibility with the latency tuning needs testing.
 * GameCube/Wii: included, with known Dolphin failures.
 * RetroAchievements and netplay: configuration support exists; coverage needs auditing, and PS2 lacks achievements.

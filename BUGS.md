@@ -1,6 +1,6 @@
 # Known bugs and loose ends
 
-Reviewed 18 October 2026 against the current tree and recorded Nova tests.
+Reviewed 21 October 2026 against the current tree and recorded Nova tests.
 An implemented fix is not a device test. Items below distinguish observed
 failures from checks still needed; each has a next action.
 
@@ -89,25 +89,31 @@ codes and verify grey ramps on the panel before recommending either profile.
 De-gamma and 8bpc dithering also need device checks. See
 [color profiles](documentation/PER_DEVICE_DOCUMENTATION/SM8550/COLOR_PROFILE.md).
 
-### External displays and audio routing
+### External displays: wider validation remains
 
 A monitor replaces the panel while it is connected (`external-display`
-forces the panel's connector off; #707). Nothing checks yet that the monitor
-has Adaptive-Sync, which msm DP does not implement, and a game keeps the
-output it started on until it exits.
+forces the panel's connector off; #710). Adaptive-Sync detection and DPU AVR
+on DisplayPort are now implemented (#714), with the effective minimum
+raised to at least 65 Hz (#716). The LG UltraGear+ showed NeoCD at
+59.62 fps and 119.24 Hz on the #714 test kernel. Recheck the later floor
+change, other monitors and adapters, and every rendering path; a running
+game still keeps the output it started on until it exits.
 
-A display carries no sound: there is no DisplayPort DAI link, and audio
-stays on the speakers or line-out. Test display ownership, hotplug and
-return to the panel together.
+USB host-mode teardown and DP unplug runtime-PM fixes (#708, #711) address
+the oops and interrupt storm seen on disconnection. Test repeated hotplug,
+display ownership, return to the panel and idle power on the current image.
+DP output is capped at 8 bpc (#713). DisplayPort audio was deliberately
+removed (#709); sound stays on the local outputs.
 
 ### VRR and Steam validation
 
-The current floor is 65 Hz, up to 120.198 Hz. The launcher and Steam's
+The built-in panel's current range is 65–120.198 Hz. The launcher and Steam's
 gamescope use VRR too, and Steam is capped at 60 fps. Probe measurements
 support the new floor and repeat scheduling; a real Steam game on the final
 kernel/gamescope combination is still unmeasured. Check frame delivery,
 late-frame recovery and display transitions. RetroArch rejects rates that
-cannot fit twice, including some arcade boards near 61 Hz. See
+cannot fit twice into the selected display mode, including some arcade
+boards near 61 Hz on the built-in panel. See
 [variable refresh](documentation/VARIABLE_REFRESH.md).
 
 ## Audio
@@ -196,7 +202,7 @@ deliberately refreshed on update; the first copy is kept at
 edits. Test both fresh and updated devices when changing defaults.
 
 The kernel patch-fuzz count from 26 September was for Linux 7.2.5 and
-97 patches. It is historical, not the current 7.2.11 stack. #658 recorded
+97 patches. It is historical, not the current Linux 7.3 stack. #658 recorded
 121 production patches applying and nine changed objects plus the DTB
 compiling; that does not establish zero fuzz. If tightening patch policy,
 measure the current stack without `patch -s`, retain its output and test a

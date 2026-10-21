@@ -1,8 +1,18 @@
 # PortareOS modelines: what is done and what is open
 
-The Nova's panel runs at 119.880 Hz, twice NTSC's 59.94 Hz. Systems with a different native rate get a panel mode at exactly twice their rate, switched on when the game starts. [REFRESH_RATES.md](PER_DEVICE_DOCUMENTATION/SM8550/REFRESH_RATES.md) has the mechanism and the tables; [CONSOLE_CLOCKS.md](CONSOLE_CLOCKS.md) derives every rate. This page is only the status.
+RetroArch, the launcher and Steam default to variable refresh on the Nova's
+fastest 120.198 Hz mode, within a 65–120.198 Hz range. The console rows below
+describe the **fixed-refresh fallback**, used by RetroArch when VRR is
+disabled and by mpv and xemu. Its preferred mode is 119.880 Hz, approximately twice
+NTSC's 59.94 Hz. [REFRESH_RATES.md](PER_DEVICE_DOCUMENTATION/SM8550/REFRESH_RATES.md)
+has the mechanism and tables; [CONSOLE_CLOCKS.md](CONSOLE_CLOCKS.md) derives
+the rates.
 
-The rate that matters is the one the emulator reports, because that is what RetroArch syncs to. Where it differs from the console's, the column says so. How RetroArch holds the core to the mode, one timed present a frame, is the pacing section of REFRESH_RATES.md.
+The rate that matters is the one the emulator reports, because RetroArch's
+Sync to Exact Content Framerate paces the core at that rate even with fixed
+refresh. Where it differs from the console's, the column says so. Vsync and
+BFI have been removed. Current presentation is described in
+[variable refresh](VARIABLE_REFRESH.md#the-launch).
 
 | System (emulator) | Emulator's rate (Hz) | Panel mode (Hz) | Status |
 |---|---|---|---|
@@ -23,8 +33,10 @@ The rate that matters is the one the emulator reports, because that is what Retr
 | PlayStation 2 (ARMSX2) | 59.94 | 119.880 (default) | done, the default is exactly 2× |
 | Xbox (xemu) | 59.94 | 119.880 (default) | done, the default is exactly 2× |
 | PSP (PPSSPP) | 59.94 | 119.880 (default) | done, the default is exactly 2× |
-| ScummVM, Steam, ports | no fixed rate | 119.880 (default) | not applicable |
+| ScummVM, ports | no fixed rate | 119.880 (default) | no dedicated fixed mode |
+| Steam | capped at 60 fps | 120.198 with VRR | gamescope; real-game validation on the final stack pending |
 | Movies (mpv) | the file's rate | 119.880 (default) | 23.976, 29.97 and 59.94 fps are exact divisions of the default; 24 and 25 fps rely on mpv's audio sync. Not planned |
-| Launcher, music, tools, image viewer | – | 119.880 (default) | not applicable |
+| Launcher | 60 flips/s on the built-in panel | 120.198 with VRR | measured repeat cadence; see VARIABLE_REFRESH.md |
+| Music, tools, image viewer | – | application-dependent | no dedicated console mode |
 
 Adding a mode is four steps, listed at the end of REFRESH_RATES.md.

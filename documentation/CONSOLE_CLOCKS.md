@@ -30,7 +30,7 @@ The SNES and the Sega consoles also derive their clocks from the subcarrier, but
 | SNES | 21.477272 MHz (6 × subcarrier) | same | 1364 (1360 once every other frame) | 262 | 60.0988 | 60.098814 (Snes9x with PortareOS's patch; upstream rounds the master clock to 21477272 and reports 0.034 ppm low) |
 | Master System, Game Gear, Mega Drive, Mega CD, 32X | 53.693175 MHz (15 × subcarrier) | same | 3420 | 262 | 59.9227 | 59.9227 (Genesis Plus GX); 60 (PicoDrive) |
 | PlayStation | 33.8688 MHz (768 × 44100) | 53.693175 MHz (× 715909/451584) | 3412.5 | 263 (240p), 262.5 (480i) | 59.826, 59.940 | 59.826 for both (SwanStation with PortareOS's patch; upstream 59.8173) |
-| Saturn | 28.636364 MHz (8 × subcarrier), or × 61/65 = 26.874126 MHz in the 320-wide modes | same | 1820 dots, or 1708 (both the broadcast line) | 263 (240p), 262.5 (480i) | 59.826, 59.940 | 59.8261 (Beetle Saturn with PortareOS's patch; upstream 59.8265) |
+| Saturn | 28.636364 MHz (8 × subcarrier), or × 61/65 = 26.874126 MHz in the 320-wide modes | same | 1820 dots, or 1708 (both the broadcast line) | 263 (240p), 262.5 (480i) | 59.826, 59.940 | 59.8261 (Ymir with PortareOS's patch; upstream wrapper reported 59.82) |
 | Nintendo 64 | 14.318182 MHz (4 × subcarrier) | 48.681818 MHz (× 17/5) | 3094 | 263 (240p), 262.5 (480i) | 59.826, 59.940 | 59.826 / 59.94 (ParaLLEl N64 with our patch) |
 | Neo Geo MVS | 24.000 MHz | 6.000 MHz (÷ 4) | 384 pixels | 264 | 59.1856 | 59.18 (FBNeo keeps hundredths) |
 | Neo Geo AES, Neo Geo CD | 24.167829 MHz | 6.041957 MHz (÷ 4) | 384 pixels | 264 | 59.599 | 59.5999 (NeoCD); FBNeo runs cartridges at the MVS rate |
