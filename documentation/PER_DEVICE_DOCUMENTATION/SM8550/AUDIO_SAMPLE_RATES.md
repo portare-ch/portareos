@@ -2,8 +2,10 @@
 
 How PortareOS makes the Nova's audio link run at 32, 44.1 or 48 kHz instead
 of resampling everything to 48 kHz, and how to carry that to another
-distribution. Everything here was verified on the device (kernel 7.2.5,
-September 2026).
+distribution. The original device checks used kernel 7.2.5 in September
+2026. Recorded speaker-link tests do not establish headphone or Bluetooth
+coverage; see [audio latency](../../AUDIO_LATENCY.md) for later measurements
+and outstanding output checks. The current recipe selects Linux 7.3.
 
 ## Why the link is stuck at 48 kHz
 
@@ -35,7 +37,9 @@ steps 1 to 3.
 
 ## The changes, in order
 
-All paths are in this repository; the patches apply to Linux 7.2.5.
+All paths are in this repository. The procedure below records the Linux
+7.2.5 implementation; check the current patches and topology script before
+porting it to another kernel or firmware blob.
 
 ### 1. The topology blob
 

@@ -1,8 +1,9 @@
 # CPU layout and isolation (SM8550)
 
 What the Retroid Pocket Nova's CPU looks like, how emulators are placed on it
-today, and the plan for keeping the rest of the system off the cores a game
-uses. Per-emulator layouts are in [emulators/](emulators/README.md).
+and how cpusets keep background services off the gaming cores. Unified
+cgroups and the game slice are implemented; a dedicated gaming user remains
+planned. Per-emulator layouts are in [emulators/](emulators/README.md).
 
 ## The SoC
 
@@ -80,29 +81,28 @@ scaling, and the big cores drop while the threads sleep between frames.
 - **Test:** `coremap-check` checks a running emulator's threads against its
   documented layout.
 
-A mask set with `taskset` only binds the process it is set on. Keeping the
-launcher, PipeWire, systemd services and kernel worker threads off a game's
-cores is phase 2 below.
+A mask set with `taskset` only binds the process it is set on. The implemented
+game slice described below also confines system services and unbound kernel
+work during gameplay.
 
-## Plan: cpuset isolation
+## Cpuset isolation
 
-### The obstacle
+### The original obstacle (resolved)
 
-systemd confines a slice to cores with `AllowedCPUs=`, which works only on the
-unified cgroup hierarchy. The project's systemd 255.22 is built with
-`-Ddefault-hierarchy=hybrid` (`packages/sysutils/systemd/package.mk`),
-inherited from upstream without a stated reason. On the device the v1
-controllers are mounted under `/sys/fs/cgroup/*`, and the cgroup2 tree at
-`/sys/fs/cgroup/unified` offers `cpuset` and `memory` but is not managed. The
-kernel is ready: `CONFIG_CPUSETS=y`, without `CPUSETS_V1`.
+`AllowedCPUs=` requires the unified cgroup hierarchy. The original systemd
+255.22 build used `-Ddefault-hierarchy=hybrid`: v1 controllers under
+`/sys/fs/cgroup/*` and an unmanaged cgroup2 tree at
+`/sys/fs/cgroup/unified`. The recipe now selects `unified`; the kernel has
+`CONFIG_CPUSETS=y`, without `CPUSETS_V1`.
 
 ### Phase 1: unified hierarchy (done)
 
 - systemd is built with `-Ddefault-hierarchy=unified`, upstream's default.
   `/sys/fs/cgroup` is then a single cgroup2 tree.
-- Nothing in the tree reads v1 paths. The Docker addon uses the systemd
-  cgroup driver, which runs on v2. The kernel has every controller systemd
-  uses there: cpuset, cpu, memory, io, pids, and BPF for device control.
+- Retained runtime paths do not require v1. The Docker addon was removed
+  with the unreachable container recipes in #701. The kernel has every
+  controller systemd uses there: cpuset, cpu, memory, io, pids, and BPF for
+  device control.
 - One unit sets a device policy: `iwd.service` (`DevicePolicy=closed`). On v2
   that is a BPF program rather than the v1 devices controller. Wi-Fi is the
   first thing to check on a new image.

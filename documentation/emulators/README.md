@@ -9,6 +9,7 @@ numbers that justified the current one.
 | Emulator | Systems | File |
 |---|---|---|
 | ARMSX2 (libretro) | PS2 | [ARMSX2.md](ARMSX2.md) |
+| Genesis Plus GX (libretro) | Mega Drive / Genesis; shared core for Master System, Game Gear and Sega CD | [Genesis.md](Genesis.md) |
 | NeoCD (libretro) | Neo Geo CD | [NeoCD.md](NeoCD.md) |
 | SwanStation (libretro) | PlayStation | [SwanStation.md](SwanStation.md) |
 

@@ -1,7 +1,7 @@
 # Packages this fork does not keep
 
 The device serves a fixed list of systems, and the emulator picked for each
-one is the table in the README's "One emulator per system". Everything below
+one is the README's [systems table](../README.md#systems-and-status). Everything below
 was removed because it served a system that is not on that list, duplicated
 the default emulator, or supported a runtime the device no longer uses.
 
@@ -21,9 +21,9 @@ trimmed out of the image, with sizes.
 
 | Removed | Why |
 |---|---|
-| `uae4arm-lr` | Amiga core we do not use; puae covers it. |
+| `uae4arm-lr` | Unused Amiga core; Amiga and the alternative puae cores are outside the retained system list. |
 | `aethersx2-sa` | EOL PS2 appimage. armsx2 is the only PS2 emulator this fork ships. |
-| `armsx2-sa` | ARMSX2's SDL frontend. Its libretro core, `armsx2-lr`, replaced it, so PS2 runs in RetroArch like every other system. |
+| `armsx2-sa` | ARMSX2's SDL frontend. Its libretro core, `armsx2-lr`, replaced it, so PS2 runs in RetroArch. Xbox retains standalone xemu. |
 | `cemu-sa` | Wii U emulator with no usable 4:3 mode on a 4:3 panel. Removed, and the wiiu system with it. |
 | `drastic-sa` | A closed-source Nintendo DS binary. |
 | `daedalusx64-sa` | A 32-bit-only N64 emulator we never built. |
@@ -34,9 +34,9 @@ trimmed out of the image, with sizes.
 | `beetle-saturn-lr` | Replaced for the Saturn by `ymir-lr`: Ymir is more accurate, and it runs the VDPs and the SCSP on their own threads where Beetle Saturn ran the console on one, which on this device was the difference a tester saw in Grandia. Ymir is also the one Saturn emulator with a GPU renderer in the making. |
 | `nestopia-lr` | Replaced for NES, Famicom and FDS by `mesence-lr`, the nesdev community's Mesen. It is more accurate, and the NES is cheap enough that the accuracy costs nothing that matters here. |
 | `gpsp-lr` | Unused alternative to `mgba-lr`. GBA, GBA Hacks and GBA Video all use mGBA. |
-| `skyemu-sa`, `nanoboyadvance-sa`, `hatarisa` | Alternatives nobody defaulted to, all covered by the retroarch core that was already the default. skyemu also remains as `skyemu-lr`. |
+| `skyemu-sa`, `skyemu-lr`, `nanoboyadvance-sa`, `hatarisa` | Unselected alternatives; the retained systems use the cores in the README. Neither SkyEmu frontend remains in the tree. |
 | `sndio` | The only thing that pulled it in was `touchhle-sa`. |
-| `vlc` | Only emulationstation ever linked it, and that is libmpv now. |
+| `vlc` | Its frontend user was EmulationStation, which was also replaced. The launcher is now portarelauncher; media playback uses mpv and PORTAMP. |
 
 ## Systems this fork does not keep
 

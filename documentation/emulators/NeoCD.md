@@ -49,12 +49,16 @@ policy is the fix, for every system at once; it is not NeoCD's to carry.
 
 ## What runs
 
-- `neocd_lr` at `b1e04c7` (`packages/emulators/libretro/neocd_lr/`), in
-  RetroArch. BIOS files under `/storage/roms/bios/neocd/`.
+- `neocd_lr` (`packages/emulators/libretro/neocd_lr/`), in RetroArch. The
+  recipe carries the current commit pin; the tuning record below used
+  `b1e04c7`. BIOS files live under `/storage/roms/bios/neocd/`.
 - Patches: `001-default-to-a-cdz-bios.patch` (#668): the first CDZ BIOS by
   family is the default and the fallback for an unmatched name, instead of
   index 0 of the name-sorted list (the Front Loader, which stops at its CD
   player until START).
+- `002-save-states-without-host-pointers.patch`: zero the ignored host
+  pointers in saved 68000 and Z80 state so checkpoints compare
+  deterministically across processes.
 - `core-info` adds `savestate = "true"` and
   `savestate_features = "deterministic"` to NeoCD's info file (#667).
   Upstream's file predates the keys, and without them RetroArch and
@@ -87,8 +91,10 @@ policy is the fix, for every system at once; it is not NeoCD's to carry.
   pixels from the same replay frame and viewed live; the user chose this one
   over a wider-beam "mild" (too saturated: the boost clips highlights) and
   prefers the dimmer picture. Lines only, no CRT filter, was the brief.
-- Open: a display trace of the fixed capture confirming 2x LFC with no late
-  or single-refresh frames (goal 2). Not yet taken.
+- The tuning summary marks presentation complete, but a dedicated flip
+  trace of the final fixed capture is not recorded here. Retain one when
+  checking later builds for late or single-refresh frames; frametime
+  summaries alone do not establish that cadence.
 
 ## Audio
 

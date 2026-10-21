@@ -4,7 +4,7 @@ One test per row of FEATURES.md, on a Retroid Pocket Nova running the build
 under test. Automatic tests are run by `tools/device-tests` over SSH and
 print PASS, FAIL or SKIP per test; human tests are a checklist with the
 exact thing to look or listen for. Configuration expectations reviewed
-18 October 2026; recorded runs below include older builds.
+21 October 2026; recorded runs below include older builds.
 
 `tools/device-tests` still contains obsolete assertions, including a fixed
 256-frame audio quantum, automatic frame delay outside its current
@@ -68,7 +68,7 @@ Idle: the DSI connector lists all eight modes.
 grep -c . /sys/class/drm/card*-DSI-1/modes          # 8
 modetest -M msm -c | grep -oE '[0-9]+\.[0-9]+' | sort -u
 ```
-Expected refresh rates, to three decimals: 119.880, 119.652, 119.455,
+Expected refresh rates, to three decimals: 119.880, 119.653, 119.455,
 120.198, 119.846, 118.360, 119.200, and 120.000.
 
 With the default built-in-panel VRR path, every core uses the fastest
@@ -85,7 +85,7 @@ setting afterward.
 |---|---|
 | gb, gbc, gba (gambatte, mgba) | 119.455 |
 | snes, nes (snes9x, mesen2) | 120.198 |
-| psx, n64, saturn | 119.652 |
+| psx, n64, saturn | 119.653 |
 | genesis (genesis_plus_gx) | 119.846 |
 | neogeo (fbneo) | 118.360 |
 | neocd | 119.200 |
@@ -200,6 +200,41 @@ dark gradient (a night sky in any film) shows no bands. Compare the same
 image with the stock profile: it must look the same as before, since
 dithering an untouched 8-bit source changes nothing visible.
 
+### D11 External monitor ownership and hotplug (auto+human)
+
+These external-display procedures are not implemented in `tools/device-tests`.
+Record the image, monitor, USB-C adapter, mode and emulator for each run.
+
+- At the launcher, connect the monitor. `external-display connected` exits
+  0, DP is connected and the panel connector reads disconnected. The launcher
+  appears on the monitor with correct geometry.
+- Launch a RetroArch game, xemu, Steam and mpv in separate runs. Check DRM
+  ownership, controls, aspect ratio, sound on the local outputs and return
+  to the launcher. No DisplayPort audio sink should appear in `wpctl status`.
+- Disconnect at the menu and confirm return to the panel. Repeat connection
+  before boot and repeated plug/unplug cycles; inspect `dmesg` for USB oopses,
+  DP timeouts and an interrupt storm, and check idle power after unplug.
+- Test connection/disconnection during a game separately. A running game
+  retains its launch output; record blanking, recovery on exit, hangs or
+  reboots rather than treating menu handover as a game-hotplug pass.
+
+### D12 DisplayPort Adaptive-Sync and 8 bpc (auto+human)
+
+With an Adaptive-Sync display enabled in the monitor's own menu, check
+`modetest -M msm -c` for `vrr_capable=1` and the effective range. For the
+recorded LG UltraGear+ EDID (60–144 Hz), the current minimum should be
+65 Hz. A higher EDID minimum must be preserved; branch devices and sinks
+whose resulting range spans no more than 10 Hz must not qualify.
+
+Confirm the live mode and at-most-8-bpc output in DRM state or the monitor's
+diagnostics. Run NeoCD and SNES: the sink's refresh readout and a display
+trace should show integer-multiple repeats near 119.2 and 120.2 Hz
+respectively, with no flicker or loss of signal. Test lower content rates
+and late frames with a probe before calling compensation verified. Repeat
+with Adaptive-Sync disabled: `vrr_capable` should clear and fixed-refresh
+playback must remain usable. Record monitor observations alongside the
+controller trace; the latter alone does not establish displayed timing.
+
 ## Audio
 
 ### A1 Link rate follows the stream (auto+human)
@@ -217,7 +252,8 @@ The link runs at the rate RetroArch opened, the `at N Hz` of the
 | System | Expected link rate |
 |---|---|
 | psx, saturn, dreamcast, psp, neocd, genesis, mastersystem, gamegear, segacd, sega32x | 44100 (per-core) |
-| snes | 32000 (per-core) |
+| snes | 32000 (picked) |
+| snesmsu1 with enhanced audio, nes | 44100, 32000 respectively (picked) |
 | gb, gbc (32768 Hz) | 44100 (picked) |
 | gba (65536 Hz) | 48000 (picked) |
 | n64, scummvm and the rest | picked from the core's rate |
@@ -246,8 +282,9 @@ the launched config. Fail if every game picks 48000.
 Covered by A1's table; additionally `audio_out_rate` in the per-core
 config under `/storage/.config/retroarch/config/<core>/<core>.cfg` is
 44100 for SwanStation, Ymir, Flycast, PPSSPP, NeoCD, Genesis
-Plus GX and PicoDrive, and the global file keeps `0`, which picks 32000
-for Snes9x's 32040 and 44100 for an MSU-1 game.
+Plus GX and PicoDrive. The global file keeps `0`; without a per-core
+override it picks 32000 for Snes9x's 32040 and 44100 for an MSU-1 game
+with enhanced audio. NES picks 32000 and Gambatte's 32768 picks 44100.
 
 ### A4 PipeWire and the 3 ms quantum floor (auto+human)
 
@@ -458,18 +495,19 @@ password and IP; power reboots and shuts down.
 
 Human: the row reads `defaults` until something is changed, then
 `N changed`. Each 2D console toggles `PRMPT on`/`PRMPT off` with its
-description; PSX toggles `latency`/`visuals` with the two-mode text; no
-text runs off the 53-column grid. Auto after the changes:
+description; PlayStation also toggles PRMPT, off by default, and Neo Geo CD
+starts on by default. No text runs off the 53-column grid. Auto after the
+changes:
 
 ```
-grep -E '^(gb|gbc|gba|nes|snes|genesis)\.preempt=|^psx\.profile=' system.cfg
+grep -E '^(gb|gbc|gba|nes|snes|genesis|psx|neocd)\.preempt=' /storage/.config/system/configs/system.cfg
 ```
 matches what was set.
 
 ### L4 Updates from GitHub (human)
 
-Settings > Update on the nightly channel: the newest nightly downloads to
-`/storage/.update/`, the sha256 check passes, the device reboots into it
+Settings > About > Update on the nightly channel: the newest nightly
+downloads to `/storage/.update/`, the sha256 check passes, the device reboots into it
 and About shows the new version. Settings survive; `.migrations` gains any
 new marker.
 
@@ -600,11 +638,14 @@ cat /sys/devices/system/cpu/cpuidle/current_governor    # teo
 cat /sys/devices/system/cpu/cpufreq/policy*/scaling_governor  # schedutil
 ```
 
-### P6 Debug tools only outside official releases (auto)
+### P6 Optional debug tools (auto)
 
 `OS_BUILD` in `/etc/os-release` says whether the build is official.
-Nightlies and releases are both official and carry neither `gdb` nor
-`strace`; an unofficial local build has both, and `strace -V` prints 7.2.
+Nightlies and releases are both official and omit the debug set by default;
+an unofficial local build includes it. `DEBUG_PACKAGES=yes` explicitly
+enables it for either. Check the eight tools listed in
+[the debug guide](DEBUG_TOOLS.md#where-the-tools-run), and run `strace -V`
+against the version selected by the build rather than a fixed old version.
 
 ### P7 Gamepad MCU and stick LED rails off in suspend (auto+human)
 
@@ -627,7 +668,7 @@ after nightly 156 is the number that says whether this helped #62.
 
 ### M1 mpv direct to the display (auto+human)
 
-Play a 1080p H.264 file from Tools > Media. While it plays:
+Play a 1080p H.264 file from the launcher's Movies system. While it plays:
 
 ```
 pgrep -af mpv | grep -o -- '--gpu-context=displayvk'
@@ -676,4 +717,4 @@ Copy this table into the PR that updates FEATURES.md after a test round.
 
 | Build | Tester | Auto passed / total | Human passed / total | Failures |
 |---|---|---|---|---|
-| nightly 155 | | | | |
+| image version and commit | | | | |

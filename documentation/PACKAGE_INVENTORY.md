@@ -1,6 +1,10 @@
 # What is in the image, and what should not be
 
-An inventory of the packages in the PortareOS image, from the package definitions and checked against a device running build 20260925 (`d3fa9894`): the binaries, libraries and services present, their sizes, and who links what. Sizes are as installed: `/usr/lib` 732 MB, `/usr/share` 457 MB, `/usr/bin` 220 MB, about 1.4 GB in all. Each package is in one of three lists: essential, candidate for removal, questionable.
+Package definitions reviewed 21 October 2026. The size audit was made on
+build 20260925 (`d3fa9894`): `/usr/lib` 732 MB, `/usr/share` 457 MB,
+`/usr/bin` 220 MB, about 1.4 GB installed. Those figures and the removal
+estimates below are historical; they are not a measurement of the current
+image. Current candidates are separated from the removal record.
 
 The rule this applies is the README's: if it is not needed for a smooth game, it is not in the image.
 
@@ -8,11 +12,11 @@ The rule this applies is the README's: if it is not needed for a smooth game, it
 
 | Package | Why |
 |---|---|
-| linux 7.2.11, linux-firmware, busybox, systemd, util-linux, coreutils, bash, kmod, udev | The base. |
+| linux 7.3, linux-firmware, busybox, systemd, util-linux, coreutils, bash, kmod, udev | The base. |
 | mesa (turnip, freedreno; `libgallium` 21 MB), vulkan-loader, libdrm, libglvnd | The display. |
 | pipewire, wireplumber, alsa-lib, alsa-ucm-conf, alsa-topology-conf | Audio; the 32 / 44.1 / 48 kHz link runs through it. |
 | iwd, portnet, wireless-regdb, openssh, rsync, bluez | Wi-Fi, SSH, controllers. iwd does the 802.11 and the addressing; portnet is the command that drives it. |
-| retroarch, core-info, slang-shaders (trimmed, see below), the 15 cores (193 MB) | The systems. |
+| retroarch, core-info, slang-shaders, the 16 selected libretro cores | The systems. `slang-shaders` still installs the upstream set plus our presets; trimming is a candidate below. ARMSX2 ships its own info file; `core-info` supplies the other fifteen. |
 | xemu-sa (19 MB), armsx2-lr, scummvm-lr, ppsspp-lr, mpv, ffmpeg, libplacebo, luajit | The standalone systems and the three large cores; mpv's Lua runs our seek script. |
 | portarelauncher, portareos, system-utils, quirks, autostart, powerstate, sleep, inputplumber (10 MB) | Our own stack; inputplumber is the gamepad. |
 | steam, gamescope, xwayland, seatd, fex-emu, pressure-vessel, the X11 libraries | The one compositor exception, about 35 MB on the image; the runtime lives on `/storage`. |
@@ -26,26 +30,30 @@ The rule this applies is the README's: if it is not needed for a smooth game, it
 |---|---|---|
 | **kernel-overlays** | 59 | Not what it looked like: 16 MB of modules, the rest the Nova's own firmware, already trimmed to this device's DSP, GPU, Wi-Fi and Bluetooth blobs. Nothing worth cutting. |
 | **slang-shaders** — trim, not drop | 70 → ~10 | We use `crt/crt-guest-advanced`, `handheld/lcd-grid-v2` and our own `portare/`. Keep those families and what they include; drop the other 60 MB. |
-| **renderdoc, apitrace (with glretrace, eglretrace), gdb, gdbserver, perf, vulkan-tools, glslc, binutils (strings, readelf), v4l-utils, edid-decode, cec-ctl, plplay, gltrim, wflinfo** | ~55 | Debugging and GPU tracing tools, in a release image. `DEBUG_PACKAGES` is off, so they arrive as somebody's dependency; find whose. |
-| The sqlite3 CLI, nano and dialog, bluez's btmon | ~1 | Duplicates and unused command-line tools. |
-| **iwd_get-networks, ukify, spit** | – | Leftover scripts. |
+| Debugging and GPU tracing tools from the September audit | remeasure | The old ~55 MB estimate is not a current saving: unused recipes were removed, and the debug metapackage is opt-in for official images. Audit binaries and their dependencies on a current image before cutting more. |
+| The sqlite3 CLI, nano and dialog, bluez's btmon | ~1 in the old audit | Recheck runtime and script users before removing. |
+| **iwd_get-networks, ukify, spit** | remeasure | Old audit candidates; check whether each is installed and has a runtime caller on a current image. A source file alone does not establish image cost. |
 
 ## Questionable: replace, or reconsider
 
 | Package | MB | The question |
 |---|---|---|
-| **python3** with pyudev, six, pyyaml, setuptools | 34 | Real users: `portareos-bluetooth-agent`, the pairing agent that runs as a service, and Steam's `steamdeps`. Rewrite the agent in C against bluez's D-Bus API, or as a bluetoothctl script, and Python goes. |
-| **mangohud, mangoapp** | 12 | A performance overlay: handy for development, an anti-feature for a player. gamescope runs without it. |
+| **Python3** and target Python modules | 34 in the old audit | The Bluetooth agent is already C. `gamecapture` is Python; the image still selects `six` and `pyudev`. Audit remaining runtime users and Steam's installed dependency scripts before proposing removal. Host-only Python build tools do not establish image cost. |
+| **mangohud, mangoapp** | 12 in the old audit | MangoHud is an opt-in runtime overlay with PortareOS display-timing measurements. Check both gamescope and emulator users before removing either component. |
 | **scummvm-lr** | 77 | ScummVM as the libretro core, with the standalone's engines less ten that want a keyboard or carry nothing playable here. Every engine in the tree would be 120. |
 | **fbneo** core | 76 | The largest core: every arcade driver. Fine for as long as arcade is a system. |
 | **umtprd** (MTP) beside the USB network gadget | – | Two USB file-transfer paths where one would do. |
-| **libtirpc, heimdal, rpcbind** | 0 | Checked on the device: libtirpc and heimdal are not on the image at all and rpcbind is a stray systemd target with no binary. The ~10 MB this row used to claim is not there to reclaim. |
+| **libtirpc, heimdal, rpcbind** | 0 | Not an installed-size saving in the device audit; their unreachable recipes are now removed too. |
 
 ## Services that start at boot and deserve a look
 
 `batteryledstatus` (idle unless `led.color=battery`), `debug-shell`, `debugconfig`. `input` runs `portsense`, which replaced a shell script that ran an evtest per device.
 
-## Removed
+## Removal history
+
+Sizes in this section describe the recorded removals, not a new inventory.
+Later replacements are named where they would otherwise imply a component
+still ships.
 
 Done in #334, from the lists above:
 
@@ -69,7 +77,9 @@ Done in #351:
 | rkmpp | 0 | Rockchip only; ffmpeg loses its `RK*` case |
 | the root ffmpeg folder | 0 | shadowed by the project's package and never read |
 
-gmu has gone: it was a second audio stack - SDL2, mpg123, vorbis, flac, opus - for the one job mpv already did through ffmpeg. PORTAMP is that mpv with a spectrum analyser for a picture and a player drawn around it, and adds no package. The GStreamer plugins, libmpeg2 and x264 stay, kept in reserve for playback; nothing links them today.
+gmu was replaced by PORTAMP, which uses mpv for playback and adds no
+separate audio stack. GStreamer and its plugins, libmpeg2 and x264 were
+initially kept in reserve; #701 later removed those unreachable recipes.
 
 Done in #347:
 
@@ -81,7 +91,7 @@ Done in #347:
 | plplay | 0 | libplacebo's demo player, not built |
 | usb-modeswitch | 1 | out of the image |
 | bluez's meshctl and mesh-cfgclient | 1 | bluez built without mesh |
-| apitrace, renderdoc, nvtop, memtester, valgrind, kmsxx, libva-utils | 0 | never in an image: the debug set is off for official builds, which the nightlies are. The set is gdb, strace, vblank-rate and pcm-flags now, 12 MB, in unofficial builds only. |
+| apitrace, renderdoc, nvtop, memtester, valgrind, kmsxx, libva-utils | 0 | Not installed by the official build's debug set. The current eight-tool set is documented in [DEBUG_TOOLS.md](DEBUG_TOOLS.md); unofficial builds include it by default, and `DEBUG_PACKAGES=yes` enables it explicitly. The old 12 MB figure covered a smaller set. |
 | v4l-utils | 3 | already gone from fresh builds since IR remote support went off (#422373c); the image on the device predates that |
 
 Done in #335:
@@ -89,7 +99,7 @@ Done in #335:
 | Package | MB | How |
 |---|---|---|
 | scummvm as a standalone, fluidsynth and its service | ~10 | ScummVM is the libretro core now, with FluidLite inside it for MIDI; the soundfont stays. The standalone's 76 MB is replaced by the core's 77, with ten engines fewer. The saving is fluidsynth and the service. |
-| qt6, and the CI job that built it | ~60 | ARMSX2 is built as upstream's SDL frontend, `armsx2-sdl`: VK_KHR_display to the panel, FullscreenUI for the menus, no window. Tested on the Nova before the switch. FEXConfig, a Qt desktop dialog, is not built. |
+| qt6, and the CI job that built it | ~60 | ARMSX2 first moved to the SDL frontend, then to the current libretro core. Neither needs Qt. FEXConfig, a Qt desktop dialog, is not built. |
 
 Done in #429:
 
@@ -98,7 +108,7 @@ Done in #429:
 | mkcontroller and its autostart | 0 | wrote 27 `DEVICE_BTN_*` variables nothing reads. `control-gen` stopped printing a `DEVICE` line, so the GUID was empty and every value came out blank; the only consumer anywhere is a template for standalone Mednafen, which is not installed. |
 | six AYANEO and Thor inputplumber configs | 0 | other handhelds' input maps in a one-device tree. The Nova's was the file named `02-ayn-controller.yaml`. |
 
-Done in #701: 253 recipes no stage of the build reaches - toolchain, base,
+Done in #701: recipes no stage of the build reaches - toolchain, base,
 either emulator stage, image or kernel. `genbuildplan.py` plans every stage
 at `ae8b932a05` step for step the same without them. The image loses only
 the installer's entry in `modules`, which pointed at a script it never
@@ -111,7 +121,7 @@ shipped.
 | openvpn, zerotier-one, tailscale | 0 | `OPENVPN_SUPPORT` and `ZEROTIER_SUPPORT` gone |
 | lirc, libirman, eventlircd, ir-bpf-decoders, evrepeat, v4l-utils | 0 | `REMOTE_SUPPORT`, which nothing read any more |
 | installer, oem, testing, driverselect, device-tree-overlays, tm16xx-display | 0 | their switches gone, and the `modules` entry that ran the installer |
-| xorg-server, the xf86-video and xf86-input drivers, fluxbox, the X core fonts, xcb-util | 0 | the image runs Wayland; xwayland stays |
+| xorg-server, the xf86-video and xf86-input drivers, fluxbox, the X core fonts, xcb-util | 0 | Direct KMS is the normal path; Steam's gamescope keeps xwayland. |
 | u-boot, atf, crust, rkbin, syslinux, grub, the Amlogic, Exynos and Raspberry Pi boot blobs | 0 | the Nova boots through qcom-abl |
 | gcc-aarch64, gcc-arm-none-eabi, gcc-bpf, gcc-or1k, the Linaro compilers, their binutils, go | 0 | cross compilers nothing builds with |
 | mold | 0 | out of the linker choice with `MOLD_SUPPORT` |
@@ -123,7 +133,13 @@ texts went with the recipes that were the only ones to declare them.
 
 ## The sum
 
-Still on the table: slang-shaders ~60 + Python 34: **about 95 MB**, without touching a supported system. Locales, gconv, p7zip and btrfs-progs came out for about 31 MB; see "Trimmed in place" below. About 250 MB is out already (above); gdb, strace, vblank-rate and pcm-flags, 12 MB, come only with an unofficial build.
+The original estimates put shader trimming and Python at about 95 MB
+combined. Python cannot be removed while retained tools need it, and the
+shader closure still needs measurement and runtime tests. The recorded
+locale, gconv, p7zip and btrfs-progs reductions were about 31 MB; see below.
+Re-measure installed and compressed sizes on a current image before
+publishing a new total. Removing recipes that were never installed reduces
+maintenance, not image size.
 
 ## Method
 

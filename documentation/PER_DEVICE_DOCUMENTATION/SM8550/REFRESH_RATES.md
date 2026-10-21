@@ -1,36 +1,42 @@
 # Refresh and audio rates on the Retroid Pocket Nova (SM8550)
 
-RetroArch defaults to **variable refresh from 80 to 120.198154 Hz** on the
+RetroArch defaults to **variable refresh from 65 to 120.198154 Hz** on the
 built-in panel when it is the only connected display and no display mode
-is pinned. It uses the fastest mode for every system and times frames at
-the core's reported rate; the display driver repeats them to keep the
-panel within its range. See [variable refresh](../../VARIABLE_REFRESH.md) for the launch
-conditions, rate limits and measurements.
+is pinned. Supported Adaptive-Sync DP monitors also qualify, with their own
+mode and range limits. It uses the fastest mode for every system and times
+frames at the core's reported rate; the display driver repeats them to
+keep the panel within its range. See [variable refresh](../../VARIABLE_REFRESH.md)
+for the launch conditions, rate limits and measurements.
 
 ## Fixed-refresh modes
 
-The mode selection and display-paced rendering described below apply to
+The mode selection described below applies to
 RetroArch with variable refresh disabled (`global.vrr=0` in
 `/storage/.config/system/configs/system.cfg`). The preferred mode is
-**119.880120 Hz**, twice NTSC's 59.94 Hz. For systems whose native rate is
-noticeably different, `setsettings.sh` (`set_ra_refresh_rate`) asks for a
-panel mode at exactly twice that rate, and RetroArch switches to it when
-the game starts.
+**119.88031 Hz**, approximately twice NTSC's 59.94 Hz. For systems whose
+native rate is noticeably different, `setsettings.sh` (`set_ra_refresh_rate`)
+asks for the supported panel mode nearest twice that rate, and RetroArch
+switches to it when the game starts.
 
 Where each system's native rate comes from, crystal by crystal, and where an emulator's number differs from the console's, is derived in [CONSOLE_CLOCKS.md](../../CONSOLE_CLOCKS.md). Which systems have their mode, and which are still open, is in [PortareOS_Modelines.md](../../PortareOS_Modelines.md).
 
-Every mode uses the panel's own timing, 1302 × 998, and changes only the pixel clock (see below). Steam's 120.0004 Hz mode is Android's own 120 Hz mode exactly. Nothing else picks it: RetroArch asks for each system's exact rate, and mpv, ARMSX2, xemu and the launcher take the preferred mode. All of them keep the panel in its 120 Hz class. The modes are defined in the panel driver, `projects/PortareOS/devices/SM8550/patches/linux/0105-drm-panel-Add-Retroid-Pocket-Nova-panel.patch`.
+Every mode uses the panel's own timing, 1302 × 998, and changes only the
+pixel clock (see below). The 120.0004 Hz mode preserves Android's own
+120 Hz timing. Steam and the launcher now use the fastest 120.198 Hz mode
+with VRR; ARMSX2 follows RetroArch's VRR path. mpv and xemu use fixed
+refresh. The modes are defined in the panel driver,
+`projects/PortareOS/devices/SM8550/patches/linux/0105-drm-panel-Add-Retroid-Pocket-Nova-panel.patch`.
 
 | Panel mode | Pixel clock | Off the console's rate | Used by |
 |---|---|---|---|
-| 119.88031 Hz | 155772 kHz | +1.6 ppm | default (launcher, everything else) |
+| 119.88031 Hz | 155772 kHz | +1.6 ppm | preferred fixed mode; mpv, xemu and unmatched fixed-refresh cores |
 | 119.45473 Hz | 155219 kHz | -2.2 ppm | `gambatte`, `mgba` |
 | 120.198154 Hz | 156185 kHz | +4.4 ppm, rounded up | `snes9x`, `mesen2`; variable refresh runs on it |
 | 119.65252 Hz | 155476 kHz | +2.6 ppm | `parallel_n64`, `swanstation`, `ymir` |
 | 119.84568 Hz | 155727 kHz | +1.7 ppm | `genesis_plus_gx` |
 | 118.36038 Hz | 153797 kHz | +3.2 ppm | `fbneo`, for `neogeo` only |
 | 119.20000 Hz | 154888 kHz | +1.7 ppm | `neocd` |
-| 120.00037 Hz | 155928 kHz | +3.1 ppm | gamescope, for Steam |
+| 120.00037 Hz | 155928 kHz | +3.1 ppm | retained fixed 120 Hz mode; Steam uses 120.198 Hz with VRR |
 
 ### Why every mode has the panel's own timing
 
@@ -176,6 +182,13 @@ declined.
 
 ## Fixed-refresh pacing: how a frame lands on a frame
 
+This section records the earlier vsync-based implementation and its
+measurements (#339). RetroArch now always disables vsync and uses Sync to
+Exact Content Framerate to pace the core, at fixed refresh too. The timed
+presentation scheduler remains, but the swap-interval-2 log below is
+historical. See [variable refresh](../../VARIABLE_REFRESH.md#the-launch)
+for the current path.
+
 A mode at twice the console's rate is only half of it. The other half is RetroArch holding the core to that mode, one frame for every two refreshes, with nothing else setting the pace.
 
 RetroArch reaches the panel through Vulkan's `VK_KHR_display`, with no compositor. Its swap interval is left on automatic, which resolves to 2 when the mode is within the audio timing skew of twice the core's rate; that is what the modes are chosen for. Vulkan has no swap interval, so stock RetroArch keeps one by presenting the same frame twice into the FIFO swapchain. With two swapchain images, which the image uses for latency, the second present's acquire returns at the vblank between the two, and the core has one refresh period, 8.36 ms, to produce the next frame. A frame that takes longer costs a whole refresh. SwanStation at 4x with a CRT shader missed often enough for 55.65 fps against 59.83, with the audio buffer running dry every 50 to 100 ms and 5 to 8 ms gaps in the sound 7.5% of the time. That was the "slowed down" audio after threaded video was turned off.
@@ -240,7 +253,7 @@ The first rate column is the console's own: the rate its sound hardware produces
 
 | Systems (default emulator) | Console's audio rate (Hz) | Emulator outputs (Hz) | Played at (Hz) |
 |---|---|---|---|
-| gb, gbh, gbc, gbch (Gambatte) | analog (the APU runs at 1,048,576) | 32,768 | 48,000 |
+| gb, gbh, gbc, gbch (Gambatte) | analog (the APU runs at 1,048,576) | 32,768 | 44,100 |
 | gba, gbah, gbav (mGBA) | 32,768 by default; a game can pick up to 262,144 | 65,536 | 48,000 |
 | snes, snesh, sfc, satellaview (snes9x) | 32,000 nominal (about 32,040 on real consoles) | 32,040 (the core's own) | 32,000 |
 | snesmsu1 (snes9x) | 32,000, plus the MSU-1's 44,100 | 44,100 with MSU-1 enhanced audio, the core's default | 44,100 |

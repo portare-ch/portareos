@@ -1,6 +1,6 @@
 # Gaming performance: measurements and next experiments
 
-Reviewed 18 October 2026. Change one thing, replay the same workload, and
+Reviewed 21 October 2026. Change one thing, replay the same workload, and
 compare results beyond the run-to-run spread. Current per-emulator decisions
 and measurements live in [emulator notes](emulators/README.md); earlier
 standalone Flycast investigations are in the [bug history](BUG_HISTORY.md).
@@ -14,7 +14,9 @@ standalone Flycast investigations are in the [bug history](BUG_HISTORY.md).
 - The gaming GPU floor is already 401 MHz (`gpuperf`), restored on exit.
   The earlier proposal to raise it from the idle floor has been implemented.
 - RetroArch, the launcher and Steam use integer-multiple VRR within
-  65–120.198 Hz. Steam is capped at 60 fps; xemu and mpv use fixed refresh.
+  65–120.198 Hz on the built-in panel. DP Adaptive-Sync uses the sink's
+  range and selected mode, with a floor of at least 65 Hz and partial device
+  coverage. Steam is capped at 60 fps; xemu and mpv use fixed refresh.
   No vsync or BFI setting is available. See [variable refresh](VARIABLE_REFRESH.md).
 - Flycast and Dolphin run as libretro cores. Standalone backend settings,
   `start_flycast.sh`, and sway experiments no longer apply.

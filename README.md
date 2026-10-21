@@ -94,7 +94,8 @@ along with their untuned settings.
 
 [Known issues](BUGS.md) tracks observed problems and changes awaiting device
 testing. The [roadmap](ROADMAP.md) covers emulator reliability, measured
-latency, suspend validation and further footprint reductions.
+latency, suspend validation, further footprint reductions and planned
+[Direct Video Output for RetroTINK 4K](ROADMAP.md#direct-video-output-for-retrotink-4k).
 
 ## What it looks like
 
@@ -121,8 +122,10 @@ all open to change. Measurements guide the work.
 
 ### Integer-multiple variable refresh at the console's rate
 
-RetroArch enables variable refresh automatically on the built-in panel
-when it is the only connected display and no display mode is pinned.
+RetroArch enables variable refresh automatically when exactly one display
+is connected, it advertises VRR support and no display mode is pinned.
+This covers the built-in panel and supported Adaptive-Sync DisplayPort
+monitors; external-display validation remains partial.
 The panel follows timed frames within a 65–120.198 Hz range, using the
 display controller's AVR, the hardware behind Qualcomm's Qsync.
 
@@ -137,8 +140,9 @@ use the fastest panel mode as the base for variable refresh.
 
 RetroArch always keeps vsync off and Sync to Exact Content Framerate on,
 including at fixed refresh. Rates too high to fit twice, such as arcade
-boards near 61 Hz, are refused on the variable-refresh path: “This game is
-not supported” appears, then RetroArch returns to the launcher.
+boards near 61 Hz on the built-in panel, are refused on the variable-refresh
+path: “This game is not supported” appears, then RetroArch returns to the
+launcher.
 
 In 10-minute runs on 9 October 2026 with kernel repeats, Super Mario World
 showed 35,963 of 35,967 frames twice, and Tekken 3 showed 35,781 of 35,793
@@ -197,14 +201,14 @@ flowchart TD
     AMP --> SPK["Built-in speakers"]
     DSP -->|Codec DMA| CODEC["WCD938x codec"]
     CODEC --> HP["Wired headphones"]
-    DSP --> DP["DisplayPort audio<br/>USB-C external display"]
     PW --> BT["BlueZ / Bluetooth audio"]
     BT --> WIRELESS["Bluetooth headphones / speakers"]
 ```
 
 The built-in speaker and headphone links follow supported stream rates.
-Bluetooth and external displays negotiate their own formats and buffering;
-the graph's quantum is not the end-to-end audio latency.
+Bluetooth negotiates its own formats and buffering; the graph's quantum
+is not the end-to-end audio latency. DisplayPort carries video only: sound
+stays on the local outputs when a monitor is attached.
 
 ### Audio at the console's sample rate
 
@@ -213,9 +217,9 @@ Kernel and DSP changes let the audio link follow the core's output at 48,
 
 | Link rate | Consoles |
 | --- | --- |
-| 44.1 kHz | PlayStation, Dreamcast, PSP, Neo Geo CD, every Sega system; N64 games at 22 or 44.1 kHz |
-| 32 kHz | Super Nintendo; N64 games at 32 kHz |
-| 48 kHz | PS2, Xbox, GameCube and Wii, and everything else |
+| 44.1 kHz | PlayStation, Dreamcast, PSP, Neo Geo CD, every Sega system; Game Boy/Color resampled from 32,768 Hz; N64 games at 22 or 44.1 kHz |
+| 32 kHz | Super Nintendo, NES/Famicom; N64 games at 32 kHz |
+| 48 kHz | PS2, Xbox, GameCube, Wii, GBA, Neo Geo and most other systems |
 
 N64 rates vary by game; the core reports the programmed rate and the device
 reopens at the matching link rate. Resampling is avoided where hardware
@@ -297,6 +301,11 @@ The diagram follows the built-in panel. The launcher releases display
 ownership while a game or player runs and takes it back on exit. xemu's
 default Vulkan renderer uses Turnip, with SDL3 KMSDRM creating the direct
 display surface. Steam uses gamescope for composition.
+
+A USB-C monitor replaces the panel for the launcher and new game launches.
+DisplayPort output is capped at 8 bpc; Adaptive-Sync uses the monitor's
+range and selected mode, with a floor of at least 65 Hz. Hotplug and emulator
+coverage remain partial. See [external-display status](BUGS.md#external-displays-wider-validation-remains).
 
 **Integer-multiple VRR spans RetroArch, Mesa and the kernel.** RetroArch
 submits each frame once with a presentation target. Our Mesa Vulkan WSI

@@ -16,6 +16,12 @@
     pinned threads.
   - `004-libretro-apply-gamedb-blending.patch`: blending accuracy raised to
     the GameDB's per-game recommendation.
+  - `005-gs-trust-the-image-turnip-to-order-a-declared-loop.patch`: trust
+    the system Turnip's feedback-loop ordering fix.
+  - `006-libretro-pace-to-the-frame-rate-the-core-reports.patch`: hand
+    the GS the core's reported frame rate, matching RetroArch's loop.
+  - `007-gs-key-the-spirv-cache-on-the-compiler-s-bytes.patch`: keep the
+    shader cache through updates whose compiler libraries are unchanged.
 - Settings live in `/storage/roms/bios/pcsx2/inis/armsx2-libretro.ini`, not
   `PCSX2.ini`. The core rewrites the keys the patches force on every load, and
   keeps everything else. That includes values left behind by an earlier build:
@@ -33,9 +39,12 @@ image to `retro_run`, which passes it to RetroArch with `set_image`.
 RetroArch draws that image into its own swapchain:
 
 - KHR display context, 2 images, FIFO.
-- Swap interval auto, so 2 at 119.88 Hz.
-- Timed presents (RetroArch patch 0014). The log shows
-  `Timed presents: swap interval 2, one present a frame, 16.683 ms apart.`
+- Vsync off, Sync to Exact Content Framerate on; RetroArch paces at the
+  core's reported rate. On the built-in panel VRR uses the 120.198 Hz mode
+  with kernel repeats.
+- Timed presents (RetroArch patches 0014/0019). The earlier
+  `Timed presents: swap interval 2` log belongs to the fixed-refresh,
+  vsync-based implementation; it is not the current launch criterion.
 
 The core's own pass is about 1.2 MP per frame, cheap on the Adreno 740.
 
@@ -117,13 +126,14 @@ and slept to its own timer at the guest rate. RetroArch meanwhile called
 published, or repeats the last. The GS blocks in `PublishFrame` until that
 happens. Two clocks raced.
 
-001 makes RetroArch the only clock:
+Patches 001 and 006 make RetroArch the only clock:
 
-- **Refresh rate.** At load the core asks for RetroArch's target refresh
-  (`GET_TARGET_REFRESH_RATE`) and divides it by the swap interval RetroArch
-  picks for the announced 59.94 fps (`round(refresh / fps)`, `runloop.c`). That
-  is the rate `retro_run` runs at, and it goes into the window info as the
-  host refresh rate.
+- **Refresh rate.** Patch 006 sets the GS's host refresh to the frame rate
+  reported to RetroArch: initially 59.94 fps, then the VM's rate if the
+  frontend accepts a change. RetroArch's Sync to Exact Content Framerate
+  calls `retro_run` at that rate. The older 001 calculation divided the
+  panel rate by a swap interval; on the 120.198 Hz VRR base it incorrectly
+  gave 60.099 fps.
 - **Settings.** `VsyncEnable`, `SyncToHostRefreshRate` and `UseVSyncForTiming`
   are on. `SkipDuplicateFrames` is off, because vsync timing needs every frame
   presented, and PCSX2 defaults it to on.
@@ -140,10 +150,11 @@ Check it engaged, in `/var/log/exec.log`:
 
 and in the RetroArch log:
 
-    Pacing to the frontend: 119.880 Hz refresh, 59.940 Hz frames.
+    Pacing to the frontend: 59.940 Hz frames.
 
-PAL (50 fps) is outside PCSX2's 5% sync window at 59.94. It falls back to the
-sleep throttle, as before 001.
+Patch 006 also removes the fixed-59.94 host-rate mismatch for a core that
+reports 50 fps. PAL remains outside PortareOS's supported scope; this is not
+a PAL compatibility claim.
 
 ### Queue depth (`VsyncQueueSize`)
 
@@ -304,7 +315,6 @@ It has caught two failures so far:
   The default changes only if schedutil with the clamp holds what
   `performance` does. `exec.log` shows `EE thread util clamp min 1024` when
   it is set.
-- Texture barriers: the standalone forced them off
-  (`OverrideTextureBarriers = 0`); the core's automatic turns them on, and a
-  barrier is expensive on a tiler. Not measured yet (ROADMAP).
-- PAL games do not sync to 59.94 and run on the sleep throttle.
+- Further texture-barrier experiments must use the current Mesa 009/core
+  005 feedback-loop path as the baseline; the driver comparison above
+  supersedes the original untested standalone/core comparison.
