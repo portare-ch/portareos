@@ -1,0 +1,33 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] drm/msm/dp: no PUSH_IDLE after an unplug
+
+Pulling a USB-C DisplayPort adapter tells the driver first (the HPD
+unplug handler clears plugged), and the CRTC is switched off after
+that. .atomic_disable() still pushed the idle pattern, because
+power_on stays set until .atomic_post_disable(). By then the sink is
+gone and the combo PHY has been switched away from DP, so PUSH_IDLE
+only timed out, 30 ms into every unplug:
+
+  msm_dp_ctrl_push_idle: PUSH_IDLE pattern timedout
+
+The HPD state machine 7.3 dropped used to skip the push in this case
+(hpd_state == ST_DISCONNECT_PENDING). Skip it when the sink is
+unplugged.
+---
+--- a/drivers/gpu/drm/msm/dp/dp_display.c
++++ b/drivers/gpu/drm/msm/dp/dp_display.c
+@@ -1482,6 +1482,14 @@
+ 	if (!dp->power_on)
+ 		return;
+ 
++	/*
++	 * Nor after an unplug: the sink is gone and, on USB-C, the PHY has
++	 * already been switched away from DP, so PUSH_IDLE only times out.
++	 */
++	scoped_guard(mutex, &msm_dp_display->plugged_lock)
++		if (!msm_dp_display->plugged)
++			return;
++
+ 	msm_dp_ctrl_push_idle(msm_dp_display->ctrl);
+ }
+ 
