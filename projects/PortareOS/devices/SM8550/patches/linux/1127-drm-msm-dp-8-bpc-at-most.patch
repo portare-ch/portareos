@@ -1,0 +1,24 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] drm/msm/dp: 8 bpc at most
+
+msm_dp_panel_get_supported_bpp() picks the deepest colour the link can
+carry, up to 10 bpc, from what the EDID claims (12 bpc on the LG
+UltraGear+). Every framebuffer on this device has 8 bits a channel and
+a monitor gets no colour profile, so 10 bpc only carried padding. Stop
+at 8; modes that need it still fall back to 6.
+---
+--- a/drivers/gpu/drm/msm/dp/dp_panel.c
++++ b/drivers/gpu/drm/msm/dp/dp_panel.c
+@@ -215,7 +215,11 @@
+ 		u32 mode_edid_bpp, u32 mode_pclk_khz)
+ {
+ 	const struct msm_dp_link_info *link_info;
+-	const u32 max_supported_bpp = 30, min_supported_bpp = 18;
++	/*
++	 * 8 bpc at most: every framebuffer here has 8 bits a channel and a
++	 * monitor gets no colour profile, so 10 bpc only carried padding.
++	 */
++	const u32 max_supported_bpp = 24, min_supported_bpp = 18;
+ 	u32 bpp, data_rate_khz;
+ 
+ 	bpp = min(mode_edid_bpp, max_supported_bpp);
