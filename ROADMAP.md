@@ -243,6 +243,8 @@ crash or reboot. Publish tested adapters, displays and remaining limitations.
 
 ## Direct Video Output for RetroTINK 4K
 
+Tracking: [#719](https://github.com/portare-ch/portareos/issues/719).
+
 **Planned; extensive work.** Send the emulator's native video directly to
 a RetroTINK 4K over HDMI, bypassing PortareOS video scaling, filtering and
 added frame buffering. Send DV1 metadata with the signal so the RetroTINK
@@ -272,8 +274,6 @@ correct DV1 metadata over HDMI, the RetroTINK applies the intended scaling
 and filtering, and measurements confirm that PortareOS adds no video
 scaling or avoidable frame queue. Hardware results and limitations are
 published.
-
-<!-- Tracking issue to be linked once opened. -->
 
 ## Other work to retain
 
