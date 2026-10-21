@@ -1,0 +1,74 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] drm/msm/dpu: AVR on a DP interface
+
+Patch 1097 gave AVR, the variable frame length, to DSI interfaces only.
+Register it for DP too, and use it only where the connector is
+vrr_capable: the panel, or a DP monitor with Adaptive-Sync (1128).
+Clients ask for VRR whatever is attached, and a monitor that does not
+follow the frame length would lose the picture.
+
+The floor is still the connector's monitor_range minimum, from the EDID
+on DP. With wide bus the DP timing engine takes two pixels a clock and
+its horizontal timing is halved, so the frame length is counted in that
+clock; with the pixel clock the floor and the LFC period came out at
+half their rates.
+---
+--- a/drivers/gpu/drm/msm/disp/dpu1/dpu_encoder_phys_vid.c
++++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_encoder_phys_vid.c
+@@ -280,12 +280,29 @@
+  * refresh range: the mode's frame is the shortest, the range's minimum
+  * gives the longest. The CRTC's VRR_ENABLED switches it per commit.
+  */
++/*
++ * Only a sink that follows the frame length may get a variable one: the
++ * panel, or a DP monitor with Adaptive-Sync. Clients ask for VRR whatever
++ * is attached.
++ */
++static bool dpu_encoder_phys_vid_vrr_capable(struct drm_connector *conn)
++{
++	u64 capable = 0;
++
++	return conn && conn->vrr_capable_property &&
++	       !drm_object_immutable_property_get_value(&conn->base,
++							conn->vrr_capable_property,
++							&capable) &&
++	       capable;
++}
++
+ static void dpu_encoder_phys_vid_setup_avr(struct dpu_encoder_phys *phys_enc,
+ 		const struct dpu_hw_intf_timing_params *timing, int clock_khz)
+ {
+ 	struct dpu_hw_intf *intf = phys_enc->hw_intf;
+ 	struct drm_connector *conn = dpu_encoder_get_connector(phys_enc->parent);
+-	unsigned int min_hz = conn ? conn->display_info.monitor_range.min_vfreq : 0;
++	unsigned int min_hz = dpu_encoder_phys_vid_vrr_capable(conn) ?
++			      conn->display_info.monitor_range.min_vfreq : 0;
+ 	u32 htotal = get_horizontal_total(timing);
+ 	u32 vtotal = get_vertical_total(timing);
+ 	unsigned long lock_flags;
+@@ -297,6 +314,13 @@
+ 	    !intf->ops.avr_trigger)
+ 		return;
+ 
++	/*
++	 * With wide bus the DP timing engine takes two pixels a clock, and its
++	 * horizontal timing is halved: count in its clock, not the pixel one.
++	 */
++	if (intf->cap->type == INTF_DP && timing->wide_bus_en)
++		clock_khz /= 2;
++
+ 	if (min_hz && htotal)
+ 		lines = div_u64((u64)clock_khz * 1000, htotal * min_hz);
+ 
+--- a/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_intf.c
++++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_intf.c
+@@ -689,7 +689,8 @@
+ 	if (mdss_rev->core_major_ver >= 7)
+ 		c->ops.program_intf_cmd_cfg = dpu_hw_intf_program_intf_cmd_cfg;
+ 
+-	if (mdss_rev->core_major_ver >= 9 && cfg->type == INTF_DSI) {
++	if (mdss_rev->core_major_ver >= 9 &&
++	    (cfg->type == INTF_DSI || cfg->type == INTF_DP)) {
+ 		c->ops.setup_avr = dpu_hw_intf_setup_avr;
+ 		c->ops.enable_avr = dpu_hw_intf_enable_avr;
+ 		c->ops.avr_trigger = dpu_hw_intf_avr_trigger;
