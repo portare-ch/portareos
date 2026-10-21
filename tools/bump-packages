@@ -1,0 +1,582 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
+
+"""Move packages forward to their upstreams.
+
+Two tiers, run on different schedules by bump-packages.yml:
+
+    emulators   RetroArch, the libretro cores, the standalone emulators
+                and packages/compat. Daily.
+    packages    Every other recipe under packages/. Weekly.
+
+Three kinds of pin, told apart from the recipe itself:
+
+A bare git commit in PKG_VERSION follows the upstream default branch:
+read it, fetch the tarball that commit produces, hash it, rewrite the
+two lines that say so. A commit pin whose comment is nothing but a
+version,
+
+    PKG_VERSION="fa50bb19..." # v1.20.4
+
+is a release pinned by its commit, and follows releases instead: the
+newest release's tag is resolved to its commit and the comment rewritten.
+Following the default branch instead moved ppsspp-lr 2231 commits past
+v1.20.4 onto a master its patches do not build against, under a comment
+that still said v1.20.4. A comment with anything else in it, such as
+"# v1.22.2 + fixes", is a branch, and follows the branch. Commit pins are
+only followed on GitHub, for want of an API elsewhere.
+
+A release in PKG_VERSION moves to the newest stable release, found where
+the package comes from:
+
+  * GitHub: /releases/latest, which is the endpoint that knows a
+    prerelease from a release (ARMSX2 publishes nightly-* most days);
+    a repository that tags without publishing releases falls back to its
+    tag list with rc/alpha/beta/pre/dev/nightly tags left out.
+  * GitLab (freedesktop, gnome, videolan, ...): the tag list, filtered
+    the same way.
+  * Everything else - GNU, X.org, sourceforge, kernel.org, PyPI, xiph:
+    release-monitoring.org, first through the LibreELEC package mapping
+    (our recipe names are LibreELEC's) and then by project name, with the
+    project's homepage matched against PKG_SITE/PKG_URL when the name
+    is ambiguous ("libtool" is a GNU project and a PyPI one).
+
+Each recipe's own convention is preserved. The text in front of
+${PKG_VERSION} in PKG_URL says what the tag looks like: scummvm's tag is
+v2026.3.0 while its PKG_VERSION is 2026.3.0 with the "v" in PKG_URL,
+where armsx2 uses its tag verbatim. PKG_URL is expanded by bash, so
+${PKG_NAME:0:1}, ${PKG_VERSION//./_} and ${PKG_VERSION%%.*} mean what
+they mean in the recipe. A version that is not numerically newer than
+the current pin is refused, so a re-tag upstream cannot walk a package
+backwards; one not written like the current pin is refused too, since
+"libxmp-4.7.4" next to "v4.6.0" and "v20201217" next to "v4.7.0" are
+both newer by the numbers and neither is the release wanted. A recipe
+named after a series - fuse2, lua54, SDL2_mixer - stays in it.
+
+It never writes a checksum it did not compute. The new tarball is
+downloaded and hashed here; if the download fails or the archive is
+empty, that package is reported as skipped and left untouched rather
+than being pinned to a checksum nobody verified. That is also what makes
+following release tags safe: if a guessed URL does not exist, the result
+is a skip line, never a bad pin.
+
+And it is opt-out: put
+
+    # bump-ignore: <reason>
+
+anywhere in a package.mk to hold it where it is. The reason is printed in
+the report, so a pin that is deliberately behind says why. The toolchain,
+glibc, the kernel, mesa and systemd are held that way: a move there is a
+project in itself, not a line in a weekly pull request.
+
+A recipe this cannot read - PKG_VERSION set in a case statement, more
+than one PKG_SHA256, no PKG_URL - is reported as skipped and left alone.
+
+Usage:
+    tools/bump-packages --tier emulators|packages [--dry-run]
+                        [--only NAME ...] [--report FILE]
+"""
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+EMULATOR_ROOTS = (
+    "packages/emulators/libretro",
+    "packages/emulators/standalone",
+    "packages/compat",
+)
+
+# Globals a PKG_URL may use that config/ defines; DISTRO_SRC is not here
+# because sources.libreelec.tv mirrors are not an upstream.
+URL_GLOBALS = {"SOURCEFORGE_SRC": "https://prdownloads.sourceforge.net"}
+
+SHA1 = re.compile(r"^[0-9a-f]{40}$")
+RELEASE_COMMIT = re.compile(
+    r'^PKG_VERSION="[0-9a-f]{40}"[^\S\n]*#[^\S\n]*(v?\d+(?:\.\d+)+)[^\S\n]*$',
+    re.M)
+PRERELEASE = re.compile(r"(rc|alpha|beta|pre|dev|nightly|snapshot|test)",
+                        re.I)
+UA = {"User-Agent": "portareos-bump-packages"}
+
+
+class Skip(Exception):
+    """Leave this package alone, for the reason given."""
+
+
+def api(url):
+    req = urllib.request.Request(url, headers=dict(UA))
+    req.add_header("Accept", "application/json")
+    if url.startswith("https://api.github.com/"):
+        token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+        if token:
+            req.add_header("Authorization", f"Bearer {token}")
+        req.add_header("Accept", "application/vnd.github+json")
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.load(r)
+
+
+def sha256_of(url):
+    """Stream the tarball and hash it. Never holds the whole file in memory."""
+    req = urllib.request.Request(url, headers=dict(UA))
+    h = hashlib.sha256()
+    size = 0
+    with urllib.request.urlopen(req, timeout=600) as r:
+        while True:
+            chunk = r.read(1 << 20)
+            if not chunk:
+                break
+            h.update(chunk)
+            size += len(chunk)
+    if size == 0:
+        raise ValueError("downloaded 0 bytes")
+    return h.hexdigest(), size
+
+
+def one(text, key):
+    """The single top-level assignment of `key`, or None if not exactly one.
+
+    The trailing comment matters: retroarch writes
+
+        PKG_VERSION="bdba046..." # v1.22.2 + fixes
+
+    and an expression anchored straight to end-of-line silently fails to
+    see it, which is how the first draft of this script quietly ignored
+    RetroArch altogether.
+    """
+    hits = re.findall(rf'^{key}="([^"]*)"[^\S\n]*(?:#[^\n]*)?$', text, re.M)
+    return hits[0] if len(hits) == 1 else None
+
+
+def repin(text, key, old, new):
+    """Replace one assignment's value, leaving any trailing comment alone."""
+    pattern = rf'^({key}=")({re.escape(old)})("[^\S\n]*(?:#[^\n]*)?)$'
+    out, n = re.subn(pattern, lambda m: m.group(1) + new + m.group(3),
+                     text, count=1, flags=re.M)
+    return out if n == 1 else None
+
+
+def vtuple(s):
+    """The numbers in a version string, for ordering releases.
+
+    "2.7" sorts above "2.6.9" because 7 > 6 at the second position, which
+    is the comparison a human makes and the one a plain string compare
+    gets wrong.
+    """
+    return tuple(int(x) for x in re.findall(r"\d+", s))
+
+
+def shape(v):
+    """What is left of a version once the numbers and dots are gone.
+
+    Letters collapse to one marker: tz moves from 2026c to 2026e.
+    """
+    return re.sub(r"[a-zA-Z]+", "a", re.sub(r"[\d.]+", "", v))
+
+
+def same_shape(new, old):
+    """`new` written the way `old` is, or a Skip.
+
+    A tag that reads R_2_9_0 where the recipe says 2.7.4 is the same
+    convention with the dots swapped, and PKG_URL puts them back with
+    ${PKG_VERSION//./_}. A tag that reads libxmp-4.7.4 where the recipe
+    says v4.6.0, or vwebp-rfc9649 where it says 1.6.0, is a different
+    thing with a number in it, and a GitHub archive URL would happily
+    serve it under that name.
+    """
+    # A pin on a release candidate moves to the release it was a
+    # candidate for, which is written without the suffix.
+    old = re.sub(r"[-_.]?(rc|alpha|beta|pre|dev)\d*$", "", old, flags=re.I) or old
+    # libslirp tags v20201217 next to v4.9.1, and 20201217 is "newer".
+    width = max(len(d) for d in re.findall(r"\d+", old)) + 3
+    if any(len(d) > width for d in re.findall(r"\d+", new)):
+        raise Skip(f"upstream latest ({new}) is not written like the pin ({old})")
+    if shape(new) == shape(old):
+        return new
+    dotted = re.sub(r"[-_]", ".", new)
+    if shape(dotted) == shape(old):
+        return dotted
+    raise Skip(f"upstream latest ({new}) is not written like the pin ({old})")
+
+
+def same_series(name, version):
+    """The version prefix a recipe named after a series must keep.
+
+    fuse2 and fuse3 are both libfuse; lua54 is Lua 5.4; SDL2_mixer is the
+    2.x SDL_mixer. The last number in the name, when the current version
+    starts with it, is the series, and upstream's newest release is only
+    an update if it starts with it too.
+    """
+    digits = re.findall(r"\d+", name)
+    if not digits:
+        return None
+    series = digits[-1]
+    return series if "".join(re.findall(r"\d+", version)).startswith(series) else None
+
+
+def literal_vars(text):
+    """Every top-level PKG_* assignment whose value is a plain string."""
+    return dict(re.findall(r'^(PKG_[A-Z0-9_]+)="([^"$`\\]*)"[^\S\n]*(?:#[^\n]*)?$',
+                           text, re.M))
+
+
+def expand(url_t, env):
+    """Expand a PKG_URL the way the recipe does: with bash.
+
+    Recipes write ${PKG_NAME:0:1}, ${PKG_VERSION//./_}, ${PKG_VERSION%%.*}
+    and ${PKG_NAME,,}; reimplementing bash's substitutions is how a tool
+    like this ends up with its own dialect. set -u turns a variable it
+    does not know into a skip instead of an empty path component.
+    """
+    r = subprocess.run(["bash", "-c", BASH_PRELUDE + 'printf %s "' + url_t + '"'],
+                       env={"PATH": os.environ["PATH"], **env},
+                       capture_output=True, text=True)
+    # A failed command substitution does not fail printf, so what bash
+    # complained about is the signal, not the exit status.
+    if r.returncode or r.stderr:
+        raise Skip(f"cannot expand PKG_URL: {r.stderr.strip() or r.returncode}")
+    return r.stdout
+
+
+# The one build-system function recipes call inside PKG_URL, as
+# config/functions defines it for the recipe's own version. Anything else
+# a URL calls is unknown here and makes the expansion a skip.
+BASH_PRELUDE = r"""set -u
+get_pkg_version_maj_min() {
+  [ $# -eq 0 ] || { echo "get_pkg_version_maj_min with an argument" >&2; return 1; }
+  if [[ ${PKG_VERSION} =~ ^[0-9A-Za-z]*\.[0-9A-Za-z]*\.[0-9A-Za-z]*$ ]]; then
+    echo "${PKG_VERSION%.*}"
+  else
+    echo "${PKG_VERSION}"
+  fi
+}
+"""
+
+
+def github_repo(*candidates):
+    for s in candidates:
+        m = re.search(r"github\.com/([^/\s]+)/([^/\s]+?)(?:\.git|/|$)", s)
+        if m:
+            return f"{m.group(1)}/{m.group(2)}"
+    return None
+
+
+def gitlab_project(*candidates):
+    for s in candidates:
+        m = re.match(r"https?://(gitlab\.[^/]+|code\.videolan\.org)/(.+?)"
+                     r"(?:/-/.*|\.git)?/?$", s)
+        if m:
+            return m.group(1), m.group(2)
+    return None
+
+
+def tag_prefix(url_t, env):
+    """The literal text a tag carries in front of the version.
+
+    Read from PKG_URL: the path component holding ${PKG_VERSION} starts
+    with it. ".../refs/tags/v${PKG_VERSION}.tar.gz" says tags are
+    vX.Y; ".../archive/${PKG_NAME}-${PKG_VERSION}.tar.gz" says name-X.Y.
+    """
+    probe = expand(url_t, {**env, "PKG_VERSION": "@VERSION@"})
+    i = probe.find("@VERSION@")
+    if i < 0:
+        return ""
+    return probe[probe.rfind("/", 0, i) + 1:i]
+
+
+def tag_to_version(tag, prefix, current):
+    if prefix and tag.startswith(prefix):
+        return tag[len(prefix):]
+    # Tags are vX.Y but the recipe writes the version bare and the "v" is
+    # not in PKG_URL either: x.org tarballs for a gitlab-tagged project.
+    if re.match(r"v\d", tag) and re.match(r"\d", current):
+        return tag[1:]
+    return tag
+
+
+def newest(tags, prefix, current):
+    """The newest stable version among a tag list, or None."""
+    allow_pre = bool(PRERELEASE.search(current))
+    best = None
+    for tag in tags:
+        v = tag_to_version(tag, prefix, current)
+        if not vtuple(v) or (PRERELEASE.search(v) and not allow_pre):
+            continue
+        if best is None or vtuple(v) > vtuple(best):
+            best = v
+    return best
+
+
+def github_release(repo, prefix, current):
+    try:
+        tag = api(f"https://api.github.com/repos/{repo}/releases/latest")["tag_name"]
+        v = tag_to_version(tag, prefix, current)
+        # libxkbcommon publishes 1.14.0-beta2 as a plain release, so the
+        # endpoint's own prerelease flag is not the last word.
+        if not PRERELEASE.search(v) or PRERELEASE.search(current):
+            return v, tag
+    except urllib.error.HTTPError as e:
+        if e.code != 404:
+            raise
+    tags = [t["name"] for t in api(f"https://api.github.com/repos/{repo}/tags?per_page=100")]
+    v = newest(tags, prefix, current)
+    if v is None:
+        raise Skip("no release and no versioned tag on GitHub")
+    return v, None
+
+
+def gitlab_release(host, path, prefix, current):
+    tags = api(f"https://{host}/api/v4/projects/{urllib.parse.quote(path, safe='')}"
+               f"/repository/tags?per_page=100")
+    v = newest([t["name"] for t in tags], prefix, current)
+    if v is None:
+        raise Skip(f"no versioned tag on {host}")
+    return v
+
+
+def anitya_release(name, site, url):
+    q = urllib.parse.quote(name)
+    items = api("https://release-monitoring.org/api/v2/packages/"
+                f"?name={q}&distribution=LibreELEC").get("items", [])
+    if items and items[0].get("stable_version"):
+        return items[0]["stable_version"], items[0]["project"]
+    projects = [p for p in api(f"https://release-monitoring.org/api/v2/projects/?name={q}")
+                .get("items", []) if p.get("stable_versions")]
+    if len(projects) > 1:
+        hosts = {urllib.parse.urlparse(s).hostname for s in (site, url)}
+        projects = [p for p in projects
+                    if urllib.parse.urlparse(p.get("homepage", "")).hostname in hosts] or projects
+    if not projects:
+        raise Skip("not on release-monitoring.org")
+    if len(projects) > 1:
+        raise Skip("ambiguous on release-monitoring.org: "
+                   + ", ".join(p["homepage"] for p in projects))
+    return projects[0]["stable_versions"][0], projects[0]["name"]
+
+
+def packages_for(tier, only):
+    all_mk = sorted(Path("packages").rglob("package.mk"))
+    if only:
+        return [p for p in all_mk if p.parent.name in only]
+    emu = [p for p in all_mk
+           if any(str(p).startswith(r + "/") for r in EMULATOR_ROOTS)]
+    return emu if tier == "emulators" else [p for p in all_mk if p not in emu]
+
+
+def bump_one(path, text, dry_run):
+    """Return a report row for a moved package, None if current; raise Skip."""
+    name = path.parent.name
+    m = re.search(r"^#\s*bump-ignore:\s*(.*)$", text, re.M)
+    if m:
+        raise Skip(f"held: {m.group(1).strip()}")
+
+    version = one(text, "PKG_VERSION")
+    site = one(text, "PKG_SITE") or ""
+    url_t = one(text, "PKG_URL")
+    have_sha = one(text, "PKG_SHA256")
+    if version is None:
+        raise Skip("PKG_VERSION is not a single plain assignment")
+    if "$" in version:
+        raise Skip("PKG_VERSION is derived: " + version)
+    if not url_t:
+        raise Skip("no PKG_URL")
+    # glfw pins "e2c9264": a commit, but not one the branch logic can
+    # compare, and as a version it would read as 2 then 9264.
+    if re.fullmatch(r"[0-9a-f]{7,39}", version) and not version.isdigit():
+        raise Skip("pinned to an abbreviated commit")
+
+    env = {**URL_GLOBALS, **literal_vars(text),
+           "PKG_NAME": name, "PKG_SITE": site, "PKG_VERSION": version}
+    url_now = expand(url_t, env)
+
+    # A ".git" source is cloned at the commit rather than fetched as a
+    # tarball, so there is no archive to hash and no PKG_SHA256 to carry -
+    # the commit hash is the verification.
+    tarball = not url_t.endswith(".git")
+    if tarball and have_sha is None:
+        raise Skip("tarball source with no single PKG_SHA256")
+
+    repo = github_repo(url_now, site)
+    pinned_to_commit = bool(SHA1.match(version))
+    m = RELEASE_COMMIT.search(text)
+    release = m.group(1) if m and pinned_to_commit else None
+    tag = None
+    source = None
+
+    if pinned_to_commit:
+        if not repo:
+            raise Skip("commit pin not on GitHub")
+        source = repo
+        if release:
+            tag = api(f"https://api.github.com/repos/{repo}/releases/latest")["tag_name"]
+            # The comment may write 0.41.0 for a tag that reads v0.41.0.
+            same_shape(tag.removeprefix("v"), release.removeprefix("v"))
+            if vtuple(tag) < vtuple(release):
+                raise Skip(f"upstream latest ({tag}) is not newer than the pin ({release})")
+            if vtuple(tag) == vtuple(release):
+                return None
+            new = api(f"https://api.github.com/repos/{repo}/commits/{tag}")["sha"]
+        else:
+            info = api(f"https://api.github.com/repos/{repo}")
+            new = api(f"https://api.github.com/repos/{repo}/commits/"
+                      f"{info['default_branch']}")["sha"]
+    else:
+        prefix = tag_prefix(url_t, env)
+        if repo:
+            source = repo
+            new, tag = github_release(repo, prefix, version)
+        elif gitlab_project(url_now, site):
+            host, project = gitlab_project(url_now, site)
+            source = f"{host}/{project}"
+            new = gitlab_release(host, project, prefix, version)
+        else:
+            new, project = anitya_release(name, site, url_now)
+            source = f"release-monitoring.org: {project}"
+
+    if new == version:
+        return None
+
+    if not pinned_to_commit:
+        old_v, new_v = vtuple(version), vtuple(new)
+        if not new_v:
+            raise Skip(f"upstream version has no number: {new}")
+        if new_v == old_v:
+            # tz counts 2026c, 2026d, 2026e: the same numbers, a later letter.
+            lettered = r"\d[\d.]*[a-z]"
+            if not (re.fullmatch(lettered, new) and re.fullmatch(lettered, version)
+                    and new > version):
+                return None
+        new = same_shape(new, version)
+        # Releases can be re-tagged or published out of order, and a bump
+        # that silently walks backwards is worse than none.
+        if old_v and new_v < old_v:
+            raise Skip(f"upstream latest ({new}) is not newer than the pin ({version})")
+        series = same_series(name, version)
+        if series and not "".join(re.findall(r"\d+", new)).startswith(series):
+            raise Skip(f"{name} stays in the series its name says ({version}); "
+                       f"upstream latest is {new}")
+
+    if pinned_to_commit and not release:
+        try:
+            ahead = api(f"https://api.github.com/repos/{repo}"
+                        f"/compare/{version}...{new}").get("ahead_by", "?")
+        except Exception:                           # noqa: BLE001 - cosmetic only
+            ahead = "?"
+        # A pin that is not behind the default branch sits on another
+        # branch on purpose. Moving it would be a change of branch, not
+        # an update.
+        if ahead == 0:
+            raise Skip("the default branch is not ahead of the pin")
+    else:
+        ahead = "release"
+
+    digest, size = None, 0
+    if tarball:
+        new_url = expand(url_t, {**env, "PKG_VERSION": new})
+        try:
+            digest, size = sha256_of(new_url)
+        except Exception as e:                      # noqa: BLE001 - report, don't stop
+            raise Skip(f"tarball not usable: {e} ({new_url})") from e
+
+    if not dry_run:
+        out = repin(text, "PKG_VERSION", version, new)
+        if out is not None and release:
+            out, n = re.subn(
+                rf'^(PKG_VERSION="{new}"[^\S\n]*#[^\S\n]*){re.escape(release)}',
+                lambda m: m.group(1) + tag, out, count=1, flags=re.M)
+            out = out if n == 1 else None
+        if out is not None and digest is not None:
+            out = repin(out, "PKG_SHA256", have_sha, digest)
+        if out is None:
+            raise Skip("could not rewrite the pin lines")
+        path.write_text(out)
+
+    old_shown = release or version
+    new_shown = tag if release else new
+    compare = (f"https://github.com/{repo}/compare/{version[:12]}...{new[:12]}"
+               if pinned_to_commit else None)
+    return {"name": name, "source": source, "old": old_shown, "new": new_shown,
+            "ahead": ahead, "size": size, "compare": compare}
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--tier", choices=("emulators", "packages"),
+                    help="which set of recipes to move (see the module docstring)")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="report what would change, write nothing")
+    ap.add_argument("--only", nargs="*", metavar="NAME",
+                    help="limit to these package directory names, from either tier")
+    ap.add_argument("--report", metavar="FILE",
+                    help="write the markdown report here as well as stdout")
+    args = ap.parse_args()
+    if not args.tier and not args.only:
+        ap.error("--tier is required unless --only is given")
+
+    bumped, skipped, current = [], [], 0
+    for path in packages_for(args.tier, args.only):
+        name = path.parent.name
+        try:
+            row = bump_one(path, path.read_text(), args.dry_run)
+        except Skip as e:
+            skipped.append((name, str(e)))
+            continue
+        except (urllib.error.URLError, KeyError, json.JSONDecodeError, OSError) as e:
+            skipped.append((name, f"upstream lookup failed: {e}"))
+            continue
+        if row is None:
+            current += 1
+            continue
+        bumped.append(row)
+        print(f"  {name}: {row['old'][:12]} -> {row['new'][:12]}  ({row['ahead']})",
+              file=sys.stderr)
+
+    lines = []
+    if bumped:
+        lines.append("| package | upstream | advance | change |")
+        lines.append("|---|---|---|---|")
+        for b in bumped:
+            change = f"`{b['old'][:12]}` → `{b['new'][:12]}`"
+            if b["compare"]:
+                change = f"[{change}]({b['compare']})"
+            advance = "release" if b["ahead"] == "release" else f"+{b['ahead']}"
+            lines.append(f"| `{b['name']}` | {b['source']} | {advance} | {change} |")
+    else:
+        lines.append("Nothing moved. Every package this run looked at is already "
+                     "at its upstream.")
+
+    lines.append("")
+    lines.append(f"{current} already current, {len(bumped)} moved, "
+                 f"{len(skipped)} skipped.")
+    if skipped:
+        lines.append("")
+        lines.append("<details><summary>Skipped</summary>")
+        lines.append("")
+        virtual = [n for n, why in skipped if why == "no PKG_URL"]
+        if virtual:
+            lines.append(f"- {len(virtual)} recipes have no PKG_URL (virtual or meta packages): "
+                         + ", ".join(f"`{n}`" for n in virtual))
+        for n, why in skipped:
+            if why != "no PKG_URL":
+                lines.append(f"- `{n}` — {why}")
+        lines.append("")
+        lines.append("</details>")
+
+    report = "\n".join(lines) + "\n"
+    print(report)
+    if args.report:
+        Path(args.report).write_text(report)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

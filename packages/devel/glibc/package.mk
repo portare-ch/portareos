@@ -3,6 +3,7 @@
 # Copyright (C) 2018-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="glibc"
+# bump-ignore: toolchain: moves with gcc and binutils, and every package rebuilds
 PKG_VERSION="2.41"
 PKG_SHA256="a5a26b22f545d6b7d7b3dd828e11e428f24f4fac43c934fb071b6a7d0828e901"
 PKG_LICENSE="GPL"

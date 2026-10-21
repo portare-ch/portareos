@@ -3,6 +3,7 @@
 # Copyright (C) 2017-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="linux"
+# bump-ignore: the kernel: a version move is a patch-series rebase and a config refresh (#696)
 PKG_LICENSE="GPL"
 PKG_SITE="http://www.kernel.org"
 PKG_DEPENDS_HOST="ccache:host openssl:host"

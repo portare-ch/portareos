@@ -3,6 +3,7 @@
 # Copyright (C) 2018-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="mesa"
+# bump-ignore: pinned to a release candidate on purpose; the Mesa page says which
 PKG_VERSION="26.3.0-rc1"
 PKG_SHA256="63327d58a51d189c1d1600746c505609bba5c495123b4e51de4e0c038b745542"
 PKG_LICENSE="OSS"

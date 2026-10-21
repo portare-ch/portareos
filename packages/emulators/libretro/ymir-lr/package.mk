@@ -15,7 +15,7 @@ PKG_BUILD_FLAGS="speed"
 # so patch 001 carries libretro's own wrapper (git.libretro.com/libretro/emir,
 # branch libretro), rebased onto the pinned upstream commit. The pin is a
 # release by its commit, and the comment on PKG_VERSION is how
-# tools/bump-emulator-pins knows to follow releases rather than the branch.
+# tools/bump-packages knows to follow releases rather than the branch.
 # A bump is a pin move and a rebase of that patch.
 #
 # No Vulkan: with the sysroot's Vulkan found, CMake makes the GPU backend's

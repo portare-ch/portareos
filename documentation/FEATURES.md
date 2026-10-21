@@ -54,7 +54,7 @@ see the test plan before interpreting its results.
 | GBC hardware and palette for GBC games | Gambatte given the GBC model and its color correction. | `Gambatte/gbc.opt` | verified | human: a GBC game's colors |
 | ScummVM as a libretro core | LITE build with our engine list, FluidLite synth, data bundle to the system directory. | `scummvm-lr` | unverified | human: a game starts, music plays |
 | No automatic savestate load | Deliberate. | `setsettings.sh` | verified | auto: `savestate_auto_load = "false"` |
-| Emulator pins bumped daily | A workflow opens a PR per upstream move. | `bump-emulator-pins.yml` | verified | auto: the workflow runs |
+| Packages bumped automatically | Emulators daily, everything else weekly, one rolling PR per tier. | `bump-packages.yml` | verified | auto: the workflow runs |
 
 ## Launcher and system
 

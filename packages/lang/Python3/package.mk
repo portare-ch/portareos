@@ -2,6 +2,7 @@
 # Copyright (C) 2017-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="Python3"
+# bump-ignore: a minor move changes the python3.N site-packages path every Python recipe uses
 # When changing PKG_VERSION remember to sync PKG_PYTHON_VERSION!
 PKG_VERSION="3.14.7"
 PKG_SHA256="3b48dac8fb59f62eaa67ac83c1eb12bda1b7a08406dd286e252c11a66be27f81"

@@ -1,0 +1,102 @@
+name: Bump packages
+
+# Keeps every recipe moving with its upstream, as rolling pull requests:
+# the emulators (RetroArch, the libretro cores, the commit-pinned
+# standalone emulators) daily, everything else weekly. tools/bump-packages
+# says how each kind of pin is followed.
+#
+# Early morning UTC deliberately: the nightly build runs at 23:00 and the
+# monthly release at 00:00 on the 1st, so this never competes with either
+# for the build concurrency group - and it does not need to, because it
+# builds nothing. A pull request only starts a build once somebody assigns
+# it (build-nightly.yml triggers on pull_request types: [assigned]), so
+# this can run every morning without ever costing five hours of runner
+# time.
+#
+# Each tier has a fixed branch name rather than a dated one, so each run
+# updates the same pull request instead of opening a new one. Merge it and
+# the next run brings the next set; leave it and it keeps refreshing until
+# you do. The two tiers are separate pull requests because one broken
+# bump blocks the whole request it is in, and an emulator that fails to
+# build should not hold back a week of library updates, or the reverse.
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: which recipes to move
+        type: choice
+        options: [emulators, packages]
+        default: emulators
+
+permissions:
+  contents: read
+
+jobs:
+  bump:
+    name: Move pins to upstream
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+
+      # The Monday 05:00 schedule is the weekly packages run; any other
+      # schedule is the daily emulators run.
+      - name: Pick the tier
+        id: tier
+        env:
+          TIER: ${{ inputs.tier }}
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          if [ -z "${TIER}" ]; then
+            if [ "${SCHEDULE}" = "0 5 * * 1" ]; then TIER=packages; else TIER=emulators; fi
+          fi
+          case "${TIER}" in
+            emulators)
+              echo "branch=bump/emulator-pins" >> "${GITHUB_OUTPUT}"
+              echo "title=emulators: move commit pins to upstream HEAD" >> "${GITHUB_OUTPUT}"
+              ;;
+            packages)
+              echo "branch=bump/packages" >> "${GITHUB_OUTPUT}"
+              echo "title=packages: move release pins to upstream" >> "${GITHUB_OUTPUT}"
+              ;;
+          esac
+          echo "tier=${TIER}" >> "${GITHUB_OUTPUT}"
+
+      - name: Move the pins
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./tools/bump-packages --tier "${{ steps.tier.outputs.tier }}" --report bump-report.md
+
+      # The report is the pull request body, so it must not also be part of
+      # the diff being proposed.
+      - name: Stage the report out of the tree
+        run: |
+          mv bump-report.md "${RUNNER_TEMP}/bump-report.md"
+          {
+            echo "Opened by \`tools/bump-packages --tier ${{ steps.tier.outputs.tier }}\`,"
+            echo "which reads each package's upstream (GitHub, GitLab or"
+            echo "release-monitoring.org), downloads the tarball the new version"
+            echo "produces, and hashes it here. No checksum in this diff was"
+            echo "copied from anywhere."
+            echo
+            cat "${RUNNER_TEMP}/bump-report.md"
+            echo
+            echo "Nothing here has been built. Assign this pull request to"
+            echo "start a build, or merge it and let the nightly pick it up."
+          } > "${RUNNER_TEMP}/pr-body.md"
+
+      - name: Open or update the pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: ${{ steps.tier.outputs.branch }}
+          delete-branch: true
+          commit-message: ${{ steps.tier.outputs.title }}
+          title: ${{ steps.tier.outputs.title }}
+          body-path: ${{ runner.temp }}/pr-body.md
