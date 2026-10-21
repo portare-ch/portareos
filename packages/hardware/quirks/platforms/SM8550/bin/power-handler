@@ -30,21 +30,14 @@ BLANK_FLAG="/run/power-blank-active.flag"
 # PORTAMP's mpv, when it is playing; see start_portamp.sh.
 PORTAMP_SOCK="/run/portamp.sock"
 
-# Blanking and the "is a display attached" question both come from
-# external-display. It blanks internal panels only: a DPMS off on an active DP output makes
-# msm_dp_display_disable() report the audio jack as unplugged, and the HPD
-# plug events that would undo it are discarded while the display is off, so
-# dock audio stays dead until a physical replug.
+# Whether a monitor is attached comes from external-display, which also
+# makes it the only output while it is there.
 EXTERNAL_DISPLAY="/usr/bin/external-display"
 
-# External display dependency. The helper itself is not part of this series.
-# Where it is missing, "connected" answers "not attached" so the handler
-# suspends exactly as it would on a device with no external output, and the
-# blanking falls through to the front-end below.
-# The helper is not in this tree, so before this fallback existed the blank
-# path did nothing at all: the flag was set, "blank" returned 1, and the DPU
-# carried on scanning out. Measured, that left 735805 kBps of DDR bandwidth
-# and the whole display pipeline powered behind a dark screen.
+# Blanking is the front-end's, below. Before it was, the blank path asked a
+# helper that did not exist and did nothing at all: the flag was set and the
+# DPU carried on scanning out. Measured, that left 735805 kBps of DDR
+# bandwidth and the whole display pipeline powered behind a dark screen.
 #
 # Whoever holds DRM master is the only process that can blank the panel, and
 # that is now portarelauncher rather than a compositor. It disables the CRTC
@@ -52,8 +45,8 @@ EXTERNAL_DISPLAY="/usr/bin/external-display"
 # scanning out rather than just drawing black - the part that costs DDR
 # bandwidth whether or not anything is lit.
 #
-# Internal outputs only is no longer something this has to enforce: the
-# launcher drives the one connector it opened, and that is the panel.
+# The launcher drives the one output that is connected, panel or monitor,
+# so the same signals blank either.
 frontend_power() {
   local pid
   # The service's main process rather than pidof: a test build run from a
@@ -68,17 +61,11 @@ frontend_power() {
 }
 
 external_display() {
-  if [ -x "${EXTERNAL_DISPLAY}" ]; then
-    "${EXTERNAL_DISPLAY}" "$@"
-    return
-  fi
-
-  # Without the helper there is no external display to ask about, so
-  # "connected" stays false and only the blanking is answered.
   case "${1}" in
-    blank)   frontend_power off ;;
-    unblank) frontend_power on ;;
-    *)       return 1 ;;
+    blank)     frontend_power off ;;
+    unblank)   frontend_power on ;;
+    connected) [ -x "${EXTERNAL_DISPLAY}" ] && "${EXTERNAL_DISPLAY}" connected ;;
+    *)         return 1 ;;
   esac
 }
 

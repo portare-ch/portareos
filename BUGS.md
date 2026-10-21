@@ -91,9 +91,10 @@ De-gamma and 8bpc dithering also need device checks. See
 
 ### External displays and audio routing
 
-`power-handler` still refers to `/usr/bin/external-display`, which is absent.
-Its fallback blanks the launcher's CRTC, but external-display detection
-answers false. The intended docked power-key policy therefore needs work.
+A monitor replaces the panel while it is connected (`external-display`
+forces the panel's connector off; #707). Nothing checks yet that the monitor
+has Adaptive-Sync, which msm DP does not implement, and a game keeps the
+output it started on until it exits.
 
 A display carries no sound: there is no DisplayPort DAI link, and audio
 stays on the speakers or line-out. Test display ownership, hotplug and
