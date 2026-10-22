@@ -128,12 +128,30 @@
 		compatible = "il97680a,rpnova";
 		/delete-property/ rotation;
 		/*
+		 * The Nova's own rails, as Android and Retroid's tree have
+		 * them. The RP6 node supplied vddio and avdd, and the driver
+		 * asks for vdd, vddio, vci, vdd18 and vdd28: avdd went unused,
+		 * and the 2.8 V and 1.2 V rails stayed as the bootloader left
+		 * them, on through every blank and suspend.
+		 */
+		/delete-property/ avdd-supply;
+		vdd-supply = <&vreg_l11b_1p2>;
+		vddio-supply = <&vreg_l12b_1p8>;
+		vci-supply = <&vreg_l13b_3p0>;
+		vdd18-supply = <&vdd_disp_1v8>;
+		vdd28-supply = <&vdd_disp_2v8>;
+		/*
 		 * The DPU turns output dithering off at 8bpc, so the 10-bit
 		 * result of a colour profile is truncated onto the panel and
 		 * dark gradients step. Kernel patch 0049 reads this.
 		 */
 		armada,dpu-8bpc-dither;
 	};
+};
+
+/* GPIO 142 is the RP6's; Android's qcom,platform-mipi-2v8 is 143. */
+&vdd_disp_2v8 {
+	gpio = <&tlmm 143 GPIO_ACTIVE_HIGH>;
 };
 
 &i2c_hub_3 {
