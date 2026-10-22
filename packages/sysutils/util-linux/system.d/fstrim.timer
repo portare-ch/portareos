@@ -1,10 +1,13 @@
 [Unit]
 Description=Discard unused blocks once a week
 
+# OnCalendar=weekly with Persistent=true never caught up here: the stamp
+# lives in /var/lib/systemd/timers, /var is tmpfs, and a Nova that reboots
+# for updates was rarely up at Monday midnight. The service keeps its own
+# record on /storage and decides; this only asks it hourly.
 [Timer]
-OnCalendar=weekly
-AccuracySec=1h
-Persistent=true
+OnBootSec=15min
+OnUnitActiveSec=1h
 
 [Install]
 WantedBy=timers.target

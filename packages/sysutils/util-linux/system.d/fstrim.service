@@ -1,7 +1,10 @@
 [Unit]
 Description=Discard unused blocks on all filesystems
 
+# Once a week by the marker's age, game or not: someone who goes from game
+# to game without lingering in the launcher would otherwise never get one.
 [Service]
 Type=oneshot
+ExecCondition=/bin/sh -c '[ -z "$(find /storage/.cache/fstrim.run -mtime -7 2>/dev/null)" ]'
 ExecStart=-/usr/sbin/fstrim --all --verbose --quiet-unsupported
 ExecStart=-/usr/bin/touch /storage/.cache/fstrim.run
