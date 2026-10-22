@@ -208,3 +208,7 @@ post_makeinstall_target() {
             > ${INSTALL}/etc/swap.conf
   fi
 }
+
+post_install() {
+  enable_service fstrim.timer
+}
