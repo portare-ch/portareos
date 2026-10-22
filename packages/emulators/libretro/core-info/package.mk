@@ -23,7 +23,7 @@ makeinstall_target() {
     cp -a ${PKG_BUILD}/${core}_libretro.info ${INSTALL}/usr/lib/libretro/
   done
 
-  # Disc games are CHD only (config/emulators/{neocd,psx,ps2,dreamcast}.conf, the
+  # Disc games are CHD only (config/emulators/{neocd,psx,ps2,dreamcast,saturn}.conf, the
   # README's note): lossless, smaller, and nova-push converts before it
   # copies. An .m3u names CHDs for a multi-disc game. The info files say
   # the same so RetroArch's own content filter matches the launcher's.
@@ -35,6 +35,10 @@ makeinstall_target() {
     ${INSTALL}/usr/lib/libretro/swanstation_libretro.info
   grep -q '^supported_extensions = "chd|m3u"$' \
     ${INSTALL}/usr/lib/libretro/swanstation_libretro.info
+  sed -i 's/^supported_extensions = "cue|chd|mds|ccd|iso|m3u"$/supported_extensions = "chd|m3u"/' \
+    ${INSTALL}/usr/lib/libretro/ymir_libretro.info
+  grep -q '^supported_extensions = "chd|m3u"$' \
+    ${INSTALL}/usr/lib/libretro/ymir_libretro.info
   # ARMSX2's info file ships with the core (armsx2-lr does the same there).
   # Flycast's file is left alone: the same core runs Naomi and Atomiswave
   # from .zip and .lst, so its list cannot be CHD only; dreamcast.conf is.
