@@ -167,6 +167,14 @@
 		touchscreen-size-y = <960>;
 		/delete-property/ touchscreen-inverted-y;
 		/delete-property/ no-regmap-bulk-read;
+		/*
+		 * The RP6 node's ts_p states are GPIO 24/25, the reference
+		 * board's touch pins and unused here; the Nova's reset and
+		 * interrupt are 14 and 15, which the ts_s states configure the
+		 * way Android's ts_active1/ts_suspend1 do.
+		 */
+		pinctrl-0 = <&ts_s_rst_default &ts_s_int_default>;
+		pinctrl-1 = <&ts_s_rst_sleep &ts_s_int_sleep>;
 	};
 };
 
