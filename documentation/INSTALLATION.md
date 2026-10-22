@@ -55,9 +55,9 @@ connect with `ssh root@<address>` using that password.
 
 **Use CHD for disc games. Cartridge games keep their native ROM formats**,
 such as `.sfc`, `.nes`, `.gba` and `.z64`, or supported cartridge archives.
-PlayStation, PlayStation 2, Dreamcast and Neo Geo CD accept only `.chd`
-images. The first three also accept `.m3u` playlists naming CHDs for
-multi-disc games. Copying an ISO, CUE/BIN or GDI directly into those folders
+PlayStation, PlayStation 2, Dreamcast, Saturn and Neo Geo CD accept only
+`.chd` images. All but Neo Geo CD also accept `.m3u` playlists naming CHDs
+for multi-disc games. Copying an ISO, CUE/BIN or GDI directly into those folders
 will not make it appear in the launcher.
 
 CHD compresses disc data losslessly and saves card space. Converting an

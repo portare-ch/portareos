@@ -65,7 +65,7 @@ Details: [audio latency](AUDIO_LATENCY.md),
 ## Games and everyday use
 
 * One selected emulator per system, with device-specific defaults.
-* CHD disc-library format; PlayStation, PS2, Dreamcast and Neo Geo CD enforce CHD-only images. Cartridge games keep their native ROM formats.
+* CHD disc-library format; PlayStation, PS2, Dreamcast, Saturn and Neo Geo CD enforce CHD-only images. Cartridge games keep their native ROM formats.
 * PortareOS tools / nova-push converts and verifies disc images during transfer over SSH.
 * Neo Geo CD tuned for full-screen 4:3, scanlines and one preemptive frame enabled by default.
 * PlayStation preemptive frames available as an option, off by default; CHDs are pre-cached in RAM.

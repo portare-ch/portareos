@@ -8,8 +8,8 @@ is shown. Required BIOS files go under `/storage/roms/bios/` in the layout
 the emulator expects.
 
 **Use CHD for disc games; cartridge games keep their ROM formats.**
-PlayStation, PlayStation 2, Dreamcast and Neo Geo CD enforce CHD-only
-images. PlayStation, PS2 and Dreamcast also accept `.m3u` playlists naming
+PlayStation, PlayStation 2, Dreamcast, Saturn and Neo Geo CD enforce
+CHD-only images. All but Neo Geo CD also accept `.m3u` playlists naming
 CHDs. For other CHD-capable disc systems, prepare CHDs even where the
 launcher still lists legacy formats. Arcade sets and floppy-disk images
 keep their own formats; experimental GameCube/Wii and Xbox emulators do
@@ -66,7 +66,7 @@ for setup and examples.
 |Sega|Mega Drive (megadrive)|1990|`megadrive`|.bin .gen .md .sg .smd .zip .7z|**retroarch:** genesis_plus_gx (default)<br>|
 |Sega|Mega Drive (megadrive-japan)|1988|`megadrive-japan`|.bin .gen .md .sg .smd .zip .7z|**retroarch:** genesis_plus_gx (default)<br>|
 |Sega|Naomi (naomi)|1998|`naomi`|.lst .bin .dat .zip .7z|**retroarch:** flycast (default)<br>|
-|Sega|Saturn (saturn)|1994|`saturn`|.cue .chd .ccd .toc .m3u .zip|**retroarch:** ymir (default)<br>|
+|Sega|Saturn (saturn)|1994|`saturn`|.chd .m3u|**retroarch:** ymir (default)<br>|
 |Sega|Sega 32X (sega32x)|1994|`sega32x`|.32x .smd .bin .md .zip .7z|**retroarch:** picodrive (default)<br>|
 |Sega|Sega CD (segacd)|1991|`segacd`|.chd .cue .iso .m3u|**retroarch:** genesis_plus_gx (default)<br>|
 |Sega|SG-1000 (sg-1000)|1983|`sg-1000`|.bin .sg .zip .7z|**retroarch:** genesis_plus_gx (default)<br>|
