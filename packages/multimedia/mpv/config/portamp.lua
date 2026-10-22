@@ -179,11 +179,13 @@ end
 
 local phase, shown = 0, nil
 
--- Screen off, as the launcher does it: display.blankminutes (5, 10 or 15)
+-- Screen off, as the launcher does it: display.blankminutes (1, 2, 5, 10 or 15)
 -- untouched and the panel goes dark. It is OLED, and mpv holds DRM master
 -- here, so the launcher's CRTC off is not ours to use: the backlight goes
 -- to 0, as power-handler does before a suspend. The music plays on.
 local SETTINGS = "/storage/.config/system/configs/system.cfg"
+
+local OFFERED = { [1] = true, [2] = true, [5] = true, [10] = true, [15] = true }
 
 local function blank_after()
     local m
@@ -194,7 +196,7 @@ local function blank_after()
         end
         f:close()
     end
-    return ((m == 5 or m == 10 or m == 15) and m or 5) * 60
+    return (OFFERED[m] and m or 2) * 60
 end
 
 local IDLE, last_input, dark = blank_after(), mp.get_time(), nil
