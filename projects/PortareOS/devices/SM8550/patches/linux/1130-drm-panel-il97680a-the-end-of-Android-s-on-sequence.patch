@@ -1,0 +1,26 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] drm/panel: il97680a: the end of Android's on-sequence
+
+The Nova's Android on-command (qcom,mdss_dsi_xingxing_4_5_1280_960_cmd)
+ends, after display on and its 20 ms, with page 0x22 register E1 set to
+1 and a return to page 0x00. Retroid's own driver for the panel sends
+the same three writes. Ours stopped at display on.
+---
+--- a/drivers/gpu/drm/panel/panel-ilitek-il97680a.c
++++ b/drivers/gpu/drm/panel/panel-ilitek-il97680a.c
+@@ -142,6 +142,15 @@ static int il97680a_rpnova_init_sequence(struct panel_info *pinfo)
+ 
+ 	mipi_dsi_msleep(&dsi_ctx, 20);
+ 
++	/*
++	 * Android's on-command ends with register E1 of page 0x22 set to 1,
++	 * after display on; Retroid's driver sends it too. Neither says what
++	 * it controls. Back to page 0x00 for the brightness writes.
++	 */
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xff, 0x5a, 0xa5, 0x22);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xe1, 0x01);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xff, 0x5a, 0xa5, 0x00);
++
+ 	return dsi_ctx.accum_err;
+ }
+ 
