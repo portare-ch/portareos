@@ -11,9 +11,10 @@ the emulator expects.
 PlayStation, PlayStation 2, Dreamcast, Saturn, Sega CD/Mega CD, Neo Geo CD
 and Xbox enforce CHD-only images. All but Neo Geo CD and Xbox also accept
 `.m3u` playlists naming CHDs. PSP and PSP Minis take CHD, or PBP for
-homebrew and PSN titles. Arcade sets and floppy-disk images keep their own
-formats; the experimental GameCube/Wii emulator does not accept CHD and
-retains the formats listed below.
+homebrew and PSN titles. GameCube, Triforce, Wii and WiiWare take RVZ,
+Dolphin's lossless format, which compresses these discs far better than CHD;
+`.dol` homebrew and `.wad` channels stay. Arcade sets and floppy-disk images
+keep their own formats.
 
 The extension list describes what the launcher recognizes, not a guarantee
 of compatibility or tested performance. See [known issues](../../../BUGS.md)
@@ -42,7 +43,7 @@ for setup and examples.
 |Nintendo|Game Boy Advance video (gbav)|2001|`gbav`|.gba .zip .7z|**retroarch:** mgba (default)<br>|
 |Nintendo|Game Boy Color (gbc)|1998|`gbc`|.gb .gbc .zip .7z|**retroarch:** gambatte (default)<br>|
 |Nintendo|Game Boy Color (Hacks) (gbch)|1998|`gbch`|.gb .gbc .zip .7z|**retroarch:** gambatte (default)<br>|
-|Nintendo|GameCube (gamecube)|2001|`gamecube`|.gcm .iso .gcz .ciso .wbfs .rvz .dol .m3u|**retroarch:** dolphin (default)<br>|
+|Nintendo|GameCube (gamecube)|2001|`gamecube`|.rvz .dol .m3u|**retroarch:** dolphin (default)<br>|
 |Nintendo|Nintendo 64 (n64)|1996|`n64`|.z64 .n64 .v64 .zip .7z|**retroarch:** parallel_n64 (default)<br>|
 |Nintendo|Nintendo 64 Disk Drive (n64dd)|1999|`n64dd`|.z64 .n64 .v64 .ndd .zip .7z|**retroarch:** parallel_n64 (default)<br>|
 |Nintendo|Nintendo Entertainment System (nes)|1985|`nes`|.nes .unif .unf .zip .7z|**retroarch:** mesen2 (default)<br>|
@@ -51,9 +52,9 @@ for setup and examples.
 |Nintendo|Super NES MSU-1 (snesmsu1)|2012|`snesmsu1`|.smc .fig .sfc .swc .zip .7z|**retroarch:** snes9x (default)<br>|
 |Nintendo|Super Nintendo (Hacks) (snesh)|1991|`snesh`|.smc .fig .sfc .swc .zip .7z|**retroarch:** snes9x (default)<br>|
 |Nintendo|Super Nintendo (snes)|1991|`snes`|.smc .fig .sfc .swc .zip .7z|**retroarch:** snes9x (default)<br>|
-|Nintendo|Triforce (triforce)|2002|`triforce`|.gcm .iso .gcz .ciso .wbfs .rvz .dol .m3u|**retroarch:** dolphin (default)<br>|
-|Nintendo|Wii (wii)|2006|`wii`|.gcm .iso .gcz .ciso .wbfs .rvz .dol .wad .m3u|**retroarch:** dolphin (default)<br>|
-|Nintendo|WiiWare (wiiware)|2008|`wiiware`|.gcm .iso .gcz .ciso .wbfs .rvz .dol .wad .m3u|**retroarch:** dolphin (default)<br>|
+|Nintendo|Triforce (triforce)|2002|`triforce`|.rvz .dol .m3u|**retroarch:** dolphin (default)<br>|
+|Nintendo|Wii (wii)|2006|`wii`|.rvz .dol .wad .m3u|**retroarch:** dolphin (default)<br>|
+|Nintendo|WiiWare (wiiware)|2008|`wiiware`|.rvz .dol .wad .m3u|**retroarch:** dolphin (default)<br>|
 |Sammy|Atomiswave (atomiswave)|2003|`atomiswave`|.lst .bin .dat .zip .7z|**retroarch:** flycast (default)<br>|
 |Sega|Dreamcast (dreamcast)|1998|`dreamcast`|.chd .m3u|**retroarch:** flycast (default)<br>|
 |Sega|Game Gear (gamegear)|1990|`gamegear`|.bin .gg .zip .7z|**retroarch:** genesis_plus_gx (default)<br>|
