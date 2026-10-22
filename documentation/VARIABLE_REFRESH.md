@@ -904,6 +904,34 @@ So a timing check here ends at the DPU. What the panel shows has to be
 watched, and the measurements above describe the link: on the wide mode the
 panel's own scan sat between them and the eye.
 
+## Mesa's commit lead
+
+Mesa commits a timed VRR present ahead of its target, by a fixed
+millisecond upstream, and reports the frame as shown no earlier than the
+target. On the 142-line back porch a commit took 1.2 ms to reach the panel,
+so frames landed a median 0.27 ms after their target. On the 998-line
+timing (1112) it takes 0.32 ms, and from then on frames were shown a median
+0.6 ms before their target, which `VK_GOOGLE_display_timing` rules out,
+while Mesa reported them as on time: `tools/display-check` failed
+"every actualPresentTime is its vblank time" on every VRR run, with
+`actualPresentTime` at the target less 1 us. RetroArch's game path times
+frames from its own clock (`0018`), so its pacing did not change.
+
+`mesa-010` measures the lead instead: the shortest time from commit to
+page flip over the last 256 commits, at most the millisecond. present-probe,
+60 s per rate, every 600th frame 4 ms late:
+
+| Rate | Shown before the target, fixed lead | Measured lead | After the target, median |
+|---|---|---|---|
+| 50 Hz | 2944 of 3076 | 0 of 3075 | 0.17 ms |
+| 30 Hz | 1352 of 1846 | 0 of 1846 | 0.23 ms |
+| 59.826 Hz | | 3 of 3681, at most 14 us | 0.20 ms |
+
+Refresh interval error is unchanged. The records still off are the first
+few after a mode set, before anything has been measured. At 60.099 Hz the
+panel runs at its fastest refresh, every frame waits for the next one, and
+nothing is early either way.
+
 ## Do not
 
 Do not write the DPU's timing registers from userspace. Writing

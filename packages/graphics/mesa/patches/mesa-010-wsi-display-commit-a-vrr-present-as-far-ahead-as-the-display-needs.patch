@@ -1,0 +1,142 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] wsi/display: commit a VRR present as far ahead as the display needs
+
+On VRR, _wsi_display_queue_next commits a timed present a millisecond
+before its target, for the time a page flip takes to reach the display,
+and reports it as shown no earlier than the target (minimum_ns). A
+variable refresh starts when the commit lands, so on a display that
+needs less the frame is shown before its target, which
+VK_GOOGLE_display_timing's desiredPresentTime rules out, and the report
+says it was on time.
+
+Measure the delay instead. Keep, per connector, how long each of the
+last 256 commits took from the commit to its page flip timestamp while
+VRR was on, and commit a timed VRR present the shortest of them ahead of
+its target, at most the millisecond as before. A commit that met a
+refresh still in progress took longer; the shortest is one the display
+was waiting for. The samples restart at a mode set. 256 commits are
+4 to 8 seconds; with 32, a brief dip in interrupt latency set the lead
+and frames came up to 0.16 ms early.
+
+Measured on SM8550 (Retroid Pocket Nova), VRR, present-probe 60 s per
+rate, every 600th frame 4 ms late. A commit reaches the panel 0.32 ms
+after it is made (median), and frames were shown a median 0.61 ms
+before their target: 2944 of 3076 at 50 Hz, 1352 of 1846 at 30 Hz. With
+the measured lead, 0 of 3075 at 50 Hz, 0 of 1846 at 30 Hz and 3 of 3681
+at 59.826 Hz, by at most 14 us; shown a median 0.17 to 0.23 ms after
+the target, refresh interval error unchanged.
+
+Signed-off-by: PortareOS <hello@portare.org>
+---
+--- a/src/vulkan/wsi/wsi_common_display.c
++++ b/src/vulkan/wsi/wsi_common_display.c
+@@ -171,6 +171,9 @@
+    uint16_t                     physical_height_cm;
+ } wsi_display_connector_metadata;
+ 
++/* Commits remembered per connector for the VRR commit lead. */
++#define VRR_LATENCY_SAMPLES 256
++
+ typedef struct wsi_display_connector {
+    struct list_head             list;
+    struct wsi_display           *wsi;
+@@ -205,6 +208,12 @@
+    bool                         has_vblank;
+    uint64_t                     last_frame;
+    uint64_t                     last_nsec;
++   /* With VRR on, how long each of the last VRR_LATENCY_SAMPLES commits
++    * took to reach the display: commit to page flip timestamp.
++    */
++   uint64_t                     vrr_latency[VRR_LATENCY_SAMPLES];
++   unsigned                     vrr_latency_count;
++   unsigned                     vrr_latency_next;
+ } wsi_display_connector;
+ 
+ struct wsi_display {
+@@ -528,6 +537,7 @@
+    struct wsi_display_fence        *fence;
+    uint64_t                        minimum_ns;
+    uint64_t                        queued_ns;
++   uint64_t                        commit_ns;
+ };
+ 
+ struct wsi_display_swapchain {
+@@ -1839,6 +1849,7 @@
+    image->state = WSI_IMAGE_IDLE;
+    image->fence = NULL;
+    image->minimum_ns = 0;
++   image->commit_ns = 0;
+    image->fb_id = 0;
+ 
+    uint64_t *fb_modifiers = NULL;
+@@ -2088,6 +2099,15 @@
+ 
+    uint64_t nsec = 1000000000ull * sec + 1000ull * usec;
+ 
++   if (nsec > image->commit_ns && image->commit_ns &&
++       connector->vrr_enabled == VRR_TRISTATE_ENABLED) {
++      connector->vrr_latency[connector->vrr_latency_next] = nsec - image->commit_ns;
++      connector->vrr_latency_next = (connector->vrr_latency_next + 1) % VRR_LATENCY_SAMPLES;
++      if (connector->vrr_latency_count < VRR_LATENCY_SAMPLES)
++         connector->vrr_latency_count++;
++   }
++   image->commit_ns = 0;
++
+    /* Pageflip event with invalid frame and timestamp received? */
+    if (nsec == 0 && frame == 0) {
+       /* This happens on amdgpu driven AMD gpu's on the first (full modesetting) atomic commit
+@@ -2646,6 +2666,7 @@
+ 
+       connector->current_mode = display_mode;
+       connector->current_drm_mode = *drm_mode;
++      connector->vrr_latency_count = 0;
+    }
+ 
+ bail_connector:
+@@ -3043,6 +3064,22 @@
+       (void) !write(wsi->trace_fd, line, MIN2((size_t)n, sizeof(line) - 1));
+ }
+ 
++/* How far ahead of its target to commit a VRR present: the shortest time a
++ * commit took to reach the display over the last VRR_LATENCY_SAMPLES, so a
++ * frame is not shown before its target, and at most the millisecond allowed
++ * for any driver. A commit that met a refresh still in progress took longer;
++ * the shortest is one the display was waiting for.
++ */
++static int64_t
++wsi_display_vrr_lead_ns(const wsi_display_connector *connector)
++{
++   uint64_t lead = 1000 * 1000;
++
++   for (unsigned i = 0; i < connector->vrr_latency_count; i++)
++      lead = MIN2(lead, connector->vrr_latency[i]);
++   return (int64_t)lead;
++}
++
+ static int
+ drm_atomic_commit(wsi_display_connector *connector, struct wsi_display_image *image, bool test_only)
+ {
+@@ -3357,8 +3394,13 @@
+ 
+             /* Account for some minimum delay in submitting a page flip until it's processed and sleep jitter.
+              * We will compensate for the difference if there is any, so that we don't report completion
+-             * times in the past. */
+-            target_ns -= 1 * 1000 * 1000;
++             * times in the past.
++             *
++             * On VRR that delay is measured instead: a refresh starts when the commit lands, so a fixed
++             * millisecond showed the frame up to that much before its target on a display that needs
++             * less, and minimum_ns reported it as on time.
++             */
++            target_ns -= is_vrr ? wsi_display_vrr_lead_ns(connector) : 1 * 1000 * 1000;
+ 
+             /* Sleeping here sleeps in the presenting thread, and with wait_mutex held, which also
+              * keeps the wait thread from handling flip events. On VRR, hold the image instead and
+@@ -3397,6 +3439,7 @@
+       if (!connector->active && !image->minimum_ns)
+          image->minimum_ns = os_time_get_nano();
+ 
++      image->commit_ns = os_time_get_nano();
+       int ret = drm_atomic_commit(connector, image, false);
+       if (ret == 0) {
+          image->state = WSI_IMAGE_FLIPPING;
