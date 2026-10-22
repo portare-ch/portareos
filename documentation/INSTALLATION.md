@@ -55,18 +55,17 @@ connect with `ssh root@<address>` using that password.
 
 **Use CHD for disc games. Cartridge games keep their native ROM formats**,
 such as `.sfc`, `.nes`, `.gba` and `.z64`, or supported cartridge archives.
-PlayStation, PlayStation 2, Dreamcast, Saturn, Sega CD/Mega CD and Neo Geo
-CD accept only `.chd` images. All but Neo Geo CD also accept `.m3u`
-playlists naming CHDs for multi-disc games. PSP and PSP Minis take `.chd`,
+PlayStation, PlayStation 2, Dreamcast, Saturn, Sega CD/Mega CD, Neo Geo CD
+and Xbox accept only `.chd` images. All but Neo Geo CD and Xbox also accept
+`.m3u` playlists naming CHDs for multi-disc games. PSP and PSP Minis take `.chd`,
 or `.pbp` for homebrew and PSN titles. Copying an ISO, CSO, CUE/BIN or GDI
 directly into those folders will not make it appear in the launcher.
 
 CHD compresses disc data losslessly and saves card space. Converting an
 already lossy rip does not restore the original disc's quality. Cartridge,
-arcade and floppy-disk games use their system's formats. Experimental
-GameCube/Wii and Xbox paths also retain emulator-specific formats because
-their emulators do not accept CHD; consult the table below before preparing
-those games.
+arcade and floppy-disk games use their system's formats. The experimental
+GameCube/Wii path also retains Dolphin's formats because Dolphin does not
+accept CHD; consult the table below before preparing those games.
 
 ### Recommended: PortareOS tools and nova-push
 
