@@ -97,6 +97,24 @@
 	};
 };
 
+/*
+ * The built-in microphone, on Android's handset-mic path: WCD DMIC7 on
+ * MIC BIAS4, through SoundWire input 10 to TX DEC0. The DMIC4-7 port is
+ * the TX master's last (patch 1135) and SWR_MIC10 is misrouted upstream
+ * (1136).
+ */
+&{/sound} {
+	widgets = "Microphone", "Internal Mic";
+	audio-routing =
+			"IN1_HPHL", "HPHL_OUT",
+			"IN2_HPHR", "HPHR_OUT",
+			"AMIC2", "MIC BIAS2",
+			"DMIC7", "Internal Mic",
+			"DMIC7", "MIC BIAS4",
+			"TX SWR_INPUT1", "ADC2_OUTPUT",
+			"TX SWR_INPUT10", "DMIC7_OUTPUT";
+};
+
 &remoteproc_adsp {
 	firmware-name = "qcom/sm8550/retroidpocket/rpnova/adsp.mbn",
 			"qcom/sm8550/retroidpocket/rpnova/adsp_dtb.mbn";
