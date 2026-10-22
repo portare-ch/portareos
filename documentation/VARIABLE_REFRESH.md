@@ -904,6 +904,40 @@ So a timing check here ends at the DPU. What the panel shows has to be
 watched, and the measurements above describe the link: on the wide mode the
 panel's own scan sat between them and the eye.
 
+## Mesa's commit lead
+
+Mesa commits a timed VRR present ahead of its target, by a fixed
+millisecond upstream, and reports the frame as shown no earlier than the
+target. On the 142-line back porch a commit took 1.2 ms to reach the panel,
+so frames landed a median 0.27 ms after their target. On the 998-line
+timing (1112) it takes 0.32 ms, and from then on frames were shown a median
+0.6 ms before their target, which `VK_GOOGLE_display_timing` rules out,
+while Mesa reported them as on time: `tools/display-check` failed
+"every actualPresentTime is its vblank time" on every VRR run, with
+`actualPresentTime` at the target less 1 us. RetroArch's game path times
+frames from its own clock (`0018`), so its pacing did not change.
+
+`mesa-010` measures the lead instead: the shortest time from commit to
+page flip since the mode was set, at most the millisecond. It is kept for
+the mode, not a recent window. Content at the panel's fastest refresh
+(SNES, 60.099 Hz) only ever waits for the next refresh; with a window of
+256 commits the lead grew with those waits once the idle commits of the
+game's start had left it, and Super Mario World's frames moved to another
+refresh, a refresh late for the 2 s before.
+
+| Run | Shown before the target, fixed lead | Measured lead | After the target, median |
+|---|---|---|---|
+| present-probe 50 Hz, 60 s | 2944 of 3076 | 0 of 3075 | 0.16 ms |
+| present-probe 30 Hz, 60 s | 1352 of 1846 | 0 of 1846 | 0.29 ms |
+| Tekken 3, 59.826 Hz, 130 s | 7066 of 7513 | 0 of 7536 | 0.27 ms |
+| Super Mario World, 60.099 Hz, 130 s | 0 of 7592 | 0 of 7601 | 1.21 ms |
+
+present-probe ran with every 600th frame 4 ms late. Super Mario World was
+never early and is unchanged; where its frames land within a refresh
+depends on the panel's phase against the game's clock. Tekken 3's refresh
+interval error went from 0.250 to 0.074 ms at p99. The records still off
+are the first few after a mode set, before anything has been measured.
+
 ## Do not
 
 Do not write the DPU's timing registers from userspace. Writing
