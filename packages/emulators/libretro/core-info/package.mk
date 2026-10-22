@@ -49,6 +49,14 @@ makeinstall_target() {
   # from .zip and .lst, so its list cannot be CHD only; dreamcast.conf is.
   # Genesis Plus GX's likewise: it runs the cartridge systems too, and
   # segacd.conf and megacd.conf carry the rule.
+  # GameCube and Wii discs are RVZ, Dolphin's lossless format, rather than
+  # CHD: it regenerates the discs' pseudo-random padding and keeps Wii data
+  # decrypted, which CHD cannot compress. .dol homebrew and .wad channels
+  # have no disc; Dolphin's FIFO logs (.dff) and .tgc go.
+  sed -i 's/^supported_extensions = "gcm|iso|wbfs|ciso|gcz|elf|dol|dff|tgc|wad|rvz|m3u|wia"$/supported_extensions = "rvz|dol|wad|m3u"/' \
+    ${INSTALL}/usr/lib/libretro/dolphin_libretro.info
+  grep -q '^supported_extensions = "rvz|dol|wad|m3u"$' \
+    ${INSTALL}/usr/lib/libretro/dolphin_libretro.info
 
   # RetroArch allows run-ahead and preemptive frames only for a core whose
   # info file says "deterministic"; SwanStation's was lowered to "basic" in

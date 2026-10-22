@@ -58,14 +58,16 @@ such as `.sfc`, `.nes`, `.gba` and `.z64`, or supported cartridge archives.
 PlayStation, PlayStation 2, Dreamcast, Saturn, Sega CD/Mega CD, Neo Geo CD
 and Xbox accept only `.chd` images. All but Neo Geo CD and Xbox also accept
 `.m3u` playlists naming CHDs for multi-disc games. PSP and PSP Minis take `.chd`,
-or `.pbp` for homebrew and PSN titles. Copying an ISO, CSO, CUE/BIN or GDI
-directly into those folders will not make it appear in the launcher.
+or `.pbp` for homebrew and PSN titles. GameCube, Triforce, Wii and WiiWare
+take `.rvz`, Dolphin's lossless format, plus `.dol` homebrew and `.wad`
+channels. Copying an ISO, CSO, CUE/BIN, GDI, GCZ or WBFS directly into those
+folders will not make it appear in the launcher.
 
 CHD compresses disc data losslessly and saves card space. Converting an
 already lossy rip does not restore the original disc's quality. Cartridge,
-arcade and floppy-disk games use their system's formats. The experimental
-GameCube/Wii path also retains Dolphin's formats because Dolphin does not
-accept CHD; consult the table below before preparing those games.
+arcade and floppy-disk games use their system's formats. GameCube and Wii
+use RVZ rather than CHD because RVZ regenerates the discs' pseudo-random
+padding and stores Wii data decrypted, which CHD cannot compress.
 
 ### Recommended: PortareOS tools and nova-push
 
