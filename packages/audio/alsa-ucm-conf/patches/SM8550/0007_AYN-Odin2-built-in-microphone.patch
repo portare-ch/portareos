@@ -1,0 +1,93 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] AYN Odin2: the Nova's built-in microphone
+
+The Nova's built-in microphone, on Android's handset-mic path: WCD
+DMIC7 through SoundWire input 10 to TX DEC0, captured on MultiMedia3
+and exposed as a mono source through SplitPCM, which needs Syntax 6 or
+newer. The device and control names follow Retroid's own UCM for the
+Nova (RetroidPocket/alsa-ucm-conf, SM8550-RetroidPocket-I2S).
+---
+--- a/ucm2/AYN/Odin2/AYN-Odin2.conf
++++ b/ucm2/AYN/Odin2/AYN-Odin2.conf
+@@ -1,7 +1,7 @@
+ # Use case configuration for AYN Odin2
+ # Author: Teguh Sobirin <teguh@sobir.in>
+ 
+-Syntax 4
++Syntax 7
+ 
+ SectionUseCase."HiFi" {
+ 	File "/AYN/Odin2/HiFi.conf"
+--- a/ucm2/AYN/Odin2/HiFi.conf
++++ b/ucm2/AYN/Odin2/HiFi.conf
+@@ -1,6 +1,23 @@
+ # Use case configuration for AYN Odin2
+ # Author: Teguh Sobirin <teguh@sobir.in>
+ 
++Include.pcm_split.File "/common/pcm/split.conf"
++
++# One TX decimator arrives on channel 0 of the 2-channel MultiMedia3
++# capture; expose it as a mono source.
++Macro [
++	{
++		SplitPCM {
++			Name "odin2_mono_in"
++			Direction Capture
++			Channels 1
++			HWChannels 2
++			HWChannelPos0 FL
++			HWChannelPos1 FR
++		}
++	}
++]
++
+ SectionVerb {
+ 	EnableSequence [
+ 		cset "name='PRIMARY_MI2S_RX Audio Mixer MultiMedia1' 1"
+@@ -48,6 +65,46 @@
+ 	}
+ }
+ 
++SectionDevice."Mic" {
++	Comment "Internal Microphone"
++
++	# WCD DMIC7 through SWR_MIC10 to DEC0, Android's handset-mic path.
++	# The SoundWire ports are set up at hw_params, so drop and reconnect
++	# the codec DMA backend to restart it with the new port.
++	EnableSequence [
++		cset "name='MultiMedia3 Mixer TX_CODEC_DMA_TX_3' 0"
++		cset "name='TX DEC0 MUX' SWR_MIC"
++		cset "name='TX_AIF1_CAP Mixer DEC0' 1"
++		cset "name='TX SMIC MUX0' SWR_MIC10"
++		cset "name='DMIC7_MIXER Switch' 1"
++		cset "name='DMIC6 Switch' 1"
++		cset "name='TX_DEC0 Volume' 84"
++		cset "name='MultiMedia3 Mixer TX_CODEC_DMA_TX_3' 1"
++	]
++
++	DisableSequence [
++		cset "name='DMIC6 Switch' 0"
++		cset "name='DMIC7_MIXER Switch' 0"
++		cset "name='TX SMIC MUX0' ZERO"
++		cset "name='TX_AIF1_CAP Mixer DEC0' 0"
++	]
++
++	Value {
++		CapturePriority 100
++		CaptureMixerElem "TX_DEC0"
++	}
++
++	Macro.pcm_split.SplitPCMDevice {
++		Name "odin2_mono_in"
++		Direction Capture
++		Device 2
++		HWChannels 2
++		Channels 1
++		Channel0 0
++		ChannelPos0 MONO
++	}
++}
++
+ #SectionDevice."Headset" {
+ #	Comment "Headphone Microphone"
+ #
