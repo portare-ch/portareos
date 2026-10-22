@@ -31,8 +31,8 @@ over Wi-Fi through the launcher, using the nightly or release channel, and
 install on restart.
 
 **Use CHD for disc games; cartridge games keep their native ROM formats.**
-PlayStation, PS2, Dreamcast, Saturn, Sega CD and Neo Geo CD enforce CHD-only
-images; PSP takes CHD, or PBP for homebrew.
+PlayStation, PS2, Dreamcast, Saturn, Sega CD, Neo Geo CD and Xbox enforce
+CHD-only images; PSP takes CHD, or PBP for homebrew.
 Use **[PortareOS tools / nova-push](https://github.com/portare-ch/portareos_tools)**
 to convert and verify CUE, GDI or ISO images while transferring them over
 SSH. It also copies existing CHDs and cartridge ROMs. See the installation
@@ -77,7 +77,7 @@ by game. Status notes below cover specific tests, not every included system.
 | Saturn | Ymir | — |
 | PlayStation 2 | [ARMSX2 (libretro)](documentation/emulators/ARMSX2.md) | 🚧 Playable; optimization ongoing ([#477](https://github.com/portare-ch/portareos/issues/477)) |
 | PSP | PPSSPP | — |
-| Xbox | xemu | — |
+| Xbox | xemu | CHD through xemu's open CHD driver (patch 003); not run on the Nova |
 | Point-and-click | ScummVM | — |
 | PC (x86 through FEX) | Steam on gamescope | ✅ Tested 2026-10-05; details below |
 | Movies, music | mpv, PORTAMP | — |

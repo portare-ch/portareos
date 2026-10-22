@@ -8,12 +8,12 @@ is shown. Required BIOS files go under `/storage/roms/bios/` in the layout
 the emulator expects.
 
 **Use CHD for disc games; cartridge games keep their ROM formats.**
-PlayStation, PlayStation 2, Dreamcast, Saturn, Sega CD/Mega CD and Neo Geo
-CD enforce CHD-only images. All but Neo Geo CD also accept `.m3u` playlists
-naming CHDs. PSP and PSP Minis take CHD, or PBP for homebrew and PSN
-titles. Arcade sets and floppy-disk images
-keep their own formats; experimental GameCube/Wii and Xbox emulators do
-not accept CHD and retain the formats listed below.
+PlayStation, PlayStation 2, Dreamcast, Saturn, Sega CD/Mega CD, Neo Geo CD
+and Xbox enforce CHD-only images. All but Neo Geo CD and Xbox also accept
+`.m3u` playlists naming CHDs. PSP and PSP Minis take CHD, or PBP for
+homebrew and PSN titles. Arcade sets and floppy-disk images keep their own
+formats; the experimental GameCube/Wii emulator does not accept CHD and
+retains the formats listed below.
 
 The extension list describes what the launcher recognizes, not a guarantee
 of compatibility or tested performance. See [known issues](../../../BUGS.md)
@@ -32,7 +32,7 @@ for setup and examples.
 |&#xf013; System|Screenshots (imageviewer)|System|`screenshots`|.jpg .jpeg .png .bmp .psd .tga .gif .hdr .pic .ppm .pgm .mkv .pdf .mp4 .avi||
 |&#xf013; System|Tools (tools)|System|`/storage/.config/modules`|.sh||
 |Arcade|Arcade (arcade)|0000|`arcade`|.zip .7z|**retroarch:** fbneo (default)<br>|
-|Microsoft|Xbox (xbox)|2001|`xbox`|.iso|**xemu:** xemu-sa (default)<br>|
+|Microsoft|Xbox (xbox)|2001|`xbox`|.chd|**xemu:** xemu-sa (default)<br>|
 |Nintendo|Famicom (famicom)|1983|`famicom`|.nes .unif .unf .zip .7z|**retroarch:** mesen2 (default)<br>|
 |Nintendo|Famicom Disk System (fds)|1986|`fds`|.fds .zip .7z|**retroarch:** mesen2 (default)<br>|
 |Nintendo|Game Boy (gb)|1989|`gb`|.gb .gbc .zip .7z|**retroarch:** gambatte (default)<br>|
