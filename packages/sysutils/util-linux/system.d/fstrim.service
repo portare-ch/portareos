@@ -1,11 +1,10 @@
 [Unit]
 Description=Discard unused blocks on all filesystems
 
-# Once a week by the marker's age, and never under a game: the first trim
-# of a 96 GB storage partition took 36 s on the Nova, which a game reading
-# its disc or PORTAMP playing should not share the UFS with.
+# Once a week by the marker's age, game or not: someone who goes from game
+# to game without lingering in the launcher would otherwise never get one.
 [Service]
 Type=oneshot
-ExecCondition=/bin/sh -c '[ ! -e /tmp/.runemu.pid ] && [ -z "$(find /storage/.cache/fstrim.run -mtime -7 2>/dev/null)" ]'
+ExecCondition=/bin/sh -c '[ -z "$(find /storage/.cache/fstrim.run -mtime -7 2>/dev/null)" ]'
 ExecStart=-/usr/sbin/fstrim --all --verbose --quiet-unsupported
 ExecStart=-/usr/bin/touch /storage/.cache/fstrim.run
