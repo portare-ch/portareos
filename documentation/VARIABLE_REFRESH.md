@@ -918,19 +918,25 @@ while Mesa reported them as on time: `tools/display-check` failed
 frames from its own clock (`0018`), so its pacing did not change.
 
 `mesa-010` measures the lead instead: the shortest time from commit to
-page flip over the last 256 commits, at most the millisecond. present-probe,
-60 s per rate, every 600th frame 4 ms late:
+page flip since the mode was set, at most the millisecond. It is kept for
+the mode, not a recent window. Content at the panel's fastest refresh
+(SNES, 60.099 Hz) only ever waits for the next refresh; with a window of
+256 commits the lead grew with those waits once the idle commits of the
+game's start had left it, and Super Mario World's frames moved to another
+refresh, a refresh late for the 2 s before.
 
-| Rate | Shown before the target, fixed lead | Measured lead | After the target, median |
+| Run | Shown before the target, fixed lead | Measured lead | After the target, median |
 |---|---|---|---|
-| 50 Hz | 2944 of 3076 | 0 of 3075 | 0.17 ms |
-| 30 Hz | 1352 of 1846 | 0 of 1846 | 0.23 ms |
-| 59.826 Hz | | 3 of 3681, at most 14 us | 0.20 ms |
+| present-probe 50 Hz, 60 s | 2944 of 3076 | 0 of 3075 | 0.16 ms |
+| present-probe 30 Hz, 60 s | 1352 of 1846 | 0 of 1846 | 0.29 ms |
+| Tekken 3, 59.826 Hz, 130 s | 7066 of 7513 | 0 of 7536 | 0.27 ms |
+| Super Mario World, 60.099 Hz, 130 s | 0 of 7592 | 0 of 7601 | 1.21 ms |
 
-Refresh interval error is unchanged. The records still off are the first
-few after a mode set, before anything has been measured. At 60.099 Hz the
-panel runs at its fastest refresh, every frame waits for the next one, and
-nothing is early either way.
+present-probe ran with every 600th frame 4 ms late. Super Mario World was
+never early and is unchanged; where its frames land within a refresh
+depends on the panel's phase against the game's clock. Tekken 3's refresh
+interval error went from 0.250 to 0.074 ms at p99. The records still off
+are the first few after a mode set, before anything has been measured.
 
 ## Do not
 
