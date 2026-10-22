@@ -1018,6 +1018,16 @@
 	status = "disabled";
 };
 
+/*
+ * The same for the crypto engine since 7.3, where CRYPTO_DEV_QCE depends
+ * on BROKEN. Its interconnect suppliers, aggre2_noc and mc_virt, never
+ * reached sync_state and kept their boot votes: EBI1 at INT_MAX in the
+ * sleep set too, so DDR and CX stopped collapsing in suspend.
+ */
+&crypto {
+	status = "disabled";
+};
+
 &iris {
 	status = "okay";
 };
