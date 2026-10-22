@@ -8,10 +8,10 @@ is shown. Required BIOS files go under `/storage/roms/bios/` in the layout
 the emulator expects.
 
 **Use CHD for disc games; cartridge games keep their ROM formats.**
-PlayStation, PlayStation 2, Dreamcast, Saturn and Neo Geo CD enforce
-CHD-only images. All but Neo Geo CD also accept `.m3u` playlists naming
-CHDs. For other CHD-capable disc systems, prepare CHDs even where the
-launcher still lists legacy formats. Arcade sets and floppy-disk images
+PlayStation, PlayStation 2, Dreamcast, Saturn, Sega CD/Mega CD and Neo Geo
+CD enforce CHD-only images. All but Neo Geo CD also accept `.m3u` playlists
+naming CHDs. PSP and PSP Minis take CHD, or PBP for homebrew and PSN
+titles. Arcade sets and floppy-disk images
 keep their own formats; experimental GameCube/Wii and Xbox emulators do
 not accept CHD and retain the formats listed below.
 
@@ -61,20 +61,20 @@ for setup and examples.
 |Sega|Genesis (genesis)|1989|`genesis`|.bin .gen .md .sg .smd .zip .7z|**retroarch:** genesis_plus_gx (default)<br>|
 |Sega|Genesis (Hacks) (genh)|1989|`genh`|.bin .gen .md .sg .smd .zip .7z|**retroarch:** genesis_plus_gx (default)<br>|
 |Sega|Master System (mastersystem)|1985|`mastersystem`|.bin .sms .zip .7z|**retroarch:** genesis_plus_gx (default)<br>|
-|Sega|Mega CD (megacd)|1991|`megacd`|.chd .cue .iso .m3u|**retroarch:** genesis_plus_gx (default)<br>|
+|Sega|Mega CD (megacd)|1991|`megacd`|.chd .m3u|**retroarch:** genesis_plus_gx (default)<br>|
 |Sega|Mega Drive (Hacks) (megadriveh)|1990|`megadriveh`|.bin .gen .md .sg .smd .zip .7z|**retroarch:** genesis_plus_gx (default)<br>|
 |Sega|Mega Drive (megadrive)|1990|`megadrive`|.bin .gen .md .sg .smd .zip .7z|**retroarch:** genesis_plus_gx (default)<br>|
 |Sega|Mega Drive (megadrive-japan)|1988|`megadrive-japan`|.bin .gen .md .sg .smd .zip .7z|**retroarch:** genesis_plus_gx (default)<br>|
 |Sega|Naomi (naomi)|1998|`naomi`|.lst .bin .dat .zip .7z|**retroarch:** flycast (default)<br>|
 |Sega|Saturn (saturn)|1994|`saturn`|.chd .m3u|**retroarch:** ymir (default)<br>|
 |Sega|Sega 32X (sega32x)|1994|`sega32x`|.32x .smd .bin .md .zip .7z|**retroarch:** picodrive (default)<br>|
-|Sega|Sega CD (segacd)|1991|`segacd`|.chd .cue .iso .m3u|**retroarch:** genesis_plus_gx (default)<br>|
+|Sega|Sega CD (segacd)|1991|`segacd`|.chd .m3u|**retroarch:** genesis_plus_gx (default)<br>|
 |Sega|SG-1000 (sg-1000)|1983|`sg-1000`|.bin .sg .zip .7z|**retroarch:** genesis_plus_gx (default)<br>|
 |SNK|Neo Geo (neogeo)|1990|`neogeo`|.7z .zip .neo|**retroarch:** fbneo (default)<br>|
 |SNK|Neo Geo CD (neocd)|1994|`neocd`|.chd|**retroarch:** neocd (default)<br>|
 |Sony|PlayStation (psx)|1994|`psx`|.chd .m3u|**retroarch:** swanstation (default)<br>|
 |Sony|PlayStation 2 (ps2)|2000|`ps2`|.chd .m3u|**retroarch:** armsx2 (default)<br>|
-|Sony|PlayStation Portable (psp)|2004|`psp`|.iso .cso .pbp .chd|**retroarch:** ppsspp (default)<br>|
-|Sony|PSP Minis (pspminis)|2004|`pspminis`|.iso .cso .pbp .chd|**retroarch:** ppsspp (default)<br>|
+|Sony|PlayStation Portable (psp)|2004|`psp`|.chd .pbp|**retroarch:** ppsspp (default)<br>|
+|Sony|PSP Minis (pspminis)|2004|`pspminis`|.chd .pbp|**retroarch:** ppsspp (default)<br>|
 |Valve|Steam (steam)|System|`/storage/.local/share/applications`|.desktop|**steam:** steam (default)<br>|
 |Various|ScummVM (scummvm)|2001|`scummvm`|.scummvm .svm|**retroarch:** scummvm (default)<br>|

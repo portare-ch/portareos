@@ -23,9 +23,9 @@ makeinstall_target() {
     cp -a ${PKG_BUILD}/${core}_libretro.info ${INSTALL}/usr/lib/libretro/
   done
 
-  # Disc games are CHD only (config/emulators/{neocd,psx,ps2,dreamcast,saturn}.conf, the
-  # README's note): lossless, smaller, and nova-push converts before it
-  # copies. An .m3u names CHDs for a multi-disc game. The info files say
+  # Disc games are CHD only (config/emulators/{neocd,psx,ps2,dreamcast,
+  # saturn,segacd,megacd}.conf, the README's note): lossless, smaller, and
+  # nova-push converts before it copies. An .m3u names CHDs for a multi-disc game. The info files say
   # the same so RetroArch's own content filter matches the launcher's.
   sed -i 's/^supported_extensions = "cue|chd"$/supported_extensions = "chd"/' \
     ${INSTALL}/usr/lib/libretro/neocd_libretro.info
@@ -39,9 +39,16 @@ makeinstall_target() {
     ${INSTALL}/usr/lib/libretro/ymir_libretro.info
   grep -q '^supported_extensions = "chd|m3u"$' \
     ${INSTALL}/usr/lib/libretro/ymir_libretro.info
+  # PSP is CHD, or PBP for homebrew and PSN titles, which have no disc.
+  sed -i 's/^supported_extensions = "elf|iso|cso|prx|pbp|chd"$/supported_extensions = "chd|pbp"/' \
+    ${INSTALL}/usr/lib/libretro/ppsspp_libretro.info
+  grep -q '^supported_extensions = "chd|pbp"$' \
+    ${INSTALL}/usr/lib/libretro/ppsspp_libretro.info
   # ARMSX2's info file ships with the core (armsx2-lr does the same there).
   # Flycast's file is left alone: the same core runs Naomi and Atomiswave
   # from .zip and .lst, so its list cannot be CHD only; dreamcast.conf is.
+  # Genesis Plus GX's likewise: it runs the cartridge systems too, and
+  # segacd.conf and megacd.conf carry the rule.
 
   # RetroArch allows run-ahead and preemptive frames only for a core whose
   # info file says "deterministic"; SwanStation's was lowered to "basic" in
