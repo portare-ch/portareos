@@ -2,7 +2,7 @@
 # Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="parallel-n64-lr"
-PKG_VERSION="6f233392445dcef4188a321d4ba65a776f0e1672"
+PKG_VERSION="a467ddaf904c8f8ddc6f6b889a876091725ccd91"
 PKG_LICENSE="GPL-2.0-or-later"
 PKG_SITE="https://github.com/libretro/parallel-n64"
 PKG_URL="${PKG_SITE}.git"
