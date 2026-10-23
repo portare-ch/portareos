@@ -1,6 +1,12 @@
-- Copy the portareos_abl folder from the SD card to the root of Android Internal Storage
-- Execute as root the backup_abl.sh script from the Internal Storage to backup your current ABL
-- After backup, execute as root the flash_abl.sh script to flash the new ABL
-- Reboot your device holding Vol - key to enter fastboot menu
-- Select "Change boot mode" option using Vol -/+ key, and hit Power button
-- Hit Power button to start
+Installing Portare BIOS from Android
+
+- Copy the portareos_abl folder from the SD card to the root of Android's
+  internal storage.
+- As root, run backup_abl.sh from there. It saves your current bootloader
+  as abl_a.img and abl_b.img in the same folder.
+- Then, as root, run flash_abl.sh to install Portare BIOS.
+- Restart. PortareOS starts first, from internal storage if it's installed
+  there, otherwise from the SD card.
+- To open Portare BIOS, hold Volume Down while powering on. Boot starts any
+  system once; Boot order sets which one starts first.
+- To go back, run restore_backup_abl.sh as root.
