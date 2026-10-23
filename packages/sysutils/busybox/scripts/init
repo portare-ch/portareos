@@ -123,8 +123,8 @@ disk_of() {
 }
 
 # A card written from the image and an install made by installtointernal
-# carry the same labels, and the bootloader gives no hint which one it loaded
-# the kernel from (the ABL adds nothing to the cmdline), so mount's own
+# carry the same labels, and Qualcomm's ABL gives no hint which one it loaded
+# the kernel from (Portare BIOS does, see resolve_bootpart), so mount's own
 # first-match resolution picks whichever enumerated first. Resolve LABEL=
 # here instead: the boot partition prefers the SD slot, so an inserted card
 # wins over the internal UFS and removing it boots the internal install; the
@@ -143,6 +143,68 @@ resolve_label() {
     esac
   done
   echo "${same:-${card:-${first}}}"
+}
+
+# The first partition labelled $1 on disk $2.
+label_on_disk() {
+  local dev
+  for dev in $(blkid | grep " LABEL=\"$1\"" | cut -d: -f1); do
+    [ "$(disk_of "${dev}")" = "$2" ] && echo "${dev}" && return 0
+  done
+  return 1
+}
+
+bootpart_fail() {
+  echo "$1" >/dev/console
+  StartProgress countdown "Power off in 10s... " 10 "NOW"
+  poweroff
+}
+
+# Portare BIOS names the partition it loaded the kernel from:
+# portare.bootpart=PARTUUID=<guid>. Then boot= and disk= labels become that
+# partition and the storage partition on its disk, once, before fsck and
+# mount see them, so the kernel, system and storage are one installation's.
+# Either half missing stops the boot rather than take the other
+# installation's. Busybox's blkid prints no PARTUUID; util-linux's does.
+resolve_bootpart() {
+  local dev= bootdisk part label i
+  [ -n "${BOOT_PARTUUID}" ] || return 0
+  if [ ! -x /usr/sbin/blkid ]; then
+    progress "no util-linux blkid for PARTUUID ${BOOT_PARTUUID}, going by labels"
+    return 0
+  fi
+  # The card can enumerate after the UFS.
+  for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+    dev="$(/usr/sbin/blkid -c /dev/null -o device -t "PARTUUID=${BOOT_PARTUUID}" 2>/dev/null | head -n 1)"
+    [ -n "${dev}" ] && break
+    usleep 1000000
+  done
+  [ -n "${dev}" ] || bootpart_fail "The partition the kernel came from (PARTUUID ${BOOT_PARTUUID}) wasn't found."
+  bootdisk="$(disk_of "${dev}")"
+  progress "booted from ${dev} on ${bootdisk}"
+
+  local was_boot="${boot}" was_disk="${disk}" fsck_disks=
+  case "${boot}" in
+    LABEL=*)
+      blkid "${dev}" | grep -q " LABEL=\"${boot#LABEL=}\"" ||
+        bootpart_fail "${dev}, where the kernel came from, isn't ${boot}."
+      boot="${dev}"
+      ;;
+  esac
+  case "${disk}" in
+    LABEL=*)
+      label="${disk%%,*}"
+      part="$(label_on_disk "${label#LABEL=}" "${bootdisk}")" ||
+        bootpart_fail "No ${label} partition on ${bootdisk}, next to ${dev}."
+      disk="${part}${disk#"${label}"}"
+      ;;
+  esac
+  for i in ${RUN_FSCK_DISKS}; do
+    [ "${i}" = "${was_boot}" ] && i="${boot}"
+    [ "${i}" = "${was_disk}" ] && i="${disk}"
+    fsck_disks="${fsck_disks} ${i}"
+  done
+  RUN_FSCK_DISKS="${fsck_disks}"
 }
 
 mount_common() {
@@ -1214,6 +1276,9 @@ for arg in $(cat /proc/cmdline); do
           ;;
       esac
       ;;
+    portare.bootpart=PARTUUID=*)
+      BOOT_PARTUUID="$(echo "${arg#*=PARTUUID=}" | tr 'A-F' 'a-f')"
+      ;;
     wol_mac=*)
       wol_mac="${arg#*=}"
       ;;
@@ -1290,6 +1355,7 @@ debug_msg "Unique identifier for this client: ${MACHINE_UID:-NOT AVAILABLE}"
 for BOOT_STEP in \
     load_modules \
     recovery_mode \
+    resolve_bootpart \
     check_disks \
     mount_flash \
     set_consolefont \
