@@ -11,8 +11,8 @@ cost is.
 
 The capture validates, three replays agree within 5 %, and every frame of
 the four minutes reaches the panel twice. Two decisions are the user's
-before this moves on: scanlines (Genesis ships none today) and the
-reference recording (the attract loop stands in until a human-played Strite
+before this moves on: none for the picture (full-screen 4:3 with
+desaturated crt-240-1x is decided) and the reference recording (the attract loop stands in until a human-played Strite
 segment exists). Nothing has been tuned yet; nothing measured so far says
 anything needs to be.
 
@@ -69,15 +69,25 @@ emulation and not for the X3's clock, the system-wide RT clamp issue
   scanned twice: 2 refreshes between 14996 of 15004 flips, the exceptions
   at launch and after the quit, plus one 3-refresh frame at 104 s in one of
   three runs.
-- Scaling as shipped: `genesis.integerscale=1`, `genesis.ratio=4/3`: 4x
-  down (896 of 960 lines), 3.74x across (1196 of 1280), a 32-row bar top
-  and bottom.
-- Scanlines: none today (no `genesis.shaderset`), unlike NES, SNES, Saturn,
-  PlayStation and NeoCD. Four candidates were captured from the GPU output
-  during the Strite demo for the user to choose from: none, `portare/lines-1x`
-  (NeoCD's), `portare/crt-240-1x` (Saturn's), `crt/crt-guest-advanced`
-  (NES/SNES's). Main-thread cost 10.2 / 10.7 / 11.2 / 12.0 ticks/s; the GPU
-  stays at its 401 MHz floor for all four.
+- Full-screen 4:3, decided 2026-10-19 as for NeoCD: `genesis.integerscale=0`,
+  ratio 4/3, so 320x224 fills 1280x960 (4x across, 4.29x down; the 256-wide
+  mode 5x across). Integer 4x (1196x896 with a 32-row bar top and bottom)
+  was what shipped before, and the baseline below ran on it.
+- Scanlines: `portare/crt-240-1x-desaturated.slangp`: Saturn's crt-240-1x
+  (crt-lines with the beam, a light aperture mask and a little glow) with the
+  new `SAT` parameter at 0.90. Decided live 2026-10-19 from four candidates
+  captured from the GPU output during the Strite demo: none (what Genesis had
+  until then), `portare/lines-1x` (NeoCD's), `portare/crt-240-1x`,
+  `crt/crt-guest-advanced` (NES/SNES's). crt-240-1x "looks oversaturated",
+  crt-guest-advanced "looks better", then "crt-240-1x but slightly tone the
+  saturation down". crt-lines had no saturation control: its 1.30 boost in
+  linear light clips the bright primaries, which reads as saturation. `SAT`
+  mixes the colour with its linear luma after the boost; 1.0 (the default,
+  every other preset) is unchanged. Main-thread cost of the candidates
+  10.2 / 10.7 / 11.2 / 12.0 ticks/s on the integer-scaled picture; the GPU
+  stays at its 401 MHz floor for all. Set for `genesis`, `megadrive` and
+  `megadrive-japan`; post-update adds the key where it is absent and keeps a
+  chosen value.
 
 ## Audio
 
@@ -102,10 +112,10 @@ emulation and not for the X3's clock, the system-wide RT clamp issue
 | `genesis_plus_gx_overclock` | 100 | Guest unchanged; the game's slowdown is the reference. |
 | `genesis_plus_gx_ym2612` | mame (ym2612) | Production FM core; Nuked is the optional comparison in #691. |
 | `genesis_plus_gx_region_detect` | auto | Japan cartridge, NTSC. |
-| `genesis.integerscale` | 1 | As shipped; see Presentation. |
+| `genesis.integerscale` | 0 | Full-screen 4:3; see Presentation. |
 | `genesis.ratio` | 4/3 | As shipped. |
 | `genesis.preempt` | 0 shipped | Measured at 0 and 1: 7.7 vs 8.0 ticks/s on the main thread, the capture validates either way. |
-| `genesis.shaderset` | (none) | Decision pending; see Presentation. |
+| `genesis.shaderset` | portare/crt-240-1x-desaturated.slangp | See Presentation. The baseline below ran without it; the next round measures it. |
 
 ## Measurements
 
@@ -136,7 +146,7 @@ differed from each other only in the 112 bytes of the pointers.
 
 ## Open
 
-- Scanline preset: the user's pick from the four candidates.
+- Measure crt-240-1x-desaturated at full-screen 4:3 against the baseline (three replays): the shader's CPU and GPU cost and its latency, as NeoCD's lines were.
 - Human-played Strite reference, from a savestate at the stage start, 240 s.
 - Section 9 of #691: uclamp alternative, Nuked FM comparison, background
   interference. None started.
