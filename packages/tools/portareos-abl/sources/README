@@ -9,4 +9,6 @@ Installing Portare BIOS from Android
   there, otherwise from the SD card.
 - To open Portare BIOS, hold Volume Down while powering on. Boot starts any
   system once; Boot order sets which one starts first.
+- Install PortareOS copies PortareOS from the SD card to internal storage,
+  next to Android (Dualboot) or in its place (Replace Android).
 - To go back, run restore_backup_abl.sh as root.
