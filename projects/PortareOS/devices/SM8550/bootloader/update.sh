@@ -22,7 +22,10 @@ if [ -d "$SYSTEM_ROOT/usr/share/bootloader/portareos_abl" ]; then
   cp $SYSTEM_ROOT/usr/share/bootloader/portareos_abl/* $BOOT_ROOT/portareos_abl
 fi
 
-$SYSTEM_ROOT/usr/bin/updateabl
+# The bootloader isn't updated with the system: it may be one the user
+# chose, such as Portare BIOS, and an older ABL can't read the settings a
+# newer one moved out of devinfo. updateabl flashes the bundled ABL when
+# run by hand.
 
 ### REMOVE IN THE FUTURE ###
 # cleanup old boot files
