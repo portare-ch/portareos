@@ -215,25 +215,25 @@ The PlayStation's line is 3412.5 GPU clocks, the broadcast line. SwanStation rou
 
 | Systems (default emulator) | Native rate (Hz) | Panel mode (Hz) |
 |---|---|---|
-| gb, gbh, gbc, gbch (Gambatte) | 59.7275 | 119.455 |
-| gba, gbah, gbav (mGBA) | 59.7275 | 119.455 |
-| snes, snesh, sfc, satellaview, snesmsu1 (snes9x) | 60.0988 | 120.198 |
-| nes, famicom, fds (MesenCE) | 60.0988 | 120.198 |
+| gb, gbc (Gambatte) | 59.7275 | 119.455 |
+| gba (mGBA) | 59.7275 | 119.455 |
+| snes (snes9x) | 60.0988 | 120.198 |
+| nes (MesenCE) | 60.0988 | 120.198 |
 | psx (SwanStation) | 59.826 (480i too, see above) | 119.652 |
 | saturn (Ymir) | 59.826 (455 x 4 master clocks a line, 263 lines; the core reports it exactly with our patch) | 119.652 |
-| mastersystem, sg-1000, gamegear, ggh (Genesis Plus GX) | 59.9227 | 119.846 |
-| megadrive, megadrive-japan, megadriveh, genesis, genh (Genesis Plus GX) | 59.9227 | 119.846 |
-| segacd, megacd (Genesis Plus GX) | 59.9227 | 119.846 |
+| mastersystem, sg-1000, gamegear (Genesis Plus GX) | 59.9227 | 119.846 |
+| genesis (Genesis Plus GX) | 59.9227 | 119.846 |
+| segacd (Genesis Plus GX) | 59.9227 | 119.846 |
 | sega32x (PicoDrive) | 59.9227 (the emulator reports 60) | 119.880 |
-| n64, n64dd (ParaLLEl N64) | 59.826 in 240p, 59.94 in 480i | 119.652 |
+| n64 (ParaLLEl N64) | 59.826 in 240p, 59.94 in 480i | 119.652 |
 | neogeo (FBNeo) | 59.1856 (the emulator keeps hundredths: 59.18) | 118.360 |
 | neocd (NeoCD) | 59.5999 (the CD's 24.168 MHz crystal) | 119.200 |
 | arcade (FBNeo) | depends on the game's board (about 54–61) | 119.880 |
 | dreamcast, naomi, atomiswave (Flycast) | 59.9453 in 480i/VGA; 59.827 in 240p | 119.880 (near 2× for 480i/VGA) |
-| gamecube, triforce, wii, wiiware (Dolphin) | 59.94 | 119.880 (exactly 2×) |
+| gamecube, wii (Dolphin) | 59.94 | 119.880 (exactly 2×) |
 | ps2 (ARMSX2) | 59.94 | 119.880 (exactly 2×) |
 | xbox (hakuX) | 59.94 | 119.880 (exactly 2×) |
-| psp, pspminis (PPSSPP) | 59.94 | 119.880 (exactly 2×) |
+| psp (PPSSPP) | 59.94 | 119.880 (exactly 2×) |
 | scummvm, ports | no fixed rate | 119.880 fixed fallback |
 | steam | capped at 60 fps | 120.198 with VRR |
 | movies (mpv) | the video's frame rate (23.976, 25, 29.97 …) | 119.880; mpv syncs video to audio |
@@ -243,33 +243,33 @@ The PlayStation's line is 3412.5 GPU clocks, the broadcast line. SwanStation rou
 
 The Nova's speaker and headphone link runs at **48 kHz, 44.1 kHz or 32 kHz**. Three things had to allow that: the AudioReach topology blob, which caps the playback PCMs at 48 kHz until `extra-firmware`'s `tplg-playback-rates.py` widens it; kernel patches 1052–1055, which open the DSP ports and the machine driver's fixup to 44.1 and 32 kHz; and the I2S bit clock, which follows the stream (1054). PipeWire allows all three rates (`default.clock.allowed-rates = [ 48000 44100 32000 ]`). [AUDIO_SAMPLE_RATES.md](AUDIO_SAMPLE_RATES.md) describes the whole procedure, for carrying it to another distribution. No rate is a resampling stage in itself: the link switches to the rate of the stream that opens it.
 
-**RetroArch picks the link rate from the core's** (`audio_out_rate = "0"`, RetroArch patch 0015): the smallest of 32, 44.1 and 48 kHz that the core's rate divides into within 0.5 % (32,040 → 32,000; 22,050 → 44,100; 44,100 → 44,100), else the smallest above it so nothing is cut (32,768 → 44,100), else 48 kHz (65,536 → 48,000). The pick is made every time the audio driver initialises, so a core that changes its rate through `SET_SYSTEM_AV_INFO`, as ParaLLEl N64 does once the game has programmed its DAC, reopens the device at the new game's rate. A non-zero `audio_out_rate` in a per-core config (`config/<core>/<core>.cfg`) still overrides the pick; the shipped ones for SwanStation, Flycast, PPSSPP, NeoCD, Genesis Plus GX, PicoDrive and Ymir (all 44.1 kHz) name the rate the pick would make anyway. Snes9x uses automatic selection: 32 kHz normally, 44.1 kHz for `snesmsu1` with enhanced audio. RetroArch resamples each core's audio to that rate with its sinc resampler, and dynamic rate control keeps the stream in step with the display. So every core is resampled at least a little, even one whose rate matches the output, because rate control adjusts the ratio by up to 0.5 %. mpv plays a file at its own rate.
+**RetroArch picks the link rate from the core's** (`audio_out_rate = "0"`, RetroArch patch 0015): the smallest of 32, 44.1 and 48 kHz that the core's rate divides into within 0.5 % (32,040 → 32,000; 22,050 → 44,100; 44,100 → 44,100), else the smallest above it so nothing is cut (32,768 → 44,100), else 48 kHz (65,536 → 48,000). The pick is made every time the audio driver initialises, so a core that changes its rate through `SET_SYSTEM_AV_INFO`, as ParaLLEl N64 does once the game has programmed its DAC, reopens the device at the new game's rate. A non-zero `audio_out_rate` in a per-core config (`config/<core>/<core>.cfg`) still overrides the pick; the shipped ones for SwanStation, Flycast, PPSSPP, NeoCD, Genesis Plus GX, PicoDrive and Ymir (all 44.1 kHz) name the rate the pick would make anyway. Snes9x uses automatic selection: 32 kHz normally, 44.1 kHz for an MSU-1 game with enhanced audio. RetroArch resamples each core's audio to that rate with its sinc resampler, and dynamic rate control keeps the stream in step with the display. So every core is resampled at least a little, even one whose rate matches the output, because rate control adjusts the ratio by up to 0.5 %. mpv plays a file at its own rate.
 
 The first rate column is the console's own: the rate its sound hardware produces samples at, or "analog" where the chip's channels are mixed as analog signals and there is no sample rate to speak of. The second is what the emulator hands RetroArch, taken from its source code at the pinned commit with PortareOS's options.
 
 | Systems (default emulator) | Console's audio rate (Hz) | Emulator outputs (Hz) | Played at (Hz) |
 |---|---|---|---|
-| gb, gbh, gbc, gbch (Gambatte) | analog (the APU runs at 1,048,576) | 32,768 | 44,100 |
-| gba, gbah, gbav (mGBA) | 32,768 by default; a game can pick up to 262,144 | 65,536 | 48,000 |
-| snes, snesh, sfc, satellaview (snes9x) | 32,000 nominal (about 32,040 on real consoles) | 32,040 (the core's own) | 32,000 |
-| snesmsu1 (snes9x) | 32,000, plus the MSU-1's 44,100 | 44,100 with MSU-1 enhanced audio, the core's default | 44,100 |
-| nes, famicom, fds (MesenCE) | analog (the APU's channels are mixed as analog signals) | 32,000 (mixed at the APU clock, lowpassed and resampled; our patch) | 32,000 |
+| gb, gbc (Gambatte) | analog (the APU runs at 1,048,576) | 32,768 | 44,100 |
+| gba (mGBA) | 32,768 by default; a game can pick up to 262,144 | 65,536 | 48,000 |
+| snes (snes9x) | 32,000 nominal (about 32,040 on real consoles) | 32,040 (the core's own) | 32,000 |
+| snes, an MSU-1 game (snes9x) | 32,000, plus the MSU-1's 44,100 | 44,100 with MSU-1 enhanced audio, the core's default | 44,100 |
+| nes (MesenCE) | analog (the APU's channels are mixed as analog signals) | 32,000 (mixed at the APU clock, lowpassed and resampled; our patch) | 32,000 |
 | psx (SwanStation) | 44,100 | 44,100 | 44,100 |
 | saturn (Ymir) | 44,100 (SCSP) | 44,100 | 44,100 |
-| mastersystem, sg-1000, gamegear, ggh (Genesis Plus GX) | analog (SN76489, 223,722 per channel step) | 44,100 | 44,100 |
-| megadrive, megadrive-japan, megadriveh, genesis, genh (Genesis Plus GX) | 53,267 (YM2612), plus the SN76489 | 44,100 | 44,100 |
-| segacd, megacd (Genesis Plus GX) | as the Mega Drive, plus 32,552 (RF5C164 PCM) and 44,100 (CD audio) | 44,100 | 44,100 |
+| mastersystem, sg-1000, gamegear (Genesis Plus GX) | analog (SN76489, 223,722 per channel step) | 44,100 | 44,100 |
+| genesis (Genesis Plus GX) | 53,267 (YM2612), plus the SN76489 | 44,100 | 44,100 |
+| segacd (Genesis Plus GX) | as the Mega Drive, plus 32,552 (RF5C164 PCM) and 44,100 (CD audio) | 44,100 | 44,100 |
 | sega32x (PicoDrive) | as the Mega Drive, plus the 32X's PWM at a rate the game sets | 44,100 (`native` would give 53,267) | 44,100 |
-| n64, n64dd (ParaLLEl N64) | set by the game (commonly 22,050 to 44,100) | the game's rate, exactly, e.g. 22,037.94; 32,040 until the game sets one | the link rate picked for the game's: 32,000 for ~32 kHz games, 44,100 for ~22 kHz and 44.1 kHz ones |
+| n64 (ParaLLEl N64) | set by the game (commonly 22,050 to 44,100) | the game's rate, exactly, e.g. 22,037.94; 32,040 until the game sets one | the link rate picked for the game's: 32,000 for ~32 kHz games, 44,100 for ~22 kHz and 44.1 kHz ones |
 | neogeo (FBNeo) | 55,555 (YM2610) | about 48,000 (47,990 at 59.18 fps) | 48,000 |
 | neocd (NeoCD) | 55,555 (YM2610), plus 44,100 (CD audio) | 44,100 | 44,100 |
 | arcade (FBNeo) | depends on the board | about 48,000, depending on the game's frame rate | 48,000 |
 | dreamcast, naomi, atomiswave (Flycast) | 44,100 (AICA) | 44,100 | 44,100 |
-| gamecube, triforce (Dolphin) | 32,029 (DSP), 48,000 (streamed disc audio) | 48,000 (asks RetroArch for its rate) | 48,000 |
-| wii, wiiware (Dolphin) | 32,000 (DSP), 48,000 (streamed disc audio) | 48,000 (asks RetroArch for its rate) | 48,000 |
+| gamecube (Dolphin) | 32,029 (DSP), 48,000 (streamed disc audio) | 48,000 (asks RetroArch for its rate) | 48,000 |
+| wii (Dolphin) | 32,000 (DSP), 48,000 (streamed disc audio) | 48,000 (asks RetroArch for its rate) | 48,000 |
 | ps2 (ARMSX2) | 48,000 (SPU2) | 48,000 (44,100 in PS1 mode) | 48,000 |
 | xbox (hakuX) | 48,000 (AC'97) | 48,000 | 48,000 |
-| psp, pspminis (PPSSPP) | 44,100 | 44,100 | 44,100 |
+| psp (PPSSPP) | 44,100 | 44,100 | 44,100 |
 | movies, music (mpv, PORTAMP) | the file's rate | the file's rate | the file's rate |
 
 In short:

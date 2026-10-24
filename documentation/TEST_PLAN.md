@@ -253,7 +253,7 @@ The link runs at the rate RetroArch opened, the `at N Hz` of the
 |---|---|
 | psx, saturn, dreamcast, psp, neocd, genesis, mastersystem, gamegear, segacd, sega32x | 44100 (per-core) |
 | snes | 32000 (picked) |
-| snesmsu1 with enhanced audio, nes | 44100, 32000 respectively (picked) |
+| snes with an MSU-1 game's enhanced audio, nes | 44100, 32000 respectively (picked) |
 | gb, gbc (32768 Hz) | 44100 (picked) |
 | gba (65536 Hz) | 48000 (picked) |
 | n64, scummvm and the rest | picked from the core's rate |

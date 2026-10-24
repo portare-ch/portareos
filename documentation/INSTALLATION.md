@@ -112,14 +112,19 @@ connect with `ssh root@<address>` using that password.
 
 **Use CHD for disc games. Cartridge games keep their native ROM formats**,
 such as `.sfc`, `.nes`, `.gba` and `.z64`, or supported cartridge archives.
-PlayStation, PlayStation 2, Dreamcast, Saturn, Sega CD/Mega CD and Neo Geo
-CD accept only `.chd` images. All but Neo Geo CD also accept `.m3u`
+PlayStation, PlayStation 2, Dreamcast, Saturn, Sega CD and Neo Geo CD
+accept only `.chd` images. All but Neo Geo CD also accept `.m3u`
 playlists naming CHDs for multi-disc games. Xbox takes XISO (`.iso`)
-images until hakuX reads CHD. PSP and PSP Minis take `.chd`,
-or `.pbp` for homebrew and PSN titles. GameCube, Triforce, Wii and WiiWare
-take `.rvz`, Dolphin's lossless format, plus `.dol` homebrew and `.wad`
-channels. Copying an ISO, CSO, CUE/BIN, GDI, GCZ or WBFS directly into the
-other disc systems' folders will not make it appear in the launcher.
+images until hakuX reads CHD. PSP takes `.chd`, or `.pbp` for homebrew,
+PSN titles and Minis. GameCube and Wii take `.rvz`, Dolphin's lossless
+format, plus `.dol` homebrew and `.wad` channels. Copying an ISO, CSO,
+CUE/BIN, GDI, GCZ or WBFS directly into the other disc systems' folders
+will not make it appear in the launcher.
+
+Each console has one folder, named for the US console: Mega Drive games
+go in `genesis`, Super Famicom ones in `snes`, Famicom and Disk System
+ones in `nes`, Mega-CD ones in `segacd`, and a hack goes in its console's
+folder.
 
 CHD compresses disc data losslessly and saves card space. Converting an
 already lossy rip does not restore the original disc's quality. Cartridge,

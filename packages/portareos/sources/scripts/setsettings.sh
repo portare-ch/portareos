@@ -61,26 +61,14 @@ declare -a HAS_CHEEVOS=(    arcade
                             cps2
                             cps3
                             dreamcast
-                            famicom
                             fbn
-                            fds
                             gamegear
                             gb
-                            gbh
                             gba
-                            gbah
-                            gbav
                             gbc
-                            gbch
-                            gbh
                             genesis
-                            genh
-                            ggh
                             intellivision
                             mastersystem
-                            megacd
-                            megadrive
-                            megadrive-japan
                             msx
                             msx2
                             n64
@@ -103,11 +91,8 @@ declare -a HAS_CHEEVOS=(    arcade
                             saturn
                             sega32x
                             segacd
-                            sfc
                             sg-1000
                             snes
-                            snesh
-                            snesmsu1
                             supergrafx
                             supervision
                             tg16
@@ -128,7 +113,6 @@ declare -a NO_REWIND=(  atomiswave
                         odyssey2
                         ps2
                         psp
-                        pspminis
                         saturn
                         sega32x
                         zxspectrum
@@ -151,7 +135,6 @@ declare -a NO_ANALOG=(  dreamcast
                         nds
                         ps2
                         psp
-                        pspminis
                         psx
                         wii
                         wonderswan
