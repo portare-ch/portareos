@@ -23,13 +23,13 @@ Where each system's native rate comes from, crystal by crystal, and where an emu
 Every mode uses the panel's own timing, 1302 × 998, and changes only the
 pixel clock (see below). The 120.0004 Hz mode preserves Android's own
 120 Hz timing. Steam and the launcher now use the fastest 120.198 Hz mode
-with VRR; ARMSX2 follows RetroArch's VRR path. mpv and hakuX use fixed
+with VRR; ARMSX2 follows RetroArch's VRR path. mpv uses fixed
 refresh. The modes are defined in the panel driver,
 `projects/PortareOS/devices/SM8550/patches/linux/0105-drm-panel-Add-Retroid-Pocket-Nova-panel.patch`.
 
 | Panel mode | Pixel clock | Off the console's rate | Used by |
 |---|---|---|---|
-| 119.88031 Hz | 155772 kHz | +1.6 ppm | preferred fixed mode; mpv, hakuX and unmatched fixed-refresh cores |
+| 119.88031 Hz | 155772 kHz | +1.6 ppm | preferred fixed mode; mpv and unmatched fixed-refresh cores |
 | 119.45473 Hz | 155219 kHz | -2.2 ppm | `gambatte`, `mgba` |
 | 120.198154 Hz | 156185 kHz | +4.4 ppm, rounded up | `snes9x`, `mesen2`; variable refresh runs on it |
 | 119.65252 Hz | 155476 kHz | +2.6 ppm | `parallel_n64`, `swanstation`, `ymir` |
