@@ -3,7 +3,7 @@
 
 PKG_NAME="hakux-lr"
 PKG_VERSION="0.2.0"
-PKG_SHA256="f0bee09751f8c092e8c73399bd018c5f11fe25fb4a3ac5a2874a616ec1c34802"
+PKG_SHA256="63a05779d49f5028dab592f69d638cf8ce3b9122e5cb0499cd4f2168403f9af1"
 PKG_ARCH="aarch64"
 PKG_LICENSE="GPL-3.0-or-later"
 PKG_SITE="https://github.com/portare-ch/hakuX"
