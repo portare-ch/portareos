@@ -23,7 +23,8 @@ trimmed out of the image, with sizes.
 |---|---|
 | `uae4arm-lr` | Unused Amiga core; Amiga and the alternative puae cores are outside the retained system list. |
 | `aethersx2-sa` | EOL PS2 appimage. armsx2 is the only PS2 emulator this fork ships. |
-| `armsx2-sa` | ARMSX2's SDL frontend. Its libretro core, `armsx2-lr`, replaced it, so PS2 runs in RetroArch. Xbox retains standalone xemu. |
+| `armsx2-sa` | ARMSX2's SDL frontend. Its libretro core, `armsx2-lr`, replaced it, so PS2 runs in RetroArch. |
+| `xemu-sa` | Replaced for the Xbox by `hakux-sa`, our Linux port of hakuX: FEX runs the CPU, its own kernel replaces the BIOS, and the NV2A draws through Vulkan, so no BIOS or hard disk image is needed. xemu was never run on the Nova; hakuX plays BLACK and Burnout 3 there. hakuX reads XISO (`.iso`) images only, so Xbox CHDs, which only xemu read, are not listed until it reads CHD. |
 | `cemu-sa` | Wii U emulator with no usable 4:3 mode on a 4:3 panel. Removed, and the wiiu system with it. |
 | `drastic-sa` | A closed-source Nintendo DS binary. |
 | `daedalusx64-sa` | A 32-bit-only N64 emulator we never built. |

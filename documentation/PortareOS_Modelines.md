@@ -3,7 +3,7 @@
 RetroArch, the launcher and Steam default to variable refresh on the Nova's
 fastest 120.198 Hz mode, within a 65–120.198 Hz range. The console rows below
 describe the **fixed-refresh fallback**, used by RetroArch when VRR is
-disabled and by mpv and xemu. Its preferred mode is 119.880 Hz, approximately twice
+disabled and by mpv and hakuX. Its preferred mode is 119.880 Hz, approximately twice
 NTSC's 59.94 Hz. [REFRESH_RATES.md](PER_DEVICE_DOCUMENTATION/SM8550/REFRESH_RATES.md)
 has the mechanism and tables; [CONSOLE_CLOCKS.md](CONSOLE_CLOCKS.md) derives
 the rates.
@@ -31,7 +31,7 @@ BFI have been removed. Current presentation is described in
 | Dreamcast, NAOMI, Atomiswave (Flycast) | 59.9453 in 480i/VGA, 59.827 in 240p | 119.880 (default) | 480i and VGA: near 2× the reported rate; 240p games: open |
 | GameCube, Wii (Dolphin) | 59.94 | 119.880 (default) | done, the default is exactly 2× |
 | PlayStation 2 (ARMSX2) | 59.94 | 119.880 (default) | done, the default is exactly 2× |
-| Xbox (xemu) | 59.94 | 119.880 (default) | done, the default is exactly 2× |
+| Xbox (hakuX) | 59.94 | 119.880 (default) | open: the default is exactly 2×, but hakuX's vblank is free-running, not paced to the panel |
 | PSP (PPSSPP) | 59.94 | 119.880 (default) | done, the default is exactly 2× |
 | ScummVM, ports | no fixed rate | 119.880 (default) | no dedicated fixed mode |
 | Steam | capped at 60 fps | 120.198 with VRR | gamescope; real-game validation on the final stack pending |

@@ -16,7 +16,7 @@ standalone Flycast investigations are in the [bug history](BUG_HISTORY.md).
 - RetroArch, the launcher and Steam use integer-multiple VRR within
   65–120.198 Hz on the built-in panel. DP Adaptive-Sync uses the sink's
   range and selected mode, with a floor of at least 65 Hz and partial device
-  coverage. Steam is capped at 60 fps; xemu and mpv use fixed refresh.
+  coverage. Steam is capped at 60 fps; hakuX and mpv use fixed refresh.
   No vsync or BFI setting is available. See [variable refresh](VARIABLE_REFRESH.md).
 - Flycast and Dolphin run as libretro cores. Standalone backend settings,
   `start_flycast.sh`, and sway experiments no longer apply.

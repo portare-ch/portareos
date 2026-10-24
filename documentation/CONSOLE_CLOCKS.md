@@ -184,7 +184,7 @@ Audio: 44100 Hz.
 
 ### Xbox
 
-The Xbox's TV encoder outputs the standard 525-line signal, 59.94 Hz interlaced or progressive. We have not traced xemu's own vblank timer in its source; the table uses the hardware figure.
+The Xbox's TV encoder outputs the standard 525-line signal, 59.94 Hz interlaced or progressive. hakuX's emulated vblank runs at the same 59.94 Hz (`FRAME_NS` in its `native/dev/nv2a.c`), free-running rather than paced to the panel.
 
 ### Arcade (FBNeo)
 

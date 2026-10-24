@@ -208,7 +208,7 @@ Record the image, monitor, USB-C adapter, mode and emulator for each run.
 - At the launcher, connect the monitor. `external-display connected` exits
   0, DP is connected and the panel connector reads disconnected. The launcher
   appears on the monitor with correct geometry.
-- Launch a RetroArch game, xemu, Steam and mpv in separate runs. Check DRM
+- Launch a RetroArch game, hakuX, Steam and mpv in separate runs. Check DRM
   ownership, controls, aspect ratio, sound on the local outputs and return
   to the launcher. No DisplayPort audio sink should appear in `wpctl status`.
 - Disconnect at the menu and confirm return to the panel. Repeat connection
