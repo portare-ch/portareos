@@ -2,7 +2,7 @@
 # Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="dolphin-lr"
-PKG_VERSION="eb68258ab5559a5c6dc8011bf9a746a0d1bab48e"
+PKG_VERSION="3aac3f052f733f8df2f1616843a4d2e14002ed11"
 PKG_LICENSE="GPL-2.0-or-later"
 PKG_DEPENDS_TARGET="toolchain libevdev libdrm ffmpeg zlib libpng lzo libusb"
 PKG_SITE="https://github.com/libretro/dolphin"
