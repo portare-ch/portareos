@@ -53,18 +53,18 @@ fi
 #
 # 960 is exactly 4x 240p and 2x 480p, so these systems integer-scale to
 # full height. The 240p and 480p ones land dead on 960 with no borders;
-# the 224-line ones (megadrive/genesis and friends, saturn in its NTSC
-# modes) land at 896 and keep a thin band top and bottom - still
-# pixel-perfect, just not edge to edge.
+# the 224-line ones (genesis, saturn in its NTSC modes) land at 896 and
+# keep a thin band top and bottom - still pixel-perfect, just not edge to
+# edge.
 #
-# Systems left alone deliberately: snes/sfc (224), neogeo (224), the
+# Systems left alone deliberately: snes (224), neogeo (224), the
 # handhelds, arcade and the home computers - none of them divide cleanly
 # into 960, so they stay on the current scaling.
 SYSTEM_CFG="/storage/.config/system/configs/system.cfg"
 NOVA_STAMP="/storage/.config/system/configs/.nova-display-defaults"
 if [ -f "${SYSTEM_CFG}" ] && [ ! -f "${NOVA_STAMP}" ]; then
-  for SYS in psx n64 nes famicom fds \
-             megadrive genesis segacd megacd sega32x mastersystem \
+  for SYS in psx n64 nes \
+             genesis segacd sega32x mastersystem \
              pcengine pcenginecd tg16 tg16cd supergrafx \
              saturn dreamcast naomi atomiswave; do
     if grep -q "^${SYS}\.integerscale=" "${SYSTEM_CFG}"; then

@@ -95,8 +95,6 @@ makeinstall_target() {
 
   add_system_dir /storage/roms/savestates
 
-  add_system_dir /storage/roms/themes
-
   start_system_doc
 
   ### Arcade
@@ -135,22 +133,6 @@ makeinstall_target() {
   esac
   add_es_system gb
 
-  ### Nintendo GameBoy Hacks
-  add_emu_core gbh retroarch gambatte true
-  case ${DEVICE} in
-    RK3399|RK3588|SM6115|SM8250|SM8550|SM8650|SM8750|S922X|AMD64)
-      ;;
-  esac
-  case ${DEVICE} in
-    H700|RK3326|RK3399|RK3576|RK3566|RK3588|SM6115|SM8250|SM8550|SM8650|SM8750|AMD64)
-      ;;
-  esac
-  case ${DEVICE} in
-    SM8550|SM8650|SM8750|AMD64)
-      ;;
-  esac
-  add_es_system gbh
-
   ### Nintendo GameBoy Advance
   add_emu_core gba retroarch mgba true
   case ${DEVICE} in
@@ -171,30 +153,6 @@ makeinstall_target() {
   esac
   add_es_system gba
 
-  ### Nintendo GameBoy Advance Hacks
-  add_emu_core gbah retroarch mgba true
-  case ${DEVICE} in
-    H700|RK3326|RK3399|RK3576|RK3566|RK3588|SM6115|SM8250|SM8550)
-      ;;
-    SM8650|SM8750|AMD64)
-      ;;
-  esac
-  case ${DEVICE} in
-    SM8550|SM8650|SM8750|AMD64)
-      ;;
-  esac
-  add_es_system gbah
-
-  ### Nintendo GameBoy Advance Video
-  add_emu_core gbav retroarch mgba true
-  case ${DEVICE} in
-    H700|RK3326|RK3399|RK3576|RK3566|RK3588|SM6115|SM8250|SM8550)
-      ;;
-    SM8650|SM8750|AMD64)
-      ;;
-  esac
-  add_es_system gbav
-
   ### Nintendo GameBoy Color
   add_emu_core gbc retroarch gambatte true
   case ${DEVICE} in
@@ -207,18 +165,6 @@ makeinstall_target() {
   esac
   add_es_system gbc
 
-  ### Nintendo GameBoy Color Hacks
-  add_emu_core gbch retroarch gambatte true
-  case ${DEVICE} in
-    H700|RK3326|RK3399|RK3576|RK3566|RK3588|SM6115|SM8250|SM8550|SM8650|SM8750|AMD64)
-      ;;
-  esac
-  case ${DEVICE} in
-    SM8550|SM8650|SM8750|AMD64)
-      ;;
-  esac
-  add_es_system gbch
-
   case ${DEVICE} in
     RK3399|RK3576|RK3566|RK3588|SM6115|SM8250|SM8550|SM8650|SM8750|S922X|AMD64)
       add_emu_core gamecube retroarch dolphin true
@@ -227,18 +173,9 @@ makeinstall_target() {
   esac
 
   case ${DEVICE} in
-    RK3399|SM6115|SM8250|SM8550|SM8650|SM8750|AMD64)
-      add_emu_core triforce retroarch dolphin true
-      add_es_system triforce
-      ;;
-  esac
-
-  case ${DEVICE} in
     RK3399|RK3576|RK3566|RK3588|SM6115|SM8250|SM8550|SM8650|SM8750|S922X|AMD64)
       add_emu_core wii retroarch dolphin true
-      add_emu_core wiiware retroarch dolphin true
       add_es_system wii
-      add_es_system wiiware
       ;;
   esac
 
@@ -254,18 +191,6 @@ makeinstall_target() {
   esac
   add_es_system gamegear
 
-  ### Sega GameGear Hacks
-  add_emu_core ggh retroarch genesis_plus_gx true
-  case ${DEVICE} in
-    H700|RK3326|RK3399|RK3576|RK3566|RK3588|SM6115|SM8250|SM8550|SM8650|SM8750|AMD64)
-      ;;
-  esac
-  case ${DEVICE} in
-    SM8550|SM8650|SM8750|AMD64)
-      ;;
-  esac
-  add_es_system ggh
-
   ## Steam & Heroic Games Launcher
   case ${DEVICE} in
     SM8250|SM8550|SM8650|SM8750)
@@ -275,18 +200,6 @@ makeinstall_target() {
       add_es_system steam
       ;;
   esac
-
-  ### Sega MegaDrive
-  add_emu_core megadrive-japan retroarch genesis_plus_gx true
-  case ${DEVICE} in
-    H700|RK3326|RK3399|RK3576|RK3566|RK3588|SM6115|SM8250|SM8550|SM8650|SM8750|AMD64)
-      ;;
-  esac
-  add_es_system megadrive-japan
-
-  ### Nintendo MSU-1
-  add_emu_core snesmsu1 retroarch snes9x true
-  add_es_system snesmsu1
 
   ### Sega Naomi
   add_emu_core naomi retroarch flycast true
@@ -305,21 +218,13 @@ makeinstall_target() {
   add_emu_core neocd retroarch neocd true
   add_es_system neocd
 
-  ### Nintendo NES, Famicom, Famicom Disk System
+  ### Nintendo NES, with the Famicom's and the Disk System's games
   add_emu_core nes retroarch mesen2 true
   add_es_system nes
-  add_emu_core famicom retroarch mesen2 true
-  add_es_system famicom
-  add_emu_core fds retroarch mesen2 true
-  add_es_system fds
 
   ### Nintendo 64
   add_emu_core n64 retroarch parallel_n64 true
   add_es_system n64
-
-  ### Nintendo 64 Disk Drive
-  add_emu_core n64dd retroarch parallel_n64 true
-  add_es_system n64dd
 
   ### Sony Playstation
   add_emu_core psx retroarch swanstation true
@@ -336,10 +241,6 @@ makeinstall_target() {
   ### Sony Playstation Portable
   add_emu_core psp retroarch ppsspp true
   add_es_system psp
-
-  ### Sony Playstation Portable Minis
-  add_emu_core pspminis retroarch ppsspp true
-  add_es_system pspminis
 
   ### ScummVM
   add_emu_core scummvm retroarch scummvm true
@@ -367,14 +268,6 @@ makeinstall_target() {
   esac
   add_es_system segacd
 
-  ### Sega Mega-CD
-  add_emu_core megacd retroarch genesis_plus_gx true
-  case ${DEVICE} in
-    SM8550|SM8650|SM8750|AMD64)
-      ;;
-  esac
-  add_es_system megacd
-
   ### Sega Genesis
   add_emu_core genesis retroarch genesis_plus_gx true
   case ${DEVICE} in
@@ -387,18 +280,6 @@ makeinstall_target() {
   esac
   add_es_system genesis
 
-  ### Sega Genesis Hacks
-  add_emu_core genh retroarch genesis_plus_gx true
-  case ${DEVICE} in
-    H700|RK3326|RK3399|RK3576|RK3566|RK3588|SM6115|SM8250|SM8550|SM8650|SM8750|AMD64)
-      ;;
-  esac
-  case ${DEVICE} in
-    SM8550|SM8650|SM8750|AMD64)
-      ;;
-  esac
-  add_es_system genh
-
   ### Sega MasterSystem
   add_emu_core mastersystem retroarch genesis_plus_gx true
   case ${DEVICE} in
@@ -410,22 +291,6 @@ makeinstall_target() {
       ;;
   esac
   add_es_system mastersystem
-
-  ### Sega MegaDrive
-  add_emu_core megadrive retroarch genesis_plus_gx true
-  case ${DEVICE} in
-    H700|RK3326|RK3399|RK3576|RK3566|RK3588|SM6115|SM8250|SM8550|SM8650|SM8750|AMD64)
-      ;;
-  esac
-  add_es_system megadrive
-
-  ### Sega MegaDrive Hacks
-  add_emu_core megadriveh retroarch genesis_plus_gx true
-  case ${DEVICE} in
-    H700|RK3326|RK3399|RK3576|RK3566|RK3588|SM6115|SM8250|SM8550|SM8650|SM8750|AMD64)
-      ;;
-  esac
-  add_es_system megadriveh
 
   ### Sega SG-1000
   add_emu_core sg-1000 retroarch genesis_plus_gx true
@@ -447,19 +312,6 @@ makeinstall_target() {
   ### Nintendo SNES
   add_emu_core snes retroarch snes9x true
   add_es_system snes
-
-  ### Nintendo SNES Hacks
-  add_emu_core snesh retroarch snes9x true
-  add_es_system snesh
-
-  ### Nintendo Super Famicom
-  add_emu_core sfc retroarch snes9x true
-  add_es_system sfc
-
-  ### Nintendo Stellaview
-  add_emu_core satellaview retroarch snes9x true
-  add_es_system satellaview
-
 
   ### Movies. One player, mpv, on the panel's 119.88 Hz mode - see
   ### start_mpv.sh. RetroArch's built-in ffmpeg player used to cover this.

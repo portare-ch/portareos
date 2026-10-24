@@ -420,10 +420,10 @@ case ${EMULATOR} in
       "setup")
         RUNTHIS='${RUN_SHELL} "${ROMNAME}"'
       ;;
-      "gamecube"|"triforce")
+      "gamecube")
         RUNTHIS='${RUN_SHELL} /usr/bin/start_dolphin_gc.sh "${ROMNAME}" "${PLATFORM}" "${CORE}"'
       ;;
-      "wii"|"wiiware")
+      "wii")
         RUNTHIS='${RUN_SHELL} /usr/bin/start_dolphin_wii.sh "${ROMNAME}" "${PLATFORM}" "${CORE}"'
       ;;
       "shell")
