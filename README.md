@@ -94,7 +94,7 @@ by game. Status notes below cover specific tests, not every included system.
 | Saturn | Ymir | — |
 | PlayStation 2 | [ARMSX2 (libretro)](documentation/emulators/ARMSX2.md) | 🚧 Playable; optimization ongoing ([#477](https://github.com/portare-ch/portareos/issues/477)) |
 | PSP | PPSSPP | — |
-| Xbox | [hakuX](https://github.com/portare-ch/hakuX), our Linux port | 🚧 XISO (`.iso`) images, no CHD yet; BLACK and Burnout 3 play; no rumble |
+| Xbox | [hakuX](https://github.com/portare-ch/hakuX), our Linux port, as a libretro core | 🚧 XISO (`.iso`) images, no CHD yet; BLACK and Burnout 3 play; no rumble |
 | Point-and-click | ScummVM | — |
 | PC (x86 through FEX) | Steam on gamescope | ✅ Tested 2026-10-05; details below |
 | Movies, music | mpv, PORTAMP | — |
@@ -170,7 +170,7 @@ measurements and design.
 
 The launcher and Steam's gamescope also use variable refresh; Steam is
 capped at 60 fps. A real game on the final gamescope/kernel combination
-still needs validation. Fixed refresh remains for hakuX and mpv, and for
+still needs validation. Fixed refresh remains for mpv, and for
 RetroArch when variable refresh is disabled. To compare, set `global.vrr=0` in
 `/storage/.config/system/configs/system.cfg`; use `snes.vrr=0` for one
 system or `snes["Super Mario World.sfc"].vrr=0` for one ROM filename.
@@ -304,8 +304,6 @@ frame queue or EmulationStation:
 flowchart TD
     RA["Libretro core → RetroArch<br/>Core timing, scaling and shaders<br/>Timed presents for integer-multiple VRR"] --> VK
     MPV["mpv<br/>Decode, scale and shaders<br/>Fixed refresh"] --> VK
-    HAKUX["hakuX<br/>NV2A drawn through Vulkan; fixed refresh"] --> SDL["SDL3 KMSDRM<br/>Vulkan display surface"]
-    SDL --> VK
     VK["Mesa Turnip / Vulkan<br/>Adreno GPU rendering"] --> WSI["Mesa Vulkan WSI / VK_KHR_display<br/>PortareOS patches: timed presents<br/>and VRR control"]
     WSI -->|Timed page flips| KMS
     STEAM["Steam / PC games<br/>60 fps ceiling"] --> GS["gamescope compositor<br/>DRM backend; variable refresh"]
@@ -316,9 +314,8 @@ flowchart TD
 ```
 
 The diagram follows the built-in panel. The launcher releases display
-ownership while a game or player runs and takes it back on exit. hakuX's
-Vulkan renderer uses Turnip, with SDL3 KMSDRM creating the direct display
-surface. Steam uses gamescope for composition.
+ownership while a game or player runs and takes it back on exit. Steam
+uses gamescope for composition.
 
 A USB-C monitor replaces the panel for the launcher and new game launches.
 DisplayPort output is capped at 8 bpc; Adaptive-Sync uses the monitor's
@@ -333,7 +330,7 @@ AVR, scanning the same buffer at evenly spaced intervals without another
 render, submission or page flip, within a 65–120.198 Hz range. For example,
 59.8261 fps becomes 119.6522 Hz (2×), and 30 fps can become 120 Hz (4×).
 Kernel repeat scheduling applies to any commit with `VRR_ENABLED` set,
-whether timed or not; mpv and hakuX currently use fixed refresh. The launcher
+whether timed or not; mpv currently uses fixed refresh. The launcher
 and Steam's gamescope use the same kernel repeat scheduling.
 See [variable refresh](documentation/VARIABLE_REFRESH.md) for the Mesa and
 kernel patches and measured behavior.

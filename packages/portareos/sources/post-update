@@ -487,6 +487,16 @@ migrate_led_battery_off() {
   set_setting sleep.led.color off
 }
 
+# The first hakuX, its standalone front end (#752), kept the console's disk
+# in /storage/.config/hakux. Its libretro core keeps it in /storage/saves/xbox
+# (#753): an install that ran the standalone gets its saves moved there.
+migrate_hakux_saves() {
+  [ -d /storage/.config/hakux/hdd ] || return 0
+  [ -e /storage/saves/xbox/hdd ] && return 0
+  mkdir -p /storage/saves/xbox
+  mv /storage/.config/hakux/* /storage/saves/xbox/ && rmdir /storage/.config/hakux
+}
+
 migrate cpugovernor-schedutil migrate_cpugovernor
 migrate audiolatency-24 migrate_audiolatency_24
 migrate audiolatency-8 migrate_audiolatency_8
@@ -500,3 +510,4 @@ migrate music-little-cores migrate_music_little_cores
 migrate nes-ratio-core migrate_nes_ratio_core
 migrate snes-ratio-core migrate_snes_ratio_core
 migrate led-battery-off migrate_led_battery_off
+migrate hakux-saves migrate_hakux_saves

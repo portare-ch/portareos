@@ -37,7 +37,7 @@ for setup and examples.
 |&#xf013; System|Screenshots (imageviewer)|System|`screenshots`|.jpg .jpeg .png .bmp .psd .tga .gif .hdr .pic .ppm .pgm .mkv .pdf .mp4 .avi||
 |&#xf013; System|Tools (tools)|System|`/storage/.config/modules`|.sh||
 |Arcade|Arcade (arcade)|0000|`arcade`|.zip .7z|**retroarch:** fbneo (default)<br>|
-|Microsoft|Xbox (xbox)|2001|`xbox`|.iso|**hakux:** hakux-sa (default)<br>|
+|Microsoft|Xbox (xbox)|2001|`xbox`|.iso|**retroarch:** hakux (default)<br>|
 |Nintendo|Famicom (famicom)|1983|`famicom`|.nes .unif .unf .zip .7z|**retroarch:** mesen2 (default)<br>|
 |Nintendo|Famicom Disk System (fds)|1986|`fds`|.fds .zip .7z|**retroarch:** mesen2 (default)<br>|
 |Nintendo|Game Boy (gb)|1989|`gb`|.gb .gbc .zip .7z|**retroarch:** gambatte (default)<br>|

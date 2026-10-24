@@ -45,8 +45,8 @@ case "${DEVICE}" in
     LIBRETRO_CORES+=" armsx2-lr dolphin-lr"
     ;;
   SM8550)
-    PKG_EMUS+=" hakux-sa steam"
-    LIBRETRO_CORES+=" armsx2-lr dolphin-lr"
+    PKG_EMUS+=" steam"
+    LIBRETRO_CORES+=" armsx2-lr dolphin-lr hakux-lr"
     ;;
   SM8650|SM8750)
     PKG_EMUS+=" steam"
@@ -435,11 +435,11 @@ makeinstall_target() {
   esac
   add_es_system sg-1000
 
-  ### Microsoft Xbox: hakuX, an aarch64 build tested on the Nova; it reads
-  ### XISO images, not CHD yet.
+  ### Microsoft Xbox: hakuX's libretro core, an aarch64 build tested on the
+  ### Nova (RetroArch's VRR path). It reads XISO images, not CHD yet.
   case ${DEVICE} in
     SM8550)
-      add_emu_core xbox hakux hakux-sa true
+      add_emu_core xbox retroarch hakux true
       add_es_system xbox
       ;;
   esac
