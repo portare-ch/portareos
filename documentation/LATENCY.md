@@ -89,7 +89,7 @@ the image's `crt/crt-guest-advanced.slangp`:
 
 The shader is 3.6 ms of the budget, and the read to first line drops by
 5.7 ms. The other 2.2 ms is the panel's wait after the target, which was 4.0
-and 2.5 ms in the two shader runs: at 60.099 Hz each frame is shown twice at
+and 1.8 ms in the two shader runs: at 60.099 Hz each frame is shown twice at
 the panel's fastest refresh, so that wait moves between runs on its own.
 Frames were ready 5.5 ms into the 16.6 ms period with the shader, so it fits;
 the question is only what it costs.

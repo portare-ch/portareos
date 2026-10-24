@@ -1,6 +1,6 @@
 # Known bugs and loose ends
 
-Reviewed 21 October 2026 against the current tree and recorded Nova tests.
+Reviewed 24 October 2026 against the current tree and recorded Nova tests.
 An implemented fix is not a device test. Items below distinguish observed
 failures from checks still needed; each has a next action.
 
@@ -13,12 +13,10 @@ may refer to removed programs or older kernels.
 
 ### nova-push and the Neo Geo CD folder name
 
-The current PortareOS tools automatic converter recognizes `neogeocd`,
-while PortareOS stores these games in `/storage/roms/neocd/`. Passing a CUE
-with `nova-push neocd` is rejected; using `neogeocd` targets the wrong folder.
-Until the tools recognize the current name, convert locally with
-`portare_chd.py` and transfer the resulting CHD with `nova-push neocd`.
-The [installation guide](documentation/INSTALLATION.md) uses this workaround.
+Resolved in the current PortareOS tools: `nova-push neocd` converts CUE
+inputs and transfers the CHDs to `/storage/roms/neocd/`. Update older copies
+that recognize only `neogeocd`; that name is not the device's folder.
+The [installation guide](documentation/INSTALLATION.md) uses `neocd`.
 
 ### Dolphin hangs and audio problems
 
@@ -144,6 +142,11 @@ The earlier "SoC never sleeps" finding is superseded by #658. Nightly
 30-second and a 10-minute test. The latter measured **23 mA**, against
 39 mA over 5.9 hours on the preceding nightly. These are different test
 durations, not a current overnight comparison.
+
+Linux 7.3 exposed another blocker: the disabled QCE driver left the crypto
+engine's interconnect suppliers holding boot votes. The device tree now
+disables the unused crypto node (#728). Recheck the sleep counters on the
+current kernel; the 18 October measurements predate this change.
 
 Run an overnight battery test, repeated short cycles, suspend with an open
 playback PCM, charger attachment while asleep, and speaker/headphone checks

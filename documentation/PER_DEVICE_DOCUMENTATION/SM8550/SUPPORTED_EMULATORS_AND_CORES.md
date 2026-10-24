@@ -1,6 +1,6 @@
 # Game folders, formats and emulators
 
-Reviewed 18 October 2026 against the
+Reviewed 24 October 2026 against the
 [system definitions](https://github.com/portare-ch/portareos/tree/next/config/emulators) and
 [emulator selection](https://github.com/portare-ch/portareos/blob/next/packages/virtual/emulators/package.mk).
 Folder names below are relative to `/storage/roms/` unless an absolute path
@@ -20,6 +20,9 @@ The extension list describes what the launcher recognizes, not a guarantee
 of compatibility or tested performance. See [known issues](../../../BUGS.md)
 for Dolphin and other open checks. `folders` in the music row means an album
 directory can be selected for playback.
+
+The Screenshots system lists the recognized files, but no image viewer is
+configured to open them from that row.
 
 Use [PortareOS tools / nova-push](https://github.com/portare-ch/portareos_tools)
 for conversion, verification and transfer. Follow the

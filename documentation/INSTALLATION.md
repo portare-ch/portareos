@@ -33,16 +33,73 @@ erases that card. Eject it safely when writing and verification finish.
 
 ## 3. Boot the Nova
 
-Power the Nova off, insert the card, then hold **Volume Down** while powering
-on. In the boot menu, choose **Switch boot mode**, confirm with the power
-button, then press power again to boot from the card.
+PortareOS bundles **[Portare BIOS](https://github.com/portare-ch/BIOS)**,
+the Nova's bootloader, which replaces ROCKNIX's ABL. It is separate from
+the emulator BIOS files stored under `/storage/roms/bios/`.
 
-If the device has no menu for switching boot mode, it needs a compatible
-bootloader first. Follow the device-specific
-[ROCKNIX Nova bootloader procedure](https://rocknix.org/devices/retroid/retroid-pocket-nova/#flashing-rocknix-abl),
-including its backup step. Flashing the wrong bootloader can leave the
-handheld unable to boot. Those instructions cover the bootloader; use a
-PortareOS image for the operating system.
+If Portare BIOS is already installed, power the Nova off, insert the card,
+then hold **Volume Down** while powering on. Use the volume buttons to move
+and Power to select. Open **Boot** and choose **PortareOS** on the **SD card**.
+This boots the card once; **Boot order** chooses the default operating system.
+By default, automatic Linux boot searches internal storage before the SD card.
+
+### Install the bootloader first, if needed
+
+Look in the `portareos_abl` folder on the card's FAT boot partition. If it
+holds the Nova's `abl_signed-SM8550.elf` with Android backup, flash and
+restore scripts, install from rooted Android:
+
+1. Copy that folder to `/sdcard/portareos_abl` in Android's internal storage.
+2. As root, run `sh /sdcard/portareos_abl/backup_abl.sh`. Keep copies of the
+   resulting `abl_a.img` and `abl_b.img` on your computer before continuing.
+3. As root, run `sh /sdcard/portareos_abl/flash_abl.sh` to write Portare BIOS
+   to both bootloader slots, then power off and boot the card as above.
+
+Alternatively, with ABL flashing unlocked, flash the bundled image from
+fastboot on your computer. If the card's `portareos_abl` folder is missing
+or empty, get `abl_signed-SM8550.elf` from the
+[Portare BIOS releases](https://github.com/portare-ch/BIOS/releases):
+
+```sh
+fastboot flash abl_a abl_signed-SM8550.elf
+fastboot flash abl_b abl_signed-SM8550.elf
+fastboot reboot
+```
+
+Back up the existing bootloader before flashing. Flashing the wrong image
+can leave the Nova unable to boot. The
+[Nova EDL recovery kit](https://github.com/portare-ch/nova_recovery) provides
+a recovery route even with a broken bootloader; its supplied backups restore
+ROCKNIX's ABL, not Portare BIOS, and it includes no Android factory image.
+Portare BIOS uses USB for fastboot and EDL; it does not boot from USB.
+Its **Emergency download mode** menu item enters EDL after confirmation.
+When off-mode charging is enabled, Portare BIOS has its own charging screen;
+Power starts the default system and a volume key opens the boot menu.
+
+### Install to internal storage
+
+With the PortareOS SD card inserted, open Portare BIOS with **Volume Down**
+at power-on and select **Install PortareOS**:
+
+* **Dualboot** keeps Android. A first install shrinks Android's data
+  partition to the size you choose and resets Android, so back up its data
+  first. If PortareOS is already installed next to Android, this replaces
+  only PortareOS's system and keeps its games, saves and settings.
+* **Replace Android** removes Android and any existing internal PortareOS
+  installation, giving PortareOS all of internal storage. Back up anything
+  you want to keep from either system first.
+
+Check the resulting space shown by the installer before confirming. Use
+**Boot** to start the internal installation once, or **Boot order** to set
+the default OS when Android is available. The SD card remains independently
+bootable through the Boot list.
+
+The distribution also ships `installtointernal`, an interactive shell script
+run from PortareOS. Its first-install path wipes Android userdata and asks
+for a new Android data size; it has no **Replace Android** mode. It can
+replace an existing PortareOS or ROCKNIX installation, offering to keep or
+wipe its storage. Use the Portare BIOS menu for the installation procedure
+above; the script is a separate path with different prompts and behavior.
 
 ## 4. First boot and games
 
@@ -79,8 +136,9 @@ CHDs and cartridge ROMs can be transferred directly.
 
 Follow the tools repository's dependency instructions. `nova-push` needs
 Python 3.10 or newer, SSH and rsync; disc conversion also needs `chdman`,
-and encoded CUE audio needs FFmpeg. Copy the standalone `nova-push` file
-to a directory on your PATH and make it executable. Then, on your computer:
+and encoded CUE audio needs FFmpeg. The tools' installer installs `nova-push`
+and `portare-chd`; alternatively, copy the standalone files to a directory
+on your PATH and make them executable. Then, on your computer:
 
 ```sh
 # Replace 192.0.2.1 with the address shown under Settings > About.
@@ -89,7 +147,7 @@ nova-push --list
 nova-push psx "Game.cue"
 nova-push ps2 "Game.iso"
 nova-push dreamcast "Game.gdi"
-nova-push neocd "Metal_Slug.chd"
+nova-push neocd "Metal Slug.cue"
 nova-push snes "Super Mario World.sfc"
 ```
 
@@ -99,9 +157,9 @@ during conversion; upload the resulting CHD. Source files are kept by
 default. The tools support more systems than PortareOS includes, so use
 `nova-push --list` to check the folders on your device.
 
-For Neo Geo CD, convert locally with `portare_chd.py` first, then transfer
-the CHD to `neocd` as above. The current nova-push automatic converter uses
-the older `neogeocd` system name; that is not the device's folder name.
+Neo Geo CD uses the `neocd` system name. GameCube and Wii inputs can be
+converted to RVZ during transfer with `dolphin-tool`; on macOS, convert in
+Dolphin first and transfer the RVZ. See the tools' instructions for details.
 
 Games belong under `/storage/roms/<system>/`, for example
 `/storage/roms/snes/`. Required BIOS files belong under `/storage/roms/bios/`
@@ -123,3 +181,7 @@ from the same release. Verify it with `shasum -a 256 -c` on macOS or
 `sha256sum -c` on Linux, as above. Copy the `.tar` to `/storage/.update/`
 on the device, then restart. This is for an existing PortareOS installation
 only; moving from ROCKNIX requires writing a fresh card.
+
+PortareOS updates also flash the bundled Portare BIOS to `abl_a` and
+`abl_b` when it differs. Updating the distribution can therefore replace
+an older or custom bootloader.

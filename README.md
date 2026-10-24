@@ -4,7 +4,7 @@
 
 **For Retroid Pocket Nova owners who care about every frame and millisecond.**
 
-[Home](https://os.portare.org) · **[Features](documentation/FEATURE_OVERVIEW.md)** · **[Installation guide](documentation/INSTALLATION.md)** · [Documentation](https://docs.portareos.org/documentation/) · [Known issues](BUGS.md) · [Roadmap](ROADMAP.md)
+[Home](https://os.portare.org) · **[Features](documentation/FEATURE_OVERVIEW.md)** · **[Installation guide](documentation/INSTALLATION.md)** · [Documentation](documentation/README.md) · [Known issues](BUGS.md) · [Roadmap](ROADMAP.md)
 
 > Black coffee without sugar and milk. With the right amount of beans and water.
 
@@ -30,6 +30,15 @@ prevents in-place updates from ROCKNIX. Later updates download from GitHub
 over Wi-Fi through the launcher, using the nightly or release channel, and
 install on restart.
 
+The image bundles **[Portare BIOS](https://github.com/portare-ch/BIOS)**,
+the Nova's bootloader. Hold **Volume Down** at power-on to open its menu;
+**Boot** starts PortareOS from internal storage or the SD card, or Android.
+To install internally, insert a PortareOS SD card and select **Install
+PortareOS**: **Dualboot** keeps Android but resets its data on a first install;
+**Replace Android** removes Android and any existing internal PortareOS data.
+The installation guide covers backups and initial bootloader flashing.
+PortareOS updates also update Portare BIOS in both bootloader slots.
+
 **Use CHD for disc games; cartridge games keep their native ROM formats.**
 PlayStation, PS2, Dreamcast, Saturn, Sega CD, Neo Geo CD and Xbox enforce
 CHD-only images; PSP takes CHD, or PBP for homebrew. GameCube and Wii take
@@ -44,6 +53,12 @@ format requirements.
 consoles, games and settings for Wi-Fi, Bluetooth, SSH, USB mode, language
 and time zone, and updates, in English or Japanese. Each device generates a root password on first boot, shown
 under About.
+
+On a fresh installation, the launcher and PORTAMP turn the screen off after
+two idle minutes; a button wakes it. Change the timeout in **Settings > Power**.
+Existing installations keep their saved timeout.
+The launcher requests suspend after five more idle minutes by default;
+an external display, disabled suspend or active SSH prevents it.
 
 * **Home + Start** quits every emulator; **M1 + volume** adjusts brightness
   anywhere.
@@ -334,8 +349,9 @@ Small services handle the rest:
 
 Suspend/resume fixes cover UFS, PCIe, audio clocks, Wi-Fi, the gamepad MCU
 and LEDs. The SoC now reaches platform sleep: a 10-minute test on
-18 October measured 23 mA, with CX, AOSS and DDR asleep. Overnight drain
-and wider resume coverage still need verification; see
+18 October measured 23 mA, with CX, AOSS and DDR asleep. That measurement
+predates the Linux 7.3 crypto-node fix and the corrected battery firmware.
+Overnight drain and wider resume coverage still need verification; see
 [power measurements](documentation/POWER.md). microSD runs at UHS-I SDR104,
 and the GPU can drop to 124.8 MHz for menus and films. Charging mitigation
 reduces current as the battery warms; device verification is pending.

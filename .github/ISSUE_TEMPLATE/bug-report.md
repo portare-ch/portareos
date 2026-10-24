@@ -7,8 +7,7 @@ assignees: ''
 
 ---
 ### Is this a PortareOS problem, or an upstream ROCKNIX one?
-PortareOS is a personal fork. Please do not take problems with it to the ROCKNIX Discord or forums; they are not theirs to fix. If it reproduces on stock ROCKNIX, report it upstream instead.
-<!-- Any issue created without first being discussed on our discord server will be closed automatically. -->
+PortareOS is a personal fork for the Retroid Pocket Nova. Please report PortareOS problems here, not in ROCKNIX's support channels. If you also reproduced the problem on stock ROCKNIX, mention that below.
 
 ### Describe the bug
 <!-- A clear description of what the bug is. -->
@@ -20,8 +19,10 @@ Steps to reproduce the behavior:
 3. See error
 
 ### Information
- - PortareOS Version: [e.g. 20240517]
- - Hardware Platform: [e.g. Powkiddy RGB20SX]
+ - PortareOS version and build ID: [shown under Settings > About]
+ - Hardware: Retroid Pocket Nova (SM8550)
+ - Installation: [SD card or internal storage]
+ - Game and emulator/core, if applicable:
 
 ### Log file
 <!-- Add debug log files that we can search for errors. -->

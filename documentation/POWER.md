@@ -5,6 +5,15 @@ the panel blanked, and suspended. Measured on 2026-10-03, build `6f8d1b3`, on
 battery (the gauge reads 0 on a charger), with `idle-probe` and the battery's
 charge counter. #496 holds the discussion.
 
+The dated measurements below are historical baselines. Since then, Linux
+7.3 left the unused crypto engine without a driver and its interconnect
+suppliers holding boot votes, blocking platform sleep again. The device
+tree disables that node in #728. #729 also replaces the ADSP with the copy
+from the Nova's Android vendor partition, which contains its 5000 mAh
+battery profile; the earlier modem-partition copy had an 8000 mAh reference
+profile. Recheck sleep counters and battery drain on the current image
+before treating the older numbers as its measured behavior.
+
 ## The SoC sleeps (2026-10-18)
 
 Patches 1114-1124 (#658) adapt the merged Armada sleep fixes
@@ -426,9 +435,14 @@ cycles resumed with the cluster asleep each time, and a write to
 
     idle-probe [seconds]      on the device, default 300
 
-It refuses on a charger or while a game runs, prints mean battery power,
-interrupt, context-switch and deep-idle rates, and the threads that woke most.
-For the overnight case, start it detached once the launcher has blanked the
-panel (5 minutes without input):
+It refuses on a charger or while a RetroArch game runs, prints mean battery
+power, interrupt, context-switch and deep-idle rates, and the threads that
+woke most.
+For an awake idle measurement, start it detached once the launcher has
+blanked the panel (two minutes on a fresh install; existing settings stay).
+Keep automatic suspend from interrupting the run, then restore that setting:
 
     setsid idle-probe 600 >/storage/idle-probe.txt 2>&1 &
+
+For overnight suspend drain, use the sleep ledger and the battery charge
+counter instead; `idle-probe` measures awake idle.

@@ -14,7 +14,7 @@ Two entries on that list were wrong at the time: `nestopia-lr` and
 `beetle-saturn-lr` were both in the tree and both shipped, for NES and
 Saturn. Both have since been replaced, and have their rows below.
 
-`documentation/PACKAGE_INVENTORY.md` covers the separate question of what was
+[PACKAGE_INVENTORY.md](PACKAGE_INVENTORY.md) covers the separate question of what was
 trimmed out of the image, with sizes.
 
 ## Emulators and cores, with a reason of their own
@@ -72,7 +72,7 @@ Libretro cores (78):
 
 | Removed | Why |
 |---|---|
-| `gamepadcalibration` | GPcal, stick and trigger calibration in Python drawn with pyxel, under Tools. The one stick problem found on the Nova was the MCU's deadband, not calibration, and a calibration tool would be a launcher screen writing the same rsinput parameters. One saved before still applies at boot from `/storage/.config/autostart/GPcal.sh`. |
+| `gamepadcalibration` | GPcal, stick and trigger calibration in Python drawn with pyxel, under Tools. The one stick problem found on the Nova was the MCU's deadband, not calibration. A calibration saved before still applies at boot from `/storage/.config/autostart/GPcal.sh`. PortScope only displays input; the launcher has no calibration screen. |
 | `pyxel` | GPcal's UI library, and GPcal its only user. Its upstream (github.com/kitao) disappeared on 2026-10-09 and took the wheel's URL with it. |
 
 ## Unused package recipes

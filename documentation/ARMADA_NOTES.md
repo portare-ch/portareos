@@ -124,6 +124,10 @@ from 0.67 W to 0.27 W with the following together. The MCU rail above
 is one part; the rest is open here and relevant to the overnight drain
 item (#62).
 
+This section records the September survey. The PCIe and audio sleep work
+was subsequently incorporated in #658; see [power measurements](POWER.md)
+for the implementation and remaining device checks.
+
 - **PCIe D3cold** (`0522-PCI-host-common-let-only-endpoints-veto-d3cold.patch`,
   armada-authored). The generic PCI host asks every device in the
   hierarchy whether D3cold is possible; the root port, still in D0,
@@ -140,7 +144,8 @@ item (#62).
   suspend). Measured on an Odin 3 as about 0.09 W when a stream was
   open at suspend. The launcher, RetroArch or mpv can hold a PipeWire
   stream at suspend. armada then raised its PipeWire min-quantum to
-  1024 against post-resume crackle; that part conflicts with our
+  1024 against post-resume crackle; that part conflicts with our low-latency
+  graph, now configured with a 3 ms minimum rather than the earlier
   256-frame quantum.
 - **tsens lower-threshold IRQs masked across suspend** (`0204`): a more
   targeted version of our 0203, which skips arming the whole uplow IRQ.
@@ -157,9 +162,9 @@ item (#62).
   Check the sm8550 dtsi before the next kernel bump.
 - **Wake ledger** (`system-sleep/40-armada-wake-ledger`): 20 lines
   appending `pm_wakeup_irq`, the interrupt name and a timestamp to a
-  log on every resume, since the kernel keeps only the last wake. We
-  record nothing about wake reasons. Trivial, and the first thing to
-  add when #62 is worked.
+  log on every resume, since the kernel keeps only the last wake. Our
+  `000-sleep-ledger` post-sleep hook now records the wake IRQ, or a
+  wakeup-source fallback, alongside sleep counters and battery charge.
 - **Sleep tracer** (`armada_sleep_debug.py`, 1391 lines): a per-cycle
   ftrace instance over power, rpm, clk, regulator, interconnect
   `icc_set_bw`, `rpmh_send_msg` (filtered to the sleep and wake sets)
@@ -168,8 +173,8 @@ item (#62).
   3, cutting the fan supply at duty 0 and in suspend. We rely on
   `regulator-off-in-suspend` on the fan regulator instead. Probably
   equivalent; worth one measurement.
-- Already equivalent: dwc3 USB autosuspend (our `81-usb-runtime-pm.rules`),
-  PCIe L23 skip (our 0215), PCIe suspend OPP (our 1048/1049), geni UART
+- Already equivalent at the survey: dwc3 USB autosuspend (our `81-usb-runtime-pm.rules`),
+  PCIe L23 skip (our 0215), PCIe suspend OPP (our 1048/1049, since removed by #658), geni UART
   IRQ masking (our 1006), rsinput quiesce (our 1004), UART frame
   reassembly (our 1013).
 
@@ -205,13 +210,14 @@ item (#62).
   brightness changes ever glitch the picture.
 - **DP audio prepare while the display is off** (`0618`): a failing
   prepare made PipeWire drop the whole card profile, losing speaker and
-  headphone sinks too. Directly relevant to our unverified HDMI sink
-  switch, since Nova HDMI is USB-C DP.
+  headphone sinks too. PortareOS has since removed DisplayPort audio
+  (#709); sound stays on the local outputs.
 - **Nova firmware**: their rp6 DTS points ADSP, `adsp_dtb`, AW883xx and
   `battmgr.jsn` at files extracted from a Pocket 6 vendor image rather
-  than the Odin 2 fallback ours still names. Relevant to the audio
-  topology our link-rate patches run against and to charger behaviour.
-  The blobs are vendor licensed.
+  than the Odin 2 fallback we used at the survey. PortareOS now ships the
+  Nova's own DSP and amplifier firmware in `nova-firmware`; #729 selects
+  the vendor-partition ADSP with the Nova's battery profile. The topology
+  keeps its `AYN-Odin2-tplg.bin` filename. The blobs are vendor licensed.
 - **Stale jack report on removal** (`0064`, wcd-mbhc, shared with our
   codec): only if the Nova ever shows a stuck headphone state.
 - Mesa 26.2.3 workarounds for A740 translation-fault storms

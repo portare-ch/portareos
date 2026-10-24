@@ -4,7 +4,7 @@ What PortareOS ships, one line each, with where it lives and whether a
 device has confirmed it. This is the inventory the
 test plan is written against: every row here gets a test, automatic on the
 device where a script can read the answer, human where only eyes or ears
-can. Configuration reviewed 21 October 2026. Verification records include
+can. Configuration reviewed 24 October 2026. Verification records include
 older builds; a row is not a new test of the current image.
 
 Status: **verified** means someone ran it on a Nova and it did what the row
@@ -61,14 +61,18 @@ see the test plan before interpreting its results.
 
 | Feature | What it does | Where | Status | Test |
 |---|---|---|---|---|
-| portarelauncher | KMS launcher on a dumb buffer: consoles, games, Tools, Settings; VRR keeps each menu frame doubled on the built-in panel. | `ui/portarelauncher` 0.8.4 | navigation verified on earlier builds; VRR probe record in VARIABLE_REFRESH.md | human: navigation and game return; auto: DRM ownership and repeat cadence |
+| portarelauncher | KMS launcher on a dumb buffer: consoles, games, Tools, Settings; VRR keeps each menu frame doubled on the built-in panel. | `packages/ui/portarelauncher` 0.9.1 | navigation verified on earlier builds; VRR probe record in VARIABLE_REFRESH.md | human: navigation and game return; auto: DRM ownership and repeat cadence |
+| Offline CHD titles | Reads PlayStation, PS2, PSP and Neo Geo CD titles locally through `ps-chd-id`, keeping filenames and launch paths. | launcher 0.9.1, packaged title tables | host tests recorded in the launcher project; physical-device coverage pending | human: named CHDs in game, recent and favourite lists; launch path unchanged |
 | Quick Access: Recently played, Favourites, scrolling titles | The last ten launches under their day, a favourites list toggled with the left face button, and a selected long title that scrolls to its end. | `ui/portarelauncher` 0.5.1 | unverified | human: play, mark, scroll; portarelauncher#42 |
 | PortScope | Settings > Diagnostics: every button, stick and trigger as the kernel reports it, the report rate measured, the last two events. Holding SELECT switches to the MCU and gpio-keys as they are before InputPlumber, which is stopped while that layer is shown. Replaces the SDL gamepad tester. | `ui/portarelauncher` 0.6.0, `/usr/bin/portscope` | unverified | human: each control lights, SELECT held switches layers, Home + START leaves; auto: `inputplumber` active after leaving |
 | Shape marks | With Button style set to Shapes, every hint, the Button style diagram and PortScope draw the face buttons as outlined triangle, square, circle and cross. | `ui/portarelauncher` 0.6.0 | unverified | human: Settings, a games list and the Wi-Fi keyboard in both styles |
-| Japanese | The launcher in English or Japanese, under Settings > Language & region (`system.language`, en_US or ja_JP). Kana and kanji drawn as the PS2 drew its system font: Noto Sans CJK JP at 26 x 26 with 16 levels, scaled with bilinear filtering. Titles in Japanese or accented file names read in either language. | `ui/portarelauncher` 0.7.0, `/usr/share/portarelauncher/ja26.bin` | verified: switching and the font; the rest unverified | human: L11 |
-| Settings: Wi-Fi, Bluetooth, SSH, USB gadget, buttons, color, profile, charging LED, language & region, about, power | Each writes system.cfg or acts directly. | launcher | verified except Consoles | human per row |
+| Japanese | The launcher in English or Japanese, under Settings > Language & time (`system.language`, en_US or ja_JP). Kana and kanji drawn as the PS2 drew its system font: Noto Sans CJK JP at 26 x 26 with 16 levels, scaled with bilinear filtering. Titles in Japanese or accented file names read in either language. | `ui/portarelauncher` 0.7.0, `/usr/share/portarelauncher/ja26.bin` | verified: switching and the font; the rest unverified | human: L11 |
+| Settings: Wi-Fi, Bluetooth, SSH, USB gadget, buttons, color, profile, charging LED, language & time, about, power | Each writes system.cfg or acts directly. | launcher | verified except Consoles | human per row |
 | Settings > Consoles | PRMPT per console: SNES, NES, PlayStation, Game Boy, Game Boy Color, Game Boy Advance, Genesis and Neo Geo CD. | launcher 0.8.3 | broader menu coverage pending; NeoCD default recorded | human: rows and text; auto: keys written to system.cfg |
 | Updates from GitHub | Nightly or release channel over Wi-Fi, installed on restart. | launcher `update.c`, `portareos-update` | verified | human: an update round trip |
+| Portare BIOS | Bundled bootloader replaces ROCKNIX's ABL; updates flash both `abl_a` and `abl_b`. Its menu boots internal storage, SD or Android and installs PortareOS internally from a PortareOS SD card. | `packages/tools/portareos-abl`, bootloader `update.sh`, `updateabl` | bundled release and update path checked; current device install/update round trip pending | human: boot list, Dualboot and Replace Android on backed-up storage |
+| Idle screen off | Launcher and PORTAMP blank after two idle minutes on a fresh install; existing settings are kept. Settings > Power changes `display.blankminutes`. A button wakes the screen. | launcher, `portamp.lua`, `system.cfg` | configured; device coverage pending | human: idle timeout and wake in both applications; games and films keep their display |
+| Idle suspend | The launcher requests sleep five minutes after blanking by default; `system.sleepminutes` changes the delay. Active SSH, an external display or `system.suspendmode=off` prevents it. | launcher, SM8550 `power-handler` | configured; device coverage pending | human: timeout, SSH inhibition, docked behavior and wake |
 | Per-device root password on first boot | Shown under About. | `007-rootpw` | verified | auto: password file exists; human: SSH with it |
 | One-shot migrations | `post-update` runs each once: cpugovernor, FpsLimit, ssh on, colorprofile stock. | `post-update` | verified for the first three | auto: marker directory after update |
 | Charging LED | Yellow thumbsticks while charging, dark otherwise, switchable. | launcher, LED daemon | verified | human |

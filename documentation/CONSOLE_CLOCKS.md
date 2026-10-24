@@ -82,7 +82,7 @@ Audio: the S-DSP runs from its own 24.576 MHz ceramic resonator and outputs a sa
 
 ### Master System, Game Gear, Mega Drive, Mega CD, 32X
 
-The master clock is 53.693175 MHz, fifteen times the subcarrier (the Master System's own crystal is a third of that, 10.738635 MHz, with the same result). The VDP's line is 3420 master clocks (342 dots × 10) in both its 256- and 320-pixel modes: 15699.8 Hz, 0.22 % below the broadcast line. A frame is 262 lines: 53693175 / (3420 × 262) = **59.9227 Hz**. PAL: 53.203424 MHz, 313 lines, 49.70 Hz.
+The master clock is 53.693175 MHz, fifteen times the subcarrier (the Master System's own crystal is a fifth of that, 10.738635 MHz, with the same result). The VDP's line is 3420 master clocks (342 dots × 10) in both its 256- and 320-pixel modes: 15699.8 Hz, 0.22 % below the broadcast line. A frame is 262 lines: 53693175 / (3420 × 262) = **59.9227 Hz**. PAL: 53.203424 MHz, 313 lines, 49.70 Hz.
 
 Audio: the YM2612 is clocked at master / 7 = 7.670454 MHz and produces a sample every 144 clocks: 53267 Hz. The SN76489 runs at master / 15 = 3.579545 MHz. The Mega CD's RF5C164 samples at 32552 Hz, its CD audio at 44100 Hz. The 32X's PWM rate is set by the game.
 
@@ -188,10 +188,10 @@ The Xbox's TV encoder outputs the standard 525-line signal, 59.94 Hz interlaced 
 
 ### Arcade (FBNeo)
 
-Every board has its own crystal and line count, and every FBNeo driver sets its rate from them (`BurnSetRefreshRate`); FBNeo reports the driver's rate to RetroArch, and logs it as "Timing set to … Hz". The rates run from about 54 to 61 Hz, so no single panel mode fits, and the default 119.88 Hz mode is used.
+Every board has its own crystal and line count, and every FBNeo driver sets its rate from them (`BurnSetRefreshRate`); FBNeo reports the driver's rate to RetroArch, and logs it as "Timing set to … Hz". The rates run from about 54 to 61 Hz, so no single fixed panel mode fits. With VRR disabled, the default 119.88 Hz mode is used. The VRR path follows the reported rate when it fits an integer multiple within the display range; rates that cannot fit twice are rejected.
 
 - FBNeo, `src/burner/libretro/libretro.cpp`: `timing = { nBurnFPS / 100.0, … }`, "[FBNeo] Timing set to %f Hz"
 
 ## Checking a rate on the device
 
-Start the game from a shell with `retroarch -v …` and look for the core's `fps` in the log: RetroArch prints the timing it was given (`[Core]: … fps` in the av_info lines), and several cores log their own (FBNeo's "Timing set to", Flycast's rate on every `SPG_LOAD` write). Then compare with `modetest -c`, which lists the panel modes with their pixel clocks: the mode's rate is clock / (1302 × 1001), and it should be twice the core's number.
+Start the game from a shell with `retroarch -v …` and look for the core's `fps` in the log: RetroArch prints the timing it was given (`[Core]: … fps` in the av_info lines), and several cores log their own (FBNeo's "Timing set to", Flycast's rate on every `SPG_LOAD` write). For a fixed-refresh comparison, disable VRR and compare with `modetest -c`, which lists the panel modes with their pixel clocks: the mode's rate in Hz is its clock in kHz × 1000 / (1302 × 998). A dedicated console mode should be near twice the core's rate. With VRR enabled, the base is the fastest mode; measure actual scanout and repeats instead.

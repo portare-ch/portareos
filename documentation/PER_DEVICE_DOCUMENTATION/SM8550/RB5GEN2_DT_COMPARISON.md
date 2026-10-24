@@ -14,6 +14,11 @@ gpu_cc, 20260424 gcc CX power domain) and the RB5 runs it stock.
 Line references: "RB5 nnn" is the RB5 dts; "common nnn", "rp6 nnn", "nova
 nnn" are the three Nova files, at the tree state of 2026-10-06.
 
+This is a historical comparison. Later changes include Nova-specific panel
+rails and speaker channels (#722, #723), touchscreen pins (#724), microphone
+routing (#726), and disabling the unused crypto node for suspend (#728).
+The tables below retain the October 6 snapshot and its line references.
+
 ## Result
 
 Nothing in the RB5 board file is worth taking. Every node both boards set

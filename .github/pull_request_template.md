@@ -1,10 +1,11 @@
 ## Summary
 
-* **What is the goal of this PR?** (e.g. Bump up an emulator version, implement a new feature. )
+* **What changed and why?**
 
 ## Testing
 
-* **How was this tested?** (e.g. Built and tested on specific devices, manual testing steps, URLs for CI/CD build artifacts.)
+* **How was this tested?** (e.g. Built and run on the Nova, scripts executed against real input, CI build artifacts.)
+* **For a new check:** How was it made to fail before confirming it passes?
 * **Test results:** (e.g. Screenshots, logs, performance metrics if applicable.)
 
 ## Additional Context

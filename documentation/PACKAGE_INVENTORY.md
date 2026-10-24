@@ -1,6 +1,6 @@
 # What is in the image, and what should not be
 
-Package definitions reviewed 21 October 2026. The size audit was made on
+Package definitions reviewed 24 October 2026. The size audit was made on
 build 20260925 (`d3fa9894`): `/usr/lib` 732 MB, `/usr/share` 457 MB,
 `/usr/bin` 220 MB, about 1.4 GB installed. Those figures and the removal
 estimates below are historical; they are not a measurement of the current
@@ -19,6 +19,7 @@ The rule this applies is the README's: if it is not needed for a smooth game, it
 | retroarch, core-info, slang-shaders, the 16 selected libretro cores | The systems. `slang-shaders` still installs the upstream set plus our presets; trimming is a candidate below. ARMSX2 ships its own info file; `core-info` supplies the other fifteen. |
 | xemu-sa (19 MB), armsx2-lr, scummvm-lr, ppsspp-lr, mpv, ffmpeg, libplacebo, luajit | The standalone systems and the three large cores; mpv's Lua runs our seek script. |
 | portarelauncher, portareos, system-utils, quirks, autostart, powerstate, sleep, inputplumber (10 MB) | Our own stack; inputplumber is the gamepad. |
+| portareos-abl | Portare BIOS, bundled for initial bootloader installation and flashed to both ABL slots by updates. |
 | steam, gamescope, xwayland, seatd, fex-emu, pressure-vessel, the X11 libraries | The one compositor exception, about 35 MB on the image; the runtime lives on `/storage`. |
 | retroarch-assets (33 MB) | RetroArch's own menu needs its assets. Trimmable to one menu driver's. |
 | e2fsprogs, dosfstools, exfatprogs, parted, udevil, umtprd | Cards, drives, USB file transfer. |
@@ -122,7 +123,7 @@ shipped.
 | lirc, libirman, eventlircd, ir-bpf-decoders, evrepeat, v4l-utils | 0 | `REMOTE_SUPPORT`, which nothing read any more |
 | installer, oem, testing, driverselect, device-tree-overlays, tm16xx-display | 0 | their switches gone, and the `modules` entry that ran the installer |
 | xorg-server, the xf86-video and xf86-input drivers, fluxbox, the X core fonts, xcb-util | 0 | Direct KMS is the normal path; Steam's gamescope keeps xwayland. |
-| u-boot, atf, crust, rkbin, syslinux, grub, the Amlogic, Exynos and Raspberry Pi boot blobs | 0 | the Nova boots through qcom-abl |
+| u-boot, atf, crust, rkbin, syslinux, grub, the Amlogic, Exynos and Raspberry Pi boot blobs | 0 | the Nova boots through ABL; Portare BIOS is now bundled as `portareos-abl` |
 | gcc-aarch64, gcc-arm-none-eabi, gcc-bpf, gcc-or1k, the Linaro compilers, their binutils, go | 0 | cross compilers nothing builds with |
 | mold | 0 | out of the linker choice with `MOLD_SUPPORT` |
 | gstreamer and its plugins, libmpeg2, x264, x265 | 0 | the reserve #351 kept; nothing asked for it since |
