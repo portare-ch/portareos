@@ -186,53 +186,28 @@ function disk_of() {
   basename "$(readlink -f "/sys/class/block/${1##*/}/..")"
 }
 
-### A PortareOS card's storage partition is grown when the system first boots
-### from the card (fs-resize). After installing from the card to internal
-### storage, the system boots internally and nothing grows it, so the image's
-### 32 MiB partition would hold the games. Grow it here, as fs-resize would:
-### only on a disk the system did not boot from, only the card's last
-### partition, and only while it still has its first-boot resize flag and has
-### never been a running system's storage. The flag stays, so a later first
-### boot from the card still regenerates its UUIDs.
-function grow_card_storage() {
-  local DEV=${1} PART=${1##*/} DISK=$(disk_of ${1}) BOOT START OTHER MNT FIRST_BOOT=0
-  [ "$(blkid -o value -s LABEL ${DEV})" = "${DISK_LABEL}" ] || return 0
-  [ "$(blkid -o value -s TYPE ${DEV})" = "ext4" ] || return 0
-  grep -q "^${DEV} " /proc/mounts && return 0
+### A PortareOS card the system was installed from (Portare BIOS, Install
+### PortareOS): its storage partition, labelled as ours, on a disk the system
+### did not boot from, still flagged for its first-boot resize and never a
+### running system's storage. It is no games card: the games stay on the
+### internal storage the installation was given.
+function installer_card() {
+  local DEV=${1} DISK=$(disk_of ${1}) BOOT MNT CARD=1
+  [ "$(blkid -o value -s LABEL ${DEV})" = "${DISK_LABEL}" ] || return 1
+  [ "$(blkid -o value -s TYPE ${DEV})" = "ext4" ] || return 1
+  grep -q "^${DEV} " /proc/mounts && return 1
   for BOOT in $(awk '$2 == "/flash" || $2 == "/storage" {print $1}' /proc/mounts)
   do
-    [ "$(disk_of ${BOOT})" = "${DISK}" ] && return 0
+    [ "$(disk_of ${BOOT})" = "${DISK}" ] && return 1
   done
-  START=$(cat /sys/class/block/${PART}/start)
-  for OTHER in /sys/block/${DISK}/${DISK}*/start
-  do
-    (( $(cat ${OTHER}) > START )) && return 0
-  done
-  ### Less than 1 GiB left after it: already grown.
-  (( $(cat /sys/block/${DISK}/size) - START - $(cat /sys/class/block/${PART}/size) < 2097152 )) && return 0
-
   MNT=$(mktemp -d)
   if mount -o ro ${DEV} ${MNT} 2>/dev/null
   then
-    [ -e ${MNT}/.please_resize_me ] && [ ! -d ${MNT}/.config ] && [ ! -d ${MNT}/.cache ] && FIRST_BOOT=1
+    [ -e ${MNT}/.please_resize_me ] && [ ! -d ${MNT}/.config ] && [ ! -d ${MNT}/.cache ] && CARD=0
     umount ${MNT}
   fi
   rmdir ${MNT}
-  (( FIRST_BOOT )) || return 0
-
-  log $0 "Growing ${DEV}, a PortareOS card's storage not booted yet, to fill /dev/${DISK}."
-  if ! parted -s -f -m /dev/${DISK} resizepart $(cat /sys/class/block/${PART}/partition) 100% >/dev/null 2>&1
-  then
-    log $0 "Growing ${DEV} failed (parted)."
-    return 0
-  fi
-  e2fsck -f -p ${DEV} >/dev/null 2>&1
-  if (( $? > 1 )) || ! resize2fs ${DEV} >/dev/null 2>&1
-  then
-    log $0 "Growing the file system on ${DEV} failed."
-    return 0
-  fi
-  log $0 "Grew ${DEV} to $(( $(cat /sys/class/block/${PART}/size) / 2097152 )) GiB."
+  return ${CARD}
 }
 
 function find_games() {
@@ -242,7 +217,11 @@ function find_games() {
     do
       ROOTDEV=$(disk_of ${DEV})
       log $0 "Inspecting ${DEV}."
-      grow_card_storage ${DEV}
+      if installer_card ${DEV}
+      then
+        log $0 "${DEV} is the storage of a PortareOS card not booted yet (an installer), ignoring."
+        continue
+      fi
       SIZE=$(awk -v p="${DEV##*/}" '$4 == p {print $3}' /proc/partitions)
       if (( ${SIZE:-0} <= 8388608 ))
       then
