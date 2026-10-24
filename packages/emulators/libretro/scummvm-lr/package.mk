@@ -2,8 +2,8 @@
 # Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
 
 PKG_NAME="scummvm-lr"
-PKG_VERSION="fcbce3ae815269dacdc309092bc92ccc6d3e13bb"
-PKG_SHA256="7e60fec38740f90bb987c79d8f8623faa48485373907d3a15a13b0b3b353a316"
+PKG_VERSION="e0ddc60bfabb1efdf1e135006c8914ca59d0596c"
+PKG_SHA256="2f87ca94ce79af39571951f797712e350870c3e56f5b5d288328f377f73d15f9"
 PKG_LICENSE="GPLv3"
 PKG_SITE="https://github.com/libretro/scummvm"
 PKG_URL="${PKG_SITE}/archive/${PKG_VERSION}.tar.gz"
