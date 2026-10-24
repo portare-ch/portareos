@@ -35,7 +35,7 @@ erases that card. Eject it safely when writing and verification finish.
 
 PortareOS bundles **[Portare BIOS](https://github.com/portare-ch/BIOS)**,
 the Nova's bootloader, which replaces ROCKNIX's ABL. It is separate from
-the emulator BIOS files stored under `/storage/roms/bios/`.
+the emulator BIOS files stored under `/storage/bios/`.
 
 If Portare BIOS is already installed, power the Nova off, insert the card,
 then hold **Volume Down** while powering on. Use the volume buttons to move
@@ -167,9 +167,16 @@ Neo Geo CD uses the `neocd` system name. GameCube and Wii inputs can be
 converted to RVZ during transfer with `dolphin-tool`; on macOS, convert in
 Dolphin first and transfer the RVZ. See the tools' instructions for details.
 
-Games belong under `/storage/roms/<system>/`, for example
-`/storage/roms/snes/`. Required BIOS files belong under `/storage/roms/bios/`
-in the layout expected by the emulator. An SFTP client can also connect
+Each system has three folders: `/storage/roms/<system>/` for the games,
+`/storage/bios/<system>/` for its BIOS files and `/storage/saves/<system>/`
+for its saves, for example `/storage/roms/snes/`, `/storage/bios/snes/` and
+`/storage/saves/snes/`. A variant system shares its console's BIOS folder
+(`/storage/bios/gbah` is a link to `/storage/bios/gba`). BIOS files go in the
+layout the emulator expects within that folder (Dreamcast: `dc/`, PS2:
+`pcsx2/bios/`). Save states stay in `/storage/roms/savestates/<system>/`. An update from an
+older release moves BIOS files from `/storage/roms/bios/` and the saves
+next to the games into these folders once; anything it does not recognise
+stays where it was, listed in `/var/log/boot.log`. An SFTP client can also connect
 using the same address, `root` username and password to copy prepared games
 and BIOS files. See
 [game folders and supported formats](PER_DEVICE_DOCUMENTATION/SM8550/SUPPORTED_EMULATORS_AND_CORES.md)

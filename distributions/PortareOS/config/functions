@@ -114,12 +114,24 @@ add_system_dir() {
   then
     mkdir -p "${ESTMP}"
   fi
+  # once: several systems share a console's BIOS folder
+  grep -qF "	${1}	" ${ESTMP}/system-dirs.conf 2>/dev/null && return 0
   cat <<EOF >>${ESTMP}/system-dirs.conf
 d	${1}			0777 root root - -
 EOF
 }
 
+# A link in system-dirs.conf: path to target (relative to its folder).
+add_system_link() {
+  if [ ! -d "${ESTMP}" ]
+  then
+    mkdir -p "${ESTMP}"
+  fi
+  echo "L	${1}			-    -    -    -  ${2}" >>${ESTMP}/system-dirs.conf
+}
+
 add_es_system() {
+  SYSTEM_BIOS=""
   RUNCMD='/usr/bin/runemu.sh %ROM% -P%SYSTEM% --core=%CORE% --emulator=%EMULATOR% --controllers="%CONTROLLERSCONFIG%"'
   if [ -e "${ROOT}/config/emulators/${1}.conf" ]
   then
@@ -153,6 +165,20 @@ EOF
   fi
 
   add_system_dir "${SYSTEM_PATH}"
+
+  ### A system RetroArch runs gets its folders in the storage layout (#753):
+  ### /storage/saves/<folder>, and /storage/bios/<folder>, which for a
+  ### variant (SYSTEM_BIOS) is a link to its console's.
+  if grep -q "^retroarch|" "${ESTMP}/${SYSTEM_NAME}-emulators.tmp" 2>/dev/null
+  then
+    local FOLDER="${SYSTEM_PATH##*/}"
+    add_system_dir "/storage/saves/${FOLDER}"
+    add_system_dir "/storage/bios/${SYSTEM_BIOS:-${FOLDER}}"
+    if [ -n "${SYSTEM_BIOS}" ] && [ "${SYSTEM_BIOS}" != "${FOLDER}" ]
+    then
+      add_system_link "/storage/bios/${FOLDER}" "${SYSTEM_BIOS}"
+    fi
+  fi
 
   if [ -e "${ESTMP}/${SYSTEM_NAME}-emulators.tmp" ]
   then

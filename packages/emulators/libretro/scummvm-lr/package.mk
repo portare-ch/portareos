@@ -51,9 +51,9 @@ makeinstall_target() {
     cp -a "${LR}/scummvm_libretro.so" ${INSTALL}/usr/lib/libretro
 
   # The bundle unpacks to scummvm/theme and scummvm/extra, the layout the
-  # core looks for under RetroArch's system directory. post-update copies
-  # it there (/storage/roms/bios/scummvm) after every update, so the data
-  # always matches the core.
+  # core looks for under RetroArch's system directory, ScummVM's BIOS folder.
+  # post-update copies it there (/storage/bios/scummvm/scummvm) after every
+  # update, so the data always matches the core.
   mkdir -p ${INSTALL}/usr/share
     unzip -qo "${LR}/scummvm.zip" -d ${INSTALL}/usr/share
 

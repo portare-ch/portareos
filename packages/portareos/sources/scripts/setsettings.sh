@@ -30,6 +30,7 @@ LOCK_FILE="/tmp/.retroarch.lock"
 ###
 
 PLATFORM=${1,,}
+ROM_PATH="${2}"
 ROM="${2##*/}"
 CORE=${3,,}
 
@@ -342,6 +343,23 @@ libretro_info_path = "/tmp/cores"
 overlay_directory = "~/overlays"
 video_shader_dir = "/tmp/shaders"
 EOF
+}
+
+### The system's own folders (#753): /storage/bios/<system>, a link to its
+### console's for a variant system (system-dirs.conf), and
+### /storage/saves/<system>, named after the system's game folder. Save
+### states stay in /storage/roms/savestates/<platform> (set_autosave).
+function set_storage() {
+    local FOLDER="${ROM_PATH#${ROMS_DIR}/}"
+    FOLDER="${FOLDER%%/*}"
+    if [ -z "${FOLDER}" ] || [ "${FOLDER}" = "${ROM_PATH}" ]
+    then
+        FOLDER="${PLATFORM}"
+    fi
+    mkdir -p "/storage/bios/${FOLDER}" "/storage/saves/${FOLDER}" 2>/dev/null
+    add_setting "none" "system_directory" "/storage/bios/${FOLDER}"
+    add_setting "none" "savefile_directory" "/storage/saves/${FOLDER}"
+    add_setting "none" "savefiles_in_content_dir" "false"
 }
 
 ### Configure retroarch hotkeys
@@ -1504,6 +1522,7 @@ set_overlay &
 set_rewind &
 set_savestates &
 set_autosave &
+set_storage &
 set_netplay &
 set_runahead &
 set_audiolatency &

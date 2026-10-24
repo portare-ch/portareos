@@ -51,7 +51,7 @@ policy is the fix, for every system at once; it is not NeoCD's to carry.
 
 - `neocd_lr` (`packages/emulators/libretro/neocd_lr/`), in RetroArch. The
   recipe carries the current commit pin; the tuning record below used
-  `b1e04c7`. BIOS files live under `/storage/roms/bios/neocd/`.
+  `b1e04c7`. BIOS files live under `/storage/bios/neocd/neocd/`.
 - Patches: `001-default-to-a-cdz-bios.patch` (#668): the first CDZ BIOS by
   family is the default and the fallback for an unmatched name, instead of
   index 0 of the name-sorted list (the Front Loader, which stops at its CD

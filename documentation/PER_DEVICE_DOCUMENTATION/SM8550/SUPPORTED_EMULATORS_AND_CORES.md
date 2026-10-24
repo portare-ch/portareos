@@ -4,8 +4,9 @@ Reviewed 29 October 2026 against the
 [system definitions](https://github.com/portare-ch/portareos/tree/next/config/emulators) and
 [emulator selection](https://github.com/portare-ch/portareos/blob/next/packages/virtual/emulators/package.mk).
 Folder names below are relative to `/storage/roms/` unless an absolute path
-is shown. Required BIOS files go under `/storage/roms/bios/` in the layout
-the emulator expects.
+is shown. Required BIOS files go under `/storage/bios/<system>/` in the
+layout the emulator expects (a variant system shares its console's), and
+saves are in `/storage/saves/<system>/`.
 
 **Use CHD for disc games; cartridge games keep their ROM formats.**
 PlayStation, PlayStation 2, Dreamcast, Saturn, Sega CD and Neo Geo CD

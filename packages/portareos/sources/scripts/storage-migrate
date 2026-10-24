@@ -1,0 +1,285 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
+
+# One storage layout for every emulator (#753):
+#
+#   /storage/bios/<console>   BIOS files and the cores' own data
+#   /storage/roms/<system>    the games
+#   /storage/saves/<system>   the saves
+#
+# A variant system's BIOS folder is a link to its console's (bios/gbah ->
+# gba), and RetroArch gets the system's two folders at every launch
+# (setsettings.sh). Save states stay in /storage/roms/savestates/<system>.
+#
+# This moves an older install's files into the layout, once, from
+# post-update: the BIOS files and the cores' data from /storage/roms/bios,
+# and the saves the cores wrote next to the games while the save folder was
+# the game's own (savefiles_in_content_dir). It moves file by file and never
+# overwrites, so a run that is cut off picks up where it stopped; a file it
+# does not recognise, or whose place is taken, stays where it was and is
+# logged. Nothing is deleted.
+#
+#   storage-migrate [storage root]     (default /storage; tests pass another)
+
+ROOT="${1:-/storage}"
+OLD="${ROOT}/roms/bios"
+ROMS="${ROOT}/roms"
+BIOS="${ROOT}/bios"
+SAVES="${ROOT}/saves"
+
+log() {
+  echo "storage-migrate: $*"
+}
+
+# src to dst, a file's full path, unless dst is taken. Across filesystems
+# (the games on a card) the copy is made as dst.part and renamed once whole:
+# a cut-off move never leaves part of a save under the real name.
+move() {
+  local src="$1" dst="$2"
+  [ -e "${src}" ] || [ -L "${src}" ] || return 0
+  if [ -e "${dst}" ] || [ -L "${dst}" ]; then
+    log "kept ${src}: ${dst} is taken"
+    return 1
+  fi
+  mkdir -p "${dst%/*}"
+  rm -f "${dst}.part"
+  if [ "$(stat -c %d "${src}")" = "$(stat -c %d "${dst%/*}")" ]; then
+    mv "${src}" "${dst}"
+  else
+    cp -a "${src}" "${dst}.part" && sync && mv "${dst}.part" "${dst}" && rm -f "${src}"
+  fi
+}
+
+# The files under src into dst at the same relative paths, but the links
+# named after src: tmpfiles.d makes them in the new place, so the old links
+# go (a link only, never what it points to). The emptied folders go.
+move_tree() {
+  local src="$1" dst="$2" f rel name skip
+  shift 2
+  [ -d "${src}" ] && [ ! -L "${src}" ] || return 0
+  for name in "$@"; do
+    [ -L "${src}/${name}" ] && rm -f "${src}/${name}"
+  done
+  while IFS= read -r -d '' f; do
+    rel="${f#${src}/}"
+    skip=0
+    for name in "$@"; do
+      [ "${rel}" = "${name}" ] && skip=1
+    done
+    [ "${skip}" = 1 ] || move "${f}" "${dst}/${rel}"
+  done < <(find "${src}" -mindepth 1 \( -type f -o -type l \) -print0)
+  find "${src}" -depth -mindepth 1 -type d -empty -delete 2>/dev/null
+  rmdir "${src}" 2>/dev/null
+  return 0
+}
+
+### The BIOS files and the cores' data, from the old shared folder.
+bios() {
+  local f name size
+  [ -d "${OLD}" ] && [ ! -L "${OLD}" ] || return 0
+
+  # Dreamcast, Naomi and Atomiswave (Flycast): dc/. Its VMUs are the saves
+  # of every Dreamcast game, so they go to the saves; the BIOS folder links
+  # each one there (z_06_flycast.conf).
+  for f in "${OLD}"/dc/vmu_save_*.bin; do
+    move "${f}" "${SAVES}/dreamcast/${f##*/}"
+  done
+  move_tree "${OLD}/dc" "${BIOS}/dreamcast/dc"
+
+  # PS2 (ARMSX2): pcsx2/, but its resources and memcards links (made again
+  # by z_06_armsx2.conf). The BIOS images the standalones used before it,
+  # and loose ones, into pcsx2/bios, where the core reads them.
+  move_tree "${OLD}/pcsx2" "${BIOS}/ps2/pcsx2" resources memcards
+  move_tree "${OLD}/armsx2" "${BIOS}/ps2/pcsx2/bios"
+  move_tree "${OLD}/aethersx2/bios" "${BIOS}/ps2/pcsx2/bios"
+  rmdir "${OLD}/aethersx2" 2>/dev/null
+
+  # Loose images: a PS1 BIOS is 512 KiB (SwanStation finds any valid one in
+  # its folder), the PS2's 4 MiB with its NVM, MEC, ROM1, ROM2 and EROM.
+  for f in "${OLD}"/*; do
+    [ -f "${f}" ] || continue
+    name="${f##*/}"
+    size=$(stat -c %s "${f}")
+    case "${name,,}" in
+      ps2*|*.nvm|*.mec|*.rom1|*.rom2|erom.bin)
+        move "${f}" "${BIOS}/ps2/pcsx2/bios/${name}" ;;
+      scph*|dtlh*|ps1_rom*|openbios*|psxonpsp*)
+        if [ "${size}" = 524288 ]; then
+          move "${f}" "${BIOS}/psx/${name}"
+        else
+          move "${f}" "${BIOS}/ps2/pcsx2/bios/${name}"
+        fi ;;
+    esac
+  done
+  move_tree "${OLD}/swanstation" "${BIOS}/psx/swanstation"
+
+  # Game Boy, Game Boy Color (Gambatte) and Game Boy Advance (mGBA). Both
+  # Game Boys read the custom palettes.
+  move "${OLD}/gb_bios.bin" "${BIOS}/gb/gb_bios.bin"
+  move "${OLD}/gbc_bios.bin" "${BIOS}/gbc/gbc_bios.bin"
+  if [ -d "${OLD}/palettes" ]; then
+    mkdir -p "${BIOS}/gbc"
+    cp -an "${OLD}/palettes" "${BIOS}/gbc/" 2>/dev/null
+    move_tree "${OLD}/palettes" "${BIOS}/gb/palettes"
+  fi
+  move "${OLD}/gba_bios.bin" "${BIOS}/gba/gba_bios.bin"
+
+  # Sega (Genesis Plus GX): the Mega Drive's boot ROM and lock-on carts, the
+  # Master System's and Game Gear's boot ROMs, the Mega-CD's BIOS.
+  for name in bios_MD.bin ggenie.bin areplay.bin sk.bin sk2chip.bin; do
+    move "${OLD}/${name}" "${BIOS}/megadrive/${name}"
+  done
+  for name in bios_U.sms bios_E.sms bios_J.sms bios.sms; do
+    move "${OLD}/${name}" "${BIOS}/mastersystem/${name}"
+  done
+  move "${OLD}/bios.gg" "${BIOS}/gamegear/bios.gg"
+  for name in bios_CD_U.bin bios_CD_E.bin bios_CD_J.bin; do
+    move "${OLD}/${name}" "${BIOS}/segacd/${name}"
+  done
+
+  # Saturn (Ymir): the BIOS, the CD block's firmware and the ROM carts.
+  for name in sega_101.bin mpr-17933.bin saturn_bios.bin mpr-18811-mx.ic1 mpr-19367-mx.ic1; do
+    move "${OLD}/${name}" "${BIOS}/saturn/${name}"
+  done
+  move_tree "${OLD}/cdb" "${BIOS}/saturn/cdb"
+
+  # SNES (Snes9x): the Satellaview's and Sufami Turbo's BIOS. NES (MesenCE):
+  # the Famicom Disk System's.
+  for name in BS-X.bin BS-X.bios STBIOS.bin; do
+    move "${OLD}/${name}" "${BIOS}/snes/${name}"
+  done
+  for name in disksys.rom FdsBios.bin; do
+    move "${OLD}/${name}" "${BIOS}/nes/${name}"
+  done
+
+  # N64 (ParaLLEl N64): the 64DD's IPL, and the disks the core copies there
+  # with their saves.
+  move "${OLD}/64DD_IPL.bin" "${BIOS}/n64/64DD_IPL.bin"
+  for f in "${OLD}"/parallel_n64_dd_*; do
+    move "${f}" "${BIOS}/n64/${f##*/}"
+  done
+
+  # Neo Geo CD (NeoCD): neocd/. Arcade and Neo Geo (FBNeo): fbneo/, and the
+  # zips it looks for in the folder's root (neogeo.zip, pgm.zip, ...).
+  move_tree "${OLD}/neocd" "${BIOS}/neocd/neocd"
+  move_tree "${OLD}/fbneo" "${BIOS}/arcade/fbneo"
+  move_tree "${OLD}/arcade" "${BIOS}/arcade"
+  for f in "${OLD}"/*.zip "${OLD}"/*.7z; do
+    move "${f}" "${BIOS}/arcade/${f##*/}"
+  done
+
+  # GameCube and Wii (Dolphin): dolphin-emu/ but its Sys link (made again by
+  # z_06_dolphin.conf for each console), and a GC/ IPL folder.
+  move_tree "${OLD}/dolphin-emu" "${BIOS}/gamecube/dolphin-emu" Sys
+  move_tree "${OLD}/GC" "${BIOS}/gamecube/GC"
+
+  # PSP (PPSSPP): its assets. ScummVM: its themes, data and game list (the
+  # saves it points at are moved with the saves). xemu's old folder.
+  move_tree "${OLD}/PPSSPP" "${BIOS}/psp/PPSSPP"
+  move_tree "${OLD}/scummvm" "${BIOS}/scummvm/scummvm"
+  move "${OLD}/scummvm.ini" "${BIOS}/scummvm/scummvm.ini"
+  move_tree "${OLD}/xemu" "${BIOS}/xbox/xemu"
+
+  rmdir "${OLD}" 2>/dev/null || log "left in ${OLD}: $(ls -A "${OLD}" | tr '\n' ' ')"
+}
+
+### The saves the cores wrote next to the games.
+
+# Matching files anywhere under a system's game folder, into its save folder
+# by name: RetroArch keeps no subfolders there.
+move_found() {
+  local s="$1" f
+  shift
+  [ -d "${ROMS}/${s}" ] || return 0
+  while IFS= read -r -d '' f; do
+    move "${f}" "${SAVES}/${s}/${f##*/}"
+  done < <(find "${ROMS}/${s}" -type f \( "$@" \) -print0)
+}
+
+# A folder a core keeps beside the games, from wherever it is under the
+# system's game folder into one in its save folder.
+move_dirs() {
+  local s="$1" name="$2" d
+  [ -d "${ROMS}/${s}" ] || return 0
+  while IFS= read -r -d '' d; do
+    move_tree "${d}" "${SAVES}/${s}/${name}"
+  done < <(find "${ROMS}/${s}" -mindepth 1 -type d -name "${name}" -prune -print0)
+}
+
+saves() {
+  local s f
+  for d in "${ROMS}"/*; do
+    s="${d##*/}"
+    [ -d "${d}" ] && [ ! -L "${d}" ] || continue
+    case "${s}" in
+      bios|savestates|screenshots|movies|music|ports|ps3) continue ;;
+    esac
+
+    # RetroArch's, for every core that hands over its cartridge RAM and
+    # clock (NeoCD's per-game copy too).
+    move_found "${s}" -iname '*.srm' -o -iname '*.rtc'
+
+    case "${s}" in
+      nes|famicom|fds)
+        # MesenCE writes its own: .sav and .chr.sav, and a disk's writes as
+        # an IPS beside an FDS image (only there: a cart's .ips is a patch).
+        move_found "${s}" -iname '*.sav'
+        if [ "${s}" = fds ]; then
+          while IFS= read -r -d '' f; do
+            [ -e "${f%.*}.fds" ] && move "${f}" "${SAVES}/${s}/${f##*/}"
+          done < <(find "${ROMS}/${s}" -type f -iname '*.ips' -print0)
+        fi ;;
+      segacd|megacd|megadrive|megadrive-japan|megadriveh|genesis|genh|mastersystem|gamegear|gamegearh|sg-1000)
+        # Genesis Plus GX: the Mega-CD's backup RAM and RAM cart. One per
+        # folder: copies from game subfolders past the first stay, logged.
+        move_found "${s}" -iname '*.brm' ;;
+      psx)
+        move_found "${s}" -iname '*.mcd' ;;
+      saturn)
+        move_found "${s}" -name 'smpc.bin' ;;
+      naomi|atomiswave)
+        # Flycast keeps an arcade board's saves beside the game while that
+        # is the save folder, and in reicast/ under any other.
+        while IFS= read -r -d '' f; do
+          move "${f}" "${SAVES}/${s}/reicast/${f##*/}"
+        done < <(find "${ROMS}/${s}" -type f \( -name '*.nvmem' -o -name '*.nvmem2' -o -name '*.eeprom' \
+                   -o -name '*.card' -o -name '*-hopper.bin' \) -print0) ;;
+      arcade|neogeo|cps1|cps2|cps3|fbneo)
+        move_dirs "${s}" fbneo ;;
+      psp|pspminis)
+        move_dirs "${s}" PSP ;;
+      gamecube|triforce|wii|wiiware)
+        move_dirs "${s}" User ;;
+      ps2)
+        # ARMSX2's memory cards, linked from its folder (z_06_armsx2.conf).
+        for f in "${ROMS}/ps2"/Mcd*.ps2; do
+          move "${f}" "${SAVES}/ps2/${f##*/}"
+        done ;;
+    esac
+  done
+}
+
+### ScummVM keeps a save path in its game list once it has one, so the old
+### one would outlive the move: its saves move to /storage/saves/scummvm and
+### every savepath line points there.
+scummvm() {
+  local ini="${BIOS}/scummvm/scummvm.ini" new="/storage/saves/scummvm" p f
+  [ -f "${ini}" ] || return 0
+  while IFS= read -r p; do
+    p="${p%/}"
+    [ -n "${p}" ] && [ "${p}" != "${new}" ] || continue
+    p="${ROOT}${p#/storage}"
+    [ -d "${p}" ] || continue
+    for f in "${p}"/*.s[0-9][0-9]*; do
+      move "${f}" "${SAVES}/scummvm/${f##*/}"
+    done
+  done < <(sed -n 's/^savepath=//p' "${ini}")
+  sed -i "s|^savepath=.*|savepath=${new}|" "${ini}"
+}
+
+mkdir -p "${BIOS}" "${SAVES}"
+bios
+saves
+scummvm
+exit 0
