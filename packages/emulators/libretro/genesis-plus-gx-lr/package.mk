@@ -2,8 +2,8 @@
 # Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="genesis-plus-gx-lr"
-PKG_VERSION="aa74d79634cd230f65cce4180e92688e53883d2f"
-PKG_SHA256="55ed2a90c037b69208c5410632e8847ac9e453fadccc6283f01a2d81e2a276c5"
+PKG_VERSION="60bee4c724859710ce05672239e5b601ad01382e"
+PKG_SHA256="be38862ff269dfb69c543fbd4219c1883f18f9de99d00164040b40d6e5b3a844"
 PKG_LICENSE="Non-commercial"
 PKG_SITE="https://github.com/libretro/Genesis-Plus-GX"
 PKG_URL="${PKG_SITE}/archive/${PKG_VERSION}.tar.gz"
