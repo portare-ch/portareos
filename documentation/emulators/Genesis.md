@@ -9,9 +9,10 @@ cost is.
 
 ## Status: baseline established, 2026-10-19
 
-The capture validates, three replays agree within 5 %, and every frame of
-the four minutes reaches the panel twice. Two decisions are the user's
-before this moves on: scanlines (Genesis ships none today) and the
+The capture validates, three replays agree within 5 %, and nearly every
+frame of the four minutes reaches the panel twice; the exceptions are
+recorded below. Two decisions are the user's before this moves on:
+scanlines (Genesis ships none today) and the
 reference recording (the attract loop stands in until a human-played Strite
 segment exists). Nothing has been tuned yet; nothing measured so far says
 anything needs to be.

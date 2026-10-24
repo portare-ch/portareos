@@ -4,7 +4,7 @@ Built for the Retroid Pocket Nova, with low latency and faithful console timing
 as priorities. One line per feature; implementation and device verification
 vary. Experimental work and known limitations are listed separately below.
 
-Reviewed 21 October 2026. See the [supported systems](../README.md#systems-and-status),
+Reviewed 24 October 2026. See the [supported systems](../README.md#systems-and-status),
 [verification inventory](FEATURES.md) and [known issues](../BUGS.md) for coverage
 and test status.
 
@@ -15,7 +15,7 @@ and test status.
 * 200 Hz gamepad reporting, up from the vendor's 111 Hz.
 * Finer analog-stick reporting through a reduced MCU deadband.
 * CPU isolation puts games on the performance cores and background services on the efficiency cores.
-* Device interrupts and background kernel work stay on the efficiency cores during games.
+* Device interrupts default to the efficiency cores; unbound kernel work is confined there during games.
 * ARMSX2 threads are assigned individually to the X3 and A715 cores.
 * Per-system and per-game CPU/GPU settings, restored after exiting.
 * Latency-oriented kernel configuration with a 1000 Hz tick.
@@ -54,6 +54,7 @@ Details: [variable refresh](VARIABLE_REFRESH.md), [console timing](CONSOLE_CLOCK
 * PipeWire audio stack using Qualcomm AudioReach DSP playback.
 * Shared-memory DSP playback with sample-accurate position reporting.
 * Speaker and headphone links support 32, 44.1 and 48 kHz.
+* Nova-specific speaker channel mapping and a configured mono built-in microphone; capture still needs device verification.
 * RetroArch selects the audio output rate from the emulated core.
 * Reduced audio buffering: 8 ms RetroArch setting and a configured 3 ms PipeWire minimum.
 * DSP period lengths follow the sample rate, avoiding extra buffering at 32 kHz.
@@ -88,18 +89,23 @@ Details: [everyday controls](../README.md#installation-and-everyday-use),
 ## Launcher, connectivity and updates
 
 * Minimal console-and-game launcher with battery, volume, brightness and time.
+* Offline CHD title recognition for PlayStation, PS2, PSP and Neo Geo CD, without renaming game files.
 * English and Japanese interface.
 * PS2-style rendering of Japanese kana and kanji.
 * Japanese and accented game filenames display in either interface language.
 * Favourites, recently played games and scrolling long titles.
 * Optional PlayStation-style shape symbols for button hints.
 * PortScope diagnostics for buttons, sticks, triggers and input report rate.
-* Stick and trigger calibration with persistent settings.
+* Existing GPcal calibration scripts still apply at boot; PortScope displays input without calibrating it.
 * Integrated Wi-Fi, Bluetooth, SSH, language and time-zone settings.
 * USB file transfer and USB networking modes.
 * SFTP game transfer over the network.
 * Unique root password generated for each device and displayed under About.
 * Nightly and release updates downloaded through the launcher and installed on restart.
+* Bundled Portare BIOS bootloader, updated in both ABL slots with the distribution.
+* Portare BIOS installs from a PortareOS SD card to internal storage, alongside Android or replacing it.
+* Screen off after two idle minutes in the launcher and PORTAMP, configurable under Settings > Power.
+* Launcher requests suspend after five more idle minutes by default; an external display, disabled suspend or active SSH prevents it.
 * Configurable charging indication through the stick LEDs.
 
 Details: [installation and updates](INSTALLATION.md),
@@ -132,7 +138,7 @@ Details: [screenshots](../README.md#what-it-looks-like),
 * PortScope inspects controls and report rate, including the raw input path before InputPlumber.
 * MangoHud exposes performance statistics and logs application and display frame intervals.
 * Host-side display-trace captures display events over SSH; display-check checks the recording frame by frame.
-* Host-side device-tests runs the automatic configuration checks from the device test plan.
+* Host-side device-tests runs configuration checks; several assertions need updating to match the current test plan.
 
 The dedicated debug package is enabled by default in unofficial builds; the
 guide distinguishes those tools from ordinary image utilities and host scripts.

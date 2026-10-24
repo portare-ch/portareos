@@ -161,9 +161,9 @@ The quirk `040-affinity` names the two sets: `GAME_CPUS=3-7` and
   emulator must be in `game.slice`, and `system.slice` must not reach the
   emulator's reserved cores.
 
-Rendering is KMS only, with no compositor during a game, so the system has
-little left to run while a game is up. That is what makes taking cores 3-7
-away from it cheap.
+Emulators render directly through KMS, so the system has little left to run
+while a game is up. Steam uses gamescope as its compositor exception. That
+small background workload makes taking cores 3-7 away from it cheap.
 
 ### Phase 3: a dedicated gaming user
 

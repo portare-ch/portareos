@@ -144,15 +144,10 @@ without DSC`. None of this was known here:
   `0x0d 0x75 0x00 0x00` brightness, the same 120 ms and 20 ms waits, and the
   same reset pulse once the active-low flag is accounted for.
 
-The vendor sends three more after the display is on - page `0x22`, register
-`0xe1 = 0x01`, back to page `0x00` - which this driver does not. Whoever
-transcribed the other fourteen exactly had those in front of them and stopped,
-so the omission is more likely a decision than an oversight, and the reasoning
-did not survive: the driver reached this tree with the ROCKNIX rename. What
-`0xe1` does is undocumented, and a register written once after display-on in a
-vendor page is the shape of a compensation setting. That is the argument
-against sending it speculatively rather than for it - getting it wrong degrades
-the image subtly and attributes itself to nothing.
+The vendor sends three more after the display is on: page `0x22`, register
+`0xe1 = 0x01`, then back to page `0x00`. This driver originally omitted them;
+patch `1130` (#727) now sends them too, matching Android's on-command and
+Retroid's driver. What `0xe1` controls remains undocumented.
 
 ### Why video mode, when the vendor uses command mode
 
@@ -160,13 +155,13 @@ That node drives the panel in command mode, with a hardware TE pin. This
 driver uses video mode, and that is deliberate.
 
 A CRT has no memory: the host drives H and V sync and the beam paints what
-arrives, when it arrives. Video-mode DSI is the same contract - the DPU owns
-the timing, the panel holds no framebuffer, pixels stream. Command mode is the
-other arrangement: the panel keeps its own GRAM, refreshes itself at its own
-rate, and the host writes into it when TE allows.
+arrives, when it arrives. With video-mode DSI the DPU sends a continuous
+pixel stream and controls its timing. That does not prove the panel has no
+buffer: the measurements above show it scanning its own memory when it loses
+lock. Command mode explicitly uses the panel's GRAM and TE to schedule writes.
 
 Every mode in the table above exists because of that difference. The timings
-are ours to choose, so each console gets a panel mode at exactly twice its
+are ours to choose, so each console family gets a fixed mode near twice its
 frame rate; in command mode the panel self-refreshes at a rate it decides and
 there is no modeline to cut. The strategy does not survive the switch.
 
@@ -216,7 +211,7 @@ The rates are the original NTSC hardware's frame rate, or for handhelds the hard
 
 Where an emulator runs at a different rate from the hardware, the table says so. On the N64, the hardware rate follows from the video chip's 48.681812 MHz clock: a 3094-clock line and a 263-line frame in 240p, or 262.5 lines in 480i. ParaLLEl N64 as shipped upstream does not emulate the line length: it derives the frame period from a nominal 60 Hz and the frame height the game sets, so it runs at about 60.02 Hz. PortareOS patches it (`003-vi-frame-period-from-h-sync.patch`) to take the period from the `V_SYNC` and `H_SYNC` registers, which gives the console's 59.826 Hz, and matches a panel mode to it.
 
-The PlayStation's line is 3412.5 GPU clocks, the broadcast line. SwanStation rounds it to 3413 and so runs at 59.8173 Hz; PortareOS patches it (`001-ntsc-line-is-3412-5-ticks.patch`) to alternate 3413 and 3412 like the console, which gives 59.826 Hz, the same as the N64, so the two share a mode. SwanStation keeps 263 lines in 480i as well, where the console has 262.5, so a 480i game runs at 59.826 rather than the console's 59.94: 0.19 % slow, the same compromise as the N64's.
+The PlayStation's line is 3412.5 GPU clocks, the broadcast line. SwanStation rounds it to 3413 and so runs at 59.8173 Hz; PortareOS patches it (`001-ntsc-line-is-3412-5-ticks.patch`) to alternate 3413 and 3412 like the console, which gives 59.826 Hz, the same as the N64, so the two share a mode. SwanStation keeps 263 lines in 480i as well, where the console has 262.5, so a 480i game runs at 59.826 rather than the console's 59.94: 0.19 % slow. ParaLLEl N64 instead reports 59.94 for interlaced output; the fixed panel mode does not change the rate of RetroArch's content timer.
 
 | Systems (default emulator) | Native rate (Hz) | Panel mode (Hz) |
 |---|---|---|
@@ -234,20 +229,21 @@ The PlayStation's line is 3412.5 GPU clocks, the broadcast line. SwanStation rou
 | neogeo (FBNeo) | 59.1856 (the emulator keeps hundredths: 59.18) | 118.360 |
 | neocd (NeoCD) | 59.5999 (the CD's 24.168 MHz crystal) | 119.200 |
 | arcade (FBNeo) | depends on the game's board (about 54–61) | 119.880 |
-| dreamcast, naomi, atomiswave (Flycast) | 59.94 | 119.880 (exactly 2×) |
+| dreamcast, naomi, atomiswave (Flycast) | 59.9453 in 480i/VGA; 59.827 in 240p | 119.880 (near 2× for 480i/VGA) |
 | gamecube, triforce, wii, wiiware (Dolphin) | 59.94 | 119.880 (exactly 2×) |
 | ps2 (ARMSX2) | 59.94 | 119.880 (exactly 2×) |
 | xbox (xemu) | 59.94 | 119.880 (exactly 2×) |
 | psp, pspminis (PPSSPP) | 59.94 | 119.880 (exactly 2×) |
-| scummvm, steam, ports | no fixed rate (PC games) | 119.880 |
+| scummvm, ports | no fixed rate | 119.880 fixed fallback |
+| steam | capped at 60 fps | 120.198 with VRR |
 | movies (mpv) | the video's frame rate (23.976, 25, 29.97 …) | 119.880; mpv syncs video to audio |
-| music, tools, imageviewer | – | 119.880 |
+| music, tools, imageviewer | – | application-dependent; no dedicated console mode |
 
 ## Audio
 
 The Nova's speaker and headphone link runs at **48 kHz, 44.1 kHz or 32 kHz**. Three things had to allow that: the AudioReach topology blob, which caps the playback PCMs at 48 kHz until `extra-firmware`'s `tplg-playback-rates.py` widens it; kernel patches 1052–1055, which open the DSP ports and the machine driver's fixup to 44.1 and 32 kHz; and the I2S bit clock, which follows the stream (1054). PipeWire allows all three rates (`default.clock.allowed-rates = [ 48000 44100 32000 ]`). [AUDIO_SAMPLE_RATES.md](AUDIO_SAMPLE_RATES.md) describes the whole procedure, for carrying it to another distribution. No rate is a resampling stage in itself: the link switches to the rate of the stream that opens it.
 
-**RetroArch picks the link rate from the core's** (`audio_out_rate = "0"`, RetroArch patch 0015): the smallest of 32, 44.1 and 48 kHz that the core's rate divides into within 0.5 % (32,040 → 32,000; 22,050 → 44,100; 44,100 → 44,100), else the smallest above it so nothing is cut (32,768 → 44,100), else 48 kHz (65,536 → 48,000). The pick is made every time the audio driver initialises, so a core that changes its rate through `SET_SYSTEM_AV_INFO`, as ParaLLEl N64 does once the game has programmed its DAC, reopens the device at the new game's rate. A non-zero `audio_out_rate` in a per-core config (`config/<core>/<core>.cfg`) still overrides the pick; the shipped ones for SwanStation, Flycast, PPSSPP, NeoCD, Genesis Plus GX, PicoDrive (44.1 kHz) and Snes9x (32 kHz, 44.1 kHz for `snesmsu1`) name the rate the pick would make anyway. RetroArch resamples each core's audio to that rate with its sinc resampler, and dynamic rate control keeps the stream in step with the display. So every core is resampled at least a little, even one whose rate matches the output, because rate control adjusts the ratio by up to 0.5 %. mpv plays a file at its own rate.
+**RetroArch picks the link rate from the core's** (`audio_out_rate = "0"`, RetroArch patch 0015): the smallest of 32, 44.1 and 48 kHz that the core's rate divides into within 0.5 % (32,040 → 32,000; 22,050 → 44,100; 44,100 → 44,100), else the smallest above it so nothing is cut (32,768 → 44,100), else 48 kHz (65,536 → 48,000). The pick is made every time the audio driver initialises, so a core that changes its rate through `SET_SYSTEM_AV_INFO`, as ParaLLEl N64 does once the game has programmed its DAC, reopens the device at the new game's rate. A non-zero `audio_out_rate` in a per-core config (`config/<core>/<core>.cfg`) still overrides the pick; the shipped ones for SwanStation, Flycast, PPSSPP, NeoCD, Genesis Plus GX, PicoDrive and Ymir (all 44.1 kHz) name the rate the pick would make anyway. Snes9x uses automatic selection: 32 kHz normally, 44.1 kHz for `snesmsu1` with enhanced audio. RetroArch resamples each core's audio to that rate with its sinc resampler, and dynamic rate control keeps the stream in step with the display. So every core is resampled at least a little, even one whose rate matches the output, because rate control adjusts the ratio by up to 0.5 %. mpv plays a file at its own rate.
 
 The first rate column is the console's own: the rate its sound hardware produces samples at, or "analog" where the chip's channels are mixed as analog signals and there is no sample rate to speak of. The second is what the emulator hands RetroArch, taken from its source code at the pinned commit with PortareOS's options.
 
@@ -278,9 +274,9 @@ The first rate column is the console's own: the rate its sound hardware produces
 
 In short:
 
-- **No resampling needed:** the 44.1 kHz cores play at 44.1 kHz: PS1, Saturn, Dreamcast, NAOMI, Atomiswave, PSP, NeoCD and every other Sega system. Xbox, PS2 and Dolphin already produce 48 kHz, and the NES 32 kHz.
+- **Matching nominal rates:** the 44.1 kHz cores play at 44.1 kHz: PS1, Saturn, Dreamcast, NAOMI, Atomiswave, PSP, NeoCD and every other Sega system. Xbox, PS2 and Dolphin already produce 48 kHz, and the NES 32 kHz.
 - **Nearly native:** the SNES plays at 32 kHz. The 32,040 → 32,000 conversion (0.125 %) is smaller than what rate control adjusts anyway.
-- **Resampled as on any other device:** Game Boy, GBA and Neo Geo. Their rates match none of the link's rates, so they need resampling either way. The N64 is per game: ~32 kHz games get the 32 kHz link, ~22 kHz games an exact 2:1 into 44.1 kHz, 44.1 kHz games play native.
+- **Resampled as on any other device:** Game Boy, GBA and Neo Geo. Their rates match none of the link's rates, so they need resampling either way. The N64 is per game: ~32 kHz games get the 32 kHz link, ~22 kHz games roughly 2:1 into 44.1 kHz, 44.1 kHz games play native.
 
 ## Adding a mode
 

@@ -1,6 +1,6 @@
 # Roadmap
 
-Last revised 21 October 2026.
+Last revised 24 October 2026.
 
 The goal is a stock Android replacement for the Retroid Pocket Nova: write
 an image, add games and any required BIOS files, and play. Every included
@@ -70,8 +70,8 @@ require a trip through RetroArch or a standalone emulator's menus.
 
 **Complete when:** games launch with usable controls, correct geometry,
 clean audio and suitable performance without manual emulator configuration.
-Required files and unavoidable exceptions are documented, and updates
-preserve settings the user deliberately changed.
+Required files and unavoidable exceptions are documented. Settings managed
+by the distribution and supported persistent overrides are clearly identified.
 
 ## MCU and input latency
 
@@ -166,7 +166,7 @@ with stable audio, frame delivery and latency across the affected systems.
 
 Use the [package inventory](documentation/PACKAGE_INVENTORY.md) as the starting
 point ([#333](https://github.com/portare-ch/portareos/issues/333)). Its size
-figures come from an older image. Recheck unused shader families, Python's
+figures come from an older image. Recheck unused shader families and Python's
 remaining runtime users before treating them as savings. GStreamer and its
 plugins, libmpeg2, x264 and x265 were removed as unreachable recipes in #701;
 they were not installed in the image, so that removal saved no image space.
@@ -291,7 +291,8 @@ published.
   ([#284](https://github.com/portare-ch/portareos/issues/284)).
 - **Launcher:** test current navigation and selection persistence, error
   reporting, game-guide handover and update behavior. Coordinate changes
-  with portarelauncher; the image currently ships 0.8.4.
+  with portarelauncher; the image currently ships 0.9.1, including offline
+  CHD titles for PlayStation, PS2, PSP and Neo Geo CD.
 - **Color profiles:** fix crushed dark greys and verify the result on the
   panel before recommending a calibrated profile again; see BUGS.md.
 - **A game session that is not root:** move game sessions to a dedicated user

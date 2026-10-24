@@ -63,9 +63,9 @@ policy is the fix, for every system at once; it is not NeoCD's to carry.
   `savestate_features = "deterministic"` to NeoCD's info file (#667).
   Upstream's file predates the keys, and without them RetroArch and
   gamecapture refuse run-ahead, preemptive frames and captures.
-- Games are `.chd` only (#669). Prepare them with PortareOS tools and
-  transfer the CHD with `nova-push neocd`; automatic conversion currently
-  recognizes the older `neogeocd` name. See [installation](../INSTALLATION.md).
+- Games are `.chd` only (#669). `nova-push neocd` converts CUE inputs,
+  verifies the CHD and transfers it to the device. See
+  [installation](../INSTALLATION.md).
 - Build: the toolchain passes `-O2 -flto -march=armv9-a+... -mtune=cortex-x3`;
   NeoCD's Makefile appends `-Ofast -DNDEBUG` and `USE_LTO=1` on its own, and
   the last `-O` wins. The effective build is `-Ofast` with LTO. Enabling LTO
@@ -74,8 +74,8 @@ policy is the fix, for every system at once; it is not NeoCD's to carry.
 ## Presentation
 
 - Core rate 59.5999 Hz (6042000 / 101376). VRR with kernel LFC; setsettings
-  asks for the exact 119.1998 Hz mode (2 x 59.5999) and the panel repeats
-  each frame twice.
+  selects the fastest 120.198 Hz base mode and the panel scans each frame
+  twice at about 119.1998 Hz. With VRR disabled, the fixed mode is 119.200 Hz.
 - Full-screen 4:3, decided 2026-10-18: the console's 320x224 filled a 4:3
   tube, so the picture fills the 4:3 panel. Integer scaling off
   (`neocd.integerscale=0`), aspect `core` with the core's `4:3 DAR`, overscan
@@ -134,7 +134,7 @@ policy is the fix, for every system at once; it is not NeoCD's to carry.
 | `neocd_aspect_ratio` | 4:3 DAR | The tube's geometry; see Presentation. |
 | `neocd_overscan_h` | 8 (default) | The hardware's blanked columns; 0 showed them as black bands. |
 | `neocd.integerscale` | 0 | Full-screen 4:3. |
-| `neocd.shaderset` | portare/lines-1x.slangp | Scanlines only; see Presentation. Its GPU time is in the latency path (LATENCY.md); measured in the next round. |
+| `neocd.shaderset` | portare/lines-1x.slangp | Scanlines only; see Presentation. Its GPU time is in the latency path; measured below and in [LATENCY.md](../LATENCY.md). |
 | `neocd_region` | Japan | |
 | `audio_out_rate` | 44100 | See Audio. |
 | `neocd.preempt` | 1 | On by default (user, 2026-10-18) after the A/B: 0.5 ms more path and a third more CPU for the game's frame of lag, zero xruns, and the console's own pause and RetroArch's survive it in Metal Slug and Metal Slug 2. Settings > Consoles switches it (portarelauncher 0.8.3). |

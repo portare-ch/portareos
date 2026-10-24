@@ -10,40 +10,51 @@
   - bookworm  (Debian 12)
   - trixie    (Debian 13)
 
-**Build docker image**
+**Build Docker image**
 
-Use the following command to create a docker image and tag it with `libreelec`.
+From the PortareOS repository root, build the container used by this tree
+and tag it with `portareos-build`:
 
 ```
-docker build --pull -t libreelec tools/docker/noble
+docker build --pull -t portareos-build .
 ```
 
 See https://docs.docker.com/engine/reference/commandline/build/ for details on `docker build` usage.
 
-**Build LibreELEC image inside a container**
+The root `Dockerfile` is the one used by CI. The distribution-specific
+Dockerfiles listed above remain under `tools/docker/`; they are alternatives,
+not the definition used for the published build container.
 
-Change to your LibreELEC.tv development directory that you checked out with <br>
- `git clone https://github.com/`**myname**`/LibreELEC.tv.git`
+**Build a PortareOS image inside a container**
 
- ```
- cd LibreELEC.tv
- ```
+From the repository root:
 
-Then use the following command to build LibreELEC images inside a new container based on the docker image tagged with `libreelec`. (The `pwd` uses the current directory - which must have the LibreELEC `Makefile` in it.)
-
-```
-docker run --rm --log-driver none -v `pwd`:/build -w /build -it libreelec make image
+```sh
+make docker-SM8550
 ```
 
-Use `--env`, `-e` or `--env-file` to pass environment variables used by the LibreELEC buildsystem.
+This uses `ghcr.io/portare-ch/portareos-build:latest` and runs the Nova build
+with the repository mounted at the same path, as your user. Docker and
+Podman are supported. To use the container built above:
 
+```sh
+make docker-SM8550 DOCKER_IMAGE=portareos-build
 ```
-docker run --rm --log-driver none -v `pwd`:/build -w /build -it -e PROJECT=RPi -e DEVICE=RPi4 -e ARCH=arm libreelec make image
+
+Images are written to `target/`. To run the same build directly with Docker:
+
+```sh
+docker run --rm --init --user "$(id -u):$(id -g)" \
+  -v "$PWD:$PWD" -w "$PWD" -it portareos-build make SM8550
+```
+
+Use `--env`, `-e` or `--env-file` to pass build settings to `docker run`:
+
+```sh
+docker run --rm --init --user "$(id -u):$(id -g)" \
+  -v "$PWD:$PWD" -w "$PWD" -it -e DEBUG_PACKAGES=yes portareos-build make SM8550
 ```
 
 See https://docs.docker.com/engine/reference/commandline/run/ for details on `docker run` usage.
 
-Note: `dockerd` is set to send all its logs to journald using the setting `--log-driver=journald` (so if you don't set the `--log-driver none` for your `docker run` these logs will be sent through to your log.
-Refer:
-
-https://github.com/LibreELEC/LibreELEC.tv/blob/1810c97fb2839486e63f6694dd093428ba24c39a/packages/addons/service/docker/source/system.d/service.system.docker.service#L12
+Use `make docker-shell` for an interactive shell in the published container.

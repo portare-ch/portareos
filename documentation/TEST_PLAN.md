@@ -4,7 +4,7 @@ One test per row of FEATURES.md, on a Retroid Pocket Nova running the build
 under test. Automatic tests are run by `tools/device-tests` over SSH and
 print PASS, FAIL or SKIP per test; human tests are a checklist with the
 exact thing to look or listen for. Configuration expectations reviewed
-21 October 2026; recorded runs below include older builds.
+24 October 2026; recorded runs below include older builds.
 
 `tools/device-tests` still contains obsolete assertions, including a fixed
 256-frame audio quantum, automatic frame delay outside its current
@@ -127,8 +127,8 @@ keep frame-delivery logs alongside the configuration.
 
 ### D5 Integer scaling per system (human)
 
-Take a screenshot (RetroArch hotkey, or `screenshot` from the launcher
-Tools menu) in each system and measure the image in an editor.
+Take a RetroArch screenshot in each system and measure the image in an
+editor. The launcher has no screenshot tool.
 
 | System | Expected picture |
 |---|---|
@@ -145,7 +145,7 @@ narrower than its neighbours).
 ### D6 Color profile Gamma 2.2 and sRGB (human)
 
 Settings > Color profile: set each of sRGB and Gamma 2.2, then show a
-16-step grey ramp image (copied into roms/media, played with mpv) and
+16-step grey ramp image (opened directly with mpv over SSH) and
 count the distinguishable steps at the dark end. Pass for a profile when all 16 are distinct and pure red, green and
 blue patches do not shift hue against the stock profile. Known state:
 both fail today on the dark steps; this test records how many steps
@@ -309,8 +309,8 @@ See [audio latency](AUDIO_LATENCY.md) for measured limits and open coverage.
 ```
 ls /usr/lib/libretro/*_libretro.so
 ```
-Exactly the cores in the README table, one per system; no `melonds`,
-`yabause`, `beetle_saturn` alongside `beetle_saturn_hw`, and so on. The
+Exactly the cores in the README table, one per system; no alternative
+Saturn core alongside `ymir`, for example. The
 script carries the expected list.
 
 ### E2 Preemptive frame per 2D console (auto+human)
@@ -445,8 +445,11 @@ loading `gbc.opt`. Start a GB game: the GB palette applies instead.
 
 ### E7 ScummVM as a libretro core (human)
 
-Copy Beneath a Steel Sky (freeware) to roms/scummvm, start it. The intro
-plays, MIDI music sounds through FluidLite, a save and load cycle works.
+Copy Beneath a Steel Sky (freeware) to roms/scummvm. Use Tools > Start
+ScummVM to add the game's directory; its Tools > Playlist Generator creates
+the `.scummvm` file the launcher needs. Launch that entry: the intro plays,
+music sounds and a save and load cycle works. Check FluidLite separately
+with a game configured for General MIDI.
 `ls /storage/roms/bios/scummvm` holds the data bundle.
 
 ### E9 No automatic savestate load (auto)
@@ -486,7 +489,7 @@ launcher returns to the game that was started.
 Each row once. Wi-Fi off and on reconnects; Bluetooth pairs a pad; SSH off
 then on (`ssh.enabled` follows, `sshd` stops and starts); USB gadget
 mounts on a PC; buttons swaps A/B in the launcher; color as D6; profile
-changes the CPU governor; charging LED as L7; Language & region as L11,
+changes the CPU governor; charging LED as L7; Language & time as L11,
 its time zone changing the clock under About and the Wi-Fi country
 (`iw reg get`: Europe/Berlin is DE, UTC is 00); About shows version,
 password and IP; power reboots and shuts down.
@@ -508,8 +511,9 @@ matches what was set.
 
 Settings > About > Update on the nightly channel: the newest nightly
 downloads to `/storage/.update/`, the sha256 check passes, the device reboots into it
-and About shows the new version. Settings survive; `.migrations` gains any
-new marker.
+and About shows the new version. User settings in `system.cfg` survive
+except for explicit migrations; managed RetroArch defaults are refreshed.
+`.migrations` gains any new marker.
 
 ### L5 Per-device root password on first boot (auto+human)
 
@@ -572,7 +576,7 @@ grep -l DualSense /sys/class/input/event*/device/name   # the virtual pad is bac
 
 ### L11 Japanese (auto+human)
 
-Human: Settings > Language & region, press A on `Language / 言語`: every
+Human: Settings > Language & time, press A on `Language / 言語`: every
 screen redraws in Japanese, and again in English on the next press; a
 restart keeps the choice. In Japanese: the console names are the ones
 sold in Japan (スーパーファミコン, NINTENDO64); a ROM named in Japanese
@@ -683,9 +687,9 @@ file plays in software without error.
 
 ### M2 SD at 4:3 with scanlines (human)
 
-Play a 712×478 DVD rip with no aspect flag: the picture is 4:3 with black
-pillars and visible scanlines. Play a 1080p file: no scanlines, full
-width.
+Play a 712×478 DVD rip with no aspect flag: the picture fills the 4:3 panel
+and has visible scanlines. Play a 1080p file: no scanlines, with its source
+aspect ratio preserved.
 
 ## Build and process
 
@@ -699,7 +703,8 @@ state. A nightly after `rebuild: full` takes the full time.
 
 Break a package on a branch (a bad `PKG_SHA256`), push, and the failing
 job's "Print the failing thread logs" step shows that package's thread log
-with the error. Revert.
+with the error. Read the tail of `output.log` first: a thread named in the
+summary may have been terminated because another job failed. Revert.
 
 ### B3 Package dependency check (auto, CI)
 
