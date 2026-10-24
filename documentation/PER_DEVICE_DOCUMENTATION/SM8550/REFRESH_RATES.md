@@ -23,13 +23,13 @@ Where each system's native rate comes from, crystal by crystal, and where an emu
 Every mode uses the panel's own timing, 1302 × 998, and changes only the
 pixel clock (see below). The 120.0004 Hz mode preserves Android's own
 120 Hz timing. Steam and the launcher now use the fastest 120.198 Hz mode
-with VRR; ARMSX2 follows RetroArch's VRR path. mpv and xemu use fixed
+with VRR; ARMSX2 follows RetroArch's VRR path. mpv and hakuX use fixed
 refresh. The modes are defined in the panel driver,
 `projects/PortareOS/devices/SM8550/patches/linux/0105-drm-panel-Add-Retroid-Pocket-Nova-panel.patch`.
 
 | Panel mode | Pixel clock | Off the console's rate | Used by |
 |---|---|---|---|
-| 119.88031 Hz | 155772 kHz | +1.6 ppm | preferred fixed mode; mpv, xemu and unmatched fixed-refresh cores |
+| 119.88031 Hz | 155772 kHz | +1.6 ppm | preferred fixed mode; mpv, hakuX and unmatched fixed-refresh cores |
 | 119.45473 Hz | 155219 kHz | -2.2 ppm | `gambatte`, `mgba` |
 | 120.198154 Hz | 156185 kHz | +4.4 ppm, rounded up | `snes9x`, `mesen2`; variable refresh runs on it |
 | 119.65252 Hz | 155476 kHz | +2.6 ppm | `parallel_n64`, `swanstation`, `ymir` |
@@ -232,7 +232,7 @@ The PlayStation's line is 3412.5 GPU clocks, the broadcast line. SwanStation rou
 | dreamcast, naomi, atomiswave (Flycast) | 59.9453 in 480i/VGA; 59.827 in 240p | 119.880 (near 2× for 480i/VGA) |
 | gamecube, triforce, wii, wiiware (Dolphin) | 59.94 | 119.880 (exactly 2×) |
 | ps2 (ARMSX2) | 59.94 | 119.880 (exactly 2×) |
-| xbox (xemu) | 59.94 | 119.880 (exactly 2×) |
+| xbox (hakuX) | 59.94 | 119.880 (exactly 2×) |
 | psp, pspminis (PPSSPP) | 59.94 | 119.880 (exactly 2×) |
 | scummvm, ports | no fixed rate | 119.880 fixed fallback |
 | steam | capped at 60 fps | 120.198 with VRR |
@@ -268,7 +268,7 @@ The first rate column is the console's own: the rate its sound hardware produces
 | gamecube, triforce (Dolphin) | 32,029 (DSP), 48,000 (streamed disc audio) | 48,000 (asks RetroArch for its rate) | 48,000 |
 | wii, wiiware (Dolphin) | 32,000 (DSP), 48,000 (streamed disc audio) | 48,000 (asks RetroArch for its rate) | 48,000 |
 | ps2 (ARMSX2) | 48,000 (SPU2) | 48,000 (44,100 in PS1 mode) | 48,000 |
-| xbox (xemu) | 48,000 (AC'97) | 48,000 | 48,000 |
+| xbox (hakuX) | 48,000 (AC'97) | 48,000 | 48,000 |
 | psp, pspminis (PPSSPP) | 44,100 | 44,100 | 44,100 |
 | movies, music (mpv, PORTAMP) | the file's rate | the file's rate | the file's rate |
 

@@ -10,10 +10,6 @@ import zipfile
 import xml.etree.ElementTree as elementTree
 
 systems = {
-    # ---------- Microsoft ---------- #
-    "xbox": { "name": "Microsoft Xbox", "biosFiles": [ { "md5": "d49c52a4102f6df7bcf8d0617ac475ed", "file": "bios/xemu/bios/mcpx_1.0.bin" },
-                                                       { "md5": "21445c6f28fca7285b0f167ea770d1e5", "file": "bios/xemu/bios/Complex_4627v1.03.bin" }] },
-
     # ---------- Nintendo ---------- #
     "gamecube":   { "name": "Nintendo GameCube", "biosFiles": [ { "md5": "db92574caab77a7ec99d4605fd6f2450", "file": "bios/GC/EUR/IPL.bin" },
                                                                 { "md5": "b17148254a5799684c7d783206504926", "file": "bios/GC/JAP/IPL.bin" },

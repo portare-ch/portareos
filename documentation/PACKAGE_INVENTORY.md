@@ -17,7 +17,7 @@ The rule this applies is the README's: if it is not needed for a smooth game, it
 | pipewire, wireplumber, alsa-lib, alsa-ucm-conf, alsa-topology-conf | Audio; the 32 / 44.1 / 48 kHz link runs through it. |
 | iwd, portnet, wireless-regdb, openssh, rsync, bluez | Wi-Fi, SSH, controllers. iwd does the 802.11 and the addressing; portnet is the command that drives it. |
 | retroarch, core-info, slang-shaders, the 16 selected libretro cores | The systems. `slang-shaders` still installs the upstream set plus our presets; trimming is a candidate below. ARMSX2 ships its own info file; `core-info` supplies the other fifteen. |
-| xemu-sa (19 MB), armsx2-lr, scummvm-lr, ppsspp-lr, mpv, ffmpeg, libplacebo, luajit | The standalone systems and the three large cores; mpv's Lua runs our seek script. |
+| hakux-sa (6 MB), armsx2-lr, scummvm-lr, ppsspp-lr, mpv, ffmpeg, libplacebo, luajit | The standalone systems and the three large cores; mpv's Lua runs our seek script. |
 | portarelauncher, portareos, system-utils, quirks, autostart, powerstate, sleep, inputplumber (10 MB) | Our own stack; inputplumber is the gamepad. |
 | portareos-abl | Portare BIOS, bundled for initial bootloader installation and flashed to both ABL slots by updates. |
 | steam, gamescope, xwayland, seatd, fex-emu, pressure-vessel, the X11 libraries | The one compositor exception, about 35 MB on the image; the runtime lives on `/storage`. |
@@ -61,7 +61,7 @@ Done in #334, from the lists above:
 | Package | MB | How |
 |---|---|---|
 | retropie-shaders (the `/usr/share/common-shaders` tree), the common-shaders and glsl-shaders lines for other boards | 22 | out of `virtual/emulators` |
-| gtk3, with gdk-pixbuf, atk, at-spi2-core, pango and their tools | ~12 | xemu-sa listed gtk3 and atk for a display backend it does not use; libdecor built its GTK plugin. Both dropped, and the chain fell away. |
+| gtk3, with gdk-pixbuf, atk, at-spi2-core, pango and their tools | ~12 | xemu-sa, since replaced by hakux-sa, listed gtk3 and atk for a display backend it does not use; libdecor built its GTK plugin. Both dropped, and the chain fell away. |
 | espeak | 1 | `PKG_SOUND` emptied |
 | entware | 1 | out of `virtual/image`, with the `/opt` link |
 | btop | 1 | `BTOP_TOOL` gone from the options; htop stays |

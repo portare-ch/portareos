@@ -59,16 +59,4 @@
         <players>1</players>
         <image>./images/scummvm.svg</image>
     </game>
-    <game>
-        <path>./Start Xemu.sh</path>
-        <name>Start Xemu</name>
-        <desc>Opens xemu's own settings, for the Xbox. A mouse and keyboard help.</desc>
-        <developer>PortareOS</developer>
-        <publisher>PortareOS</publisher>
-        <rating>5.0</rating>
-        <releasedate>2023</releasedate>
-        <genre>Emulator</genre>
-        <players>1</players>
-        <image>./images/xemu.svg</image>
-    </game>
 </gameList>

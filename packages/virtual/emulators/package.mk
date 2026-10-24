@@ -41,22 +41,21 @@ case "${DEVICE}" in
     LIBRETRO_CORES+=" armsx2-lr dolphin-lr"
     ;;
   SM8250)
-    PKG_EMUS+=" xemu-sa steam"
+    PKG_EMUS+=" steam"
     LIBRETRO_CORES+=" armsx2-lr dolphin-lr"
     ;;
   SM8550)
-    PKG_EMUS+=" xemu-sa steam"
+    PKG_EMUS+=" hakux-sa steam"
     LIBRETRO_CORES+=" armsx2-lr dolphin-lr"
     ;;
   SM8650|SM8750)
-    PKG_EMUS+=" xemu-sa steam"
+    PKG_EMUS+=" steam"
     LIBRETRO_CORES+=" armsx2-lr dolphin-lr"
     ;;
   S922X)
     LIBRETRO_CORES+=" armsx2-lr dolphin-lr"
     ;;
   AMD64)
-    PKG_EMUS+=" xemu-sa"
     LIBRETRO_CORES+=" armsx2-lr dolphin-lr"
 esac
 
@@ -436,11 +435,12 @@ makeinstall_target() {
   esac
   add_es_system sg-1000
 
+  ### Microsoft Xbox: hakuX, an aarch64 build tested on the Nova; it reads
+  ### XISO images, not CHD yet.
   case ${DEVICE} in
-    SM8250|SM8550|SM8650|SM8750|AMD64)
-      add_emu_core xbox xemu xemu-sa true
+    SM8550)
+      add_emu_core xbox hakux hakux-sa true
       add_es_system xbox
-      install_script "Start Xemu.sh"
       ;;
   esac
 
