@@ -196,6 +196,57 @@
 	};
 };
 
+/*
+ * The Nova's vibration motor is an LRA (resonant near 170 Hz, the 5880 us
+ * period), not the ERM the AYN tree describes: driven as an ERM, at up to
+ * 5 V, it gets flat DC and only ticks as it starts and stops. The drive
+ * voltage, the effects' and their auto-resonance off are the Nova's
+ * Android device tree's (board-id 0x1001f); ArmadaOS has the same for the
+ * RP6. The rest of the node is Android's already.
+ */
+&pm8550b_hv_haptics {
+	/delete-property/ qcom,use-erm;
+	qcom,vmax-mv = <1300>;
+
+	effect_0 {
+		qcom,wf-pattern-data =  <0x11f 0x00 0x00>,
+					<0x13f 0x00 0x00>,
+					<0x15f 0x00 0x00>,
+					<0x17f 0x00 0x00>,
+					<0x17f 0x00 0x00>,
+					<0x15f 0x00 0x00>,
+					<0x13f 0x00 0x00>,
+					<0x11f 0x00 0x00>;
+		qcom,wf-vmax-mv = <1300>;
+		qcom,wf-auto-res-disable;
+	};
+
+	effect_1 {
+		qcom,wf-vmax-mv = <1300>;
+		qcom,wf-auto-res-disable;
+	};
+
+	effect_2 {
+		qcom,wf-vmax-mv = <1300>;
+		qcom,wf-auto-res-disable;
+	};
+
+	effect_3 {
+		qcom,wf-vmax-mv = <1300>;
+		qcom,wf-auto-res-disable;
+	};
+
+	effect_4 {
+		qcom,wf-vmax-mv = <1300>;
+		qcom,wf-auto-res-disable;
+	};
+
+	effect_5 {
+		qcom,wf-vmax-mv = <1300>;
+		qcom,wf-auto-res-disable;
+	};
+};
+
 &gamepad {
 	invert-x;
 	invert-y;
