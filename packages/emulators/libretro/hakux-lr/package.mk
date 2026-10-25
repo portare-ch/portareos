@@ -2,8 +2,8 @@
 # Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
 
 PKG_NAME="hakux-lr"
-PKG_VERSION="0.3.0"
-PKG_SHA256="54924ac2529ad7f5b208ee42109e91854e52e8fba53b402cc7a4197de3cbcbeb"
+PKG_VERSION="0.4.0"
+PKG_SHA256="a8924c69e9b69c45678c5bc076ec43540fea0d8ce723dc32ad9f60bd9757f75a"
 PKG_ARCH="aarch64"
 PKG_LICENSE="GPL-3.0-or-later"
 PKG_SITE="https://github.com/portare-ch/hakuX"
@@ -13,7 +13,7 @@ PKG_DEPENDS_TARGET="toolchain zlib"
 PKG_LONGDESC="hakuX as a libretro core: original Xbox games in RetroArch, drawn on RetroArch's Vulkan device."
 PKG_TOOLCHAIN="manual"
 
-# The core from hakuX's own release, the tarball hakux-sa installs from too
+# The core from hakuX's own release, which holds only the core since 0.4.0
 # (tools/native/linux-package.sh in its repository). RetroArch hands it its
 # Vulkan device, sound and controllers; its override (config/hakuX) keeps
 # the console's disk in /storage/saves/xbox and run-ahead off.
