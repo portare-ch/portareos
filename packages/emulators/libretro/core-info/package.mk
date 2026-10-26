@@ -2,8 +2,8 @@
 # Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="core-info"
-PKG_VERSION="e086617c6c6e1017c0de99bfd96ce129d9af86a3"
-PKG_SHA256="c4fbd24f7c04ee48b07701500990c2500074854219e16e8c4bf347b961683584"
+PKG_VERSION="445421549abc0638a2f5ecf05db8437e580dcc69"
+PKG_SHA256="99901524a88c9c4dba3eb03a15eaa314255e9f617bccbd9f3612d626178a1fe5"
 PKG_LICENSE="MIT"
 PKG_SITE="https://github.com/libretro/libretro-core-info"
 PKG_URL="https://github.com/libretro/libretro-core-info/archive/${PKG_VERSION}.tar.gz"
