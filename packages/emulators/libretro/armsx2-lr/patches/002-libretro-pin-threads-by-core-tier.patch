@@ -17,10 +17,9 @@ design, then the core number. On the 8 Gen 2 that is X3, A715, A715,
 A710, A710, A510s: EE gets the prime core to itself, VU and GS the
 A715s.
 
-2.8 builds the capacity reader and the performance-core mask on all of
-Linux itself, so only the ranking and the libretro side are carried
-here; splitting that block again hid GetPerformanceCoresMask from 2.8's
-own desktop-Linux code.
+2.9 ranks by capacity in IopThread::OrderProcessors. Keep the newer
+design first within an equal tier there, and pass cpuinfo's architecture
+through from VMManager; without that tie-break the A710s precede the A715s.
 ---
 diff --git a/pcsx2-libretro/Main.cpp b/pcsx2-libretro/Main.cpp
 --- a/pcsx2-libretro/Main.cpp
@@ -42,37 +41,45 @@ diff --git a/pcsx2-libretro/Main.cpp b/pcsx2-libretro/Main.cpp
 diff --git a/pcsx2/VMManager.cpp b/pcsx2/VMManager.cpp
 --- a/pcsx2/VMManager.cpp
 +++ b/pcsx2/VMManager.cpp
-@@ -4586,10 +4586,30 @@ static void InitializeProcessorList()
- 		processors.push_back(proc);
+@@ -4880,7 +4880,8 @@
+ 		capacity = (i < capacities.size()) ? capacities[i] : 0;
+ #endif
+ 		cpus.push_back({GetProcessorIdForProcessor(proc), capacity, proc->smt_id == 0,
+-			(proc->core ? static_cast<u64>(proc->core->frequency) : 0)});
++			(proc->core ? static_cast<u64>(proc->core->frequency) : 0),
++			(proc->core ? static_cast<u32>(proc->core->uarch) : 0)});
  	}
+ 	s_processor_list = IopThread::OrderProcessors(cpus);
  
--	// Prioritize faster cores in heterogeneous CPUs.
-+	// Prioritize faster cores in heterogeneous CPUs, ranked as the kernel ranks them:
-+	// cpu_capacity, else cpuinfo_max_freq, else cpuinfo's own frequency (GetProcessorWeights).
-+	// cpuinfo's frequency alone read 0 for every core on a Snapdragon 8 Gen 2 under Linux, and
-+	// pinning then put EE, VU and GS on the A510s. Pinning takes the first three, so the order has
-+	// to be total: a tier of equal weight can mix designs (that SoC's two A715s and two A710s are
-+	// all 657), and within one, cpuinfo numbers a newer design of the same series higher. Only
-+	// within a tier: across series the numbering means nothing (the X3 sorts below the A510).
-+	// The core number settles the rest.
-+#if defined(__linux__)
-+	const std::vector<u32> weights = GetProcessorWeights();
-+	const cpuinfo_processor* const first = cpuinfo_get_processors();
-+	const auto weight = [&weights, first](const cpuinfo_processor* proc) {
-+		return weights[static_cast<size_t>(proc - first)];
-+	};
-+#else
-+	const auto weight = [](const cpuinfo_processor* proc) { return proc->core->frequency; };
-+#endif
- 	std::sort(processors.begin(), processors.end(),
--		[](const cpuinfo_processor* lhs, const cpuinfo_processor* rhs) {
--			return (lhs->core->frequency > rhs->core->frequency);
-+		[&weight](const cpuinfo_processor* lhs, const cpuinfo_processor* rhs) {
-+			if (weight(lhs) != weight(rhs))
-+				return (weight(lhs) > weight(rhs));
-+			if (weight(lhs) != 0 && lhs->core->uarch != rhs->core->uarch)
-+				return (lhs->core->uarch > rhs->core->uarch);
-+			return (GetProcessorIdForProcessor(lhs) < GetProcessorIdForProcessor(rhs));
- 		});
+diff --git a/pcsx2/IopThread/IopPlacement.h b/pcsx2/IopThread/IopPlacement.h
+--- a/pcsx2/IopThread/IopPlacement.h
++++ b/pcsx2/IopThread/IopPlacement.h
+@@ -32,6 +32,7 @@
+ 		u32 capacity = 0; // cpu_capacity, else the maximum frequency, else cpuinfo's frequency: only ratios matter
+ 		bool first_thread = true; // false for the second hardware thread of a core, which is never pinned to
+ 		u64 frequency_hz = 0; // what cpuinfo reports, 0 when it cannot read it (the ROCKNIX and Android kernels leave it at 0)
++		u32 uarch = 0; // cpuinfo's architecture order, comparable only within a known capacity tier
+ 	};
  
- 	SmallString str;
+ 	/// A processor is in the tier when its capacity is at least this fraction of the fastest one's.
+@@ -53,7 +54,7 @@
+ 	HostCpuInfo MakeHostInfo(bool is_arm64, u32 total_cores, u64 performance_mask);
+ 
+ 	/// The processor numbers in the order pinned threads take them: fastest first, one entry per core (the second hardware
+-	/// thread of a core is left out). The key is the capacity, then the frequency cpuinfo reports, then the processor number,
++	/// thread of a core is left out). The key is the capacity, then the architecture within a known tier, then frequency and processor number,
+ 	/// so equal cores keep their number order.
+ 	///
+ 	/// The capacity comes first because it is the one reading every target has. On the SD865 and the MQ65 under ROCKNIX cpuinfo
+diff --git a/pcsx2/IopThread/IopPlacement.cpp b/pcsx2/IopThread/IopPlacement.cpp
+--- a/pcsx2/IopThread/IopPlacement.cpp
++++ b/pcsx2/IopThread/IopPlacement.cpp
+@@ -37,6 +37,8 @@
+ 	std::stable_sort(cores.begin(), cores.end(), [](const CpuCapacity& lhs, const CpuCapacity& rhs) {
+ 		if (lhs.capacity != rhs.capacity)
+ 			return lhs.capacity > rhs.capacity;
++		if (lhs.capacity != 0 && lhs.uarch != rhs.uarch)
++			return lhs.uarch > rhs.uarch;
+ 		if (lhs.frequency_hz != rhs.frequency_hz)
+ 			return lhs.frequency_hz > rhs.frequency_hz;
+ 		return lhs.processor_id < rhs.processor_id;

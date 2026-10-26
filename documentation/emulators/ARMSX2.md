@@ -2,7 +2,7 @@
 
 ## What runs
 
-- `armsx2-lr` 2.8.4, the ARMSX2 libretro core (`armsx2_libretro.so`), in
+- `armsx2-lr` 2.9, the ARMSX2 libretro core (`armsx2_libretro.so`), in
   RetroArch. It replaced the SDL standalone in #473.
 - Recipe: `packages/emulators/libretro/armsx2-lr/`.
 - Patches:
@@ -68,7 +68,7 @@ Its other patches touch Adreno 6xx or 610 only, or Wayland, and it is built
 on Mesa main at `e3a986f0`.
 
 **How the image carries it:**
-- Mesa is 26.3.0-rc1, and `mesa-009` adds the flush, on only for the
+- Mesa is 26.3.0-rc2, and `mesa-009` adds the flush, on only for the
   engine named `ARMSX2`, which the core passes RetroArch through libretro's
   Vulkan context negotiation. Every other application keeps stock behaviour.
 - ARMSX2 trusts a driver to order a declared loop only when `driverInfo`

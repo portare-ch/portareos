@@ -11,9 +11,9 @@ generation 2 ... TRUSTED".
 ---
 --- a/pcsx2/GS/Renderers/Common/GSGPUDriverProfile.cpp
 +++ b/pcsx2/GS/Renderers/Common/GSGPUDriverProfile.cpp
-@@ -650,6 +650,12 @@
- 	// declared loop), measured on the Adreno 740; it is trusted on Adreno 730 and up, the range the
- 	// a7xx road preference below already covers. A Qualcomm driver cannot carry a Mesa git tag.
+@@ -732,6 +732,12 @@
+ 	// preference below but not here: with the barriers dropped it drew a different picture on each
+ 	// run of two dumps. A Qualcomm driver cannot carry a Mesa git tag.
  	profile.declared_loop_fix_generation = ParseFixGeneration(context.driver_info);
 +	// PortareOS: the image's Turnip carries the generation-2 change, the per-draw
 +	// flush before a declared loop on a7xx (Mesa patch mesa-009), and turns it on

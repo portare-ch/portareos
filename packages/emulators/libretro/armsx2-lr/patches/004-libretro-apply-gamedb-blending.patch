@@ -74,7 +74,7 @@ diff --git a/pcsx2/Config.h b/pcsx2/Config.h
 diff --git a/pcsx2/GameDatabase.cpp b/pcsx2/GameDatabase.cpp
 --- a/pcsx2/GameDatabase.cpp
 +++ b/pcsx2/GameDatabase.cpp
-@@ -1129,6 +1129,33 @@ void GameDatabaseSchema::GameEntry::applyGSHardwareFixes(
+@@ -1169,6 +1169,33 @@
  
  			case GSHWFixId::RecommendedBlendingLevel:
  			{
@@ -105,17 +105,17 @@ diff --git a/pcsx2/GameDatabase.cpp b/pcsx2/GameDatabase.cpp
 +					break;
 +				}
 +
- 				if (quiet)
+ 				// Quiet also while auto-tune applies a trial: a toast per apply stacks up (see AutoTune::IsApplyingSettings).
+ 				if (quiet || AutoTune::IsApplyingSettings())
  					break;
- 
 diff --git a/pcsx2/Pcsx2Config.cpp b/pcsx2/Pcsx2Config.cpp
 --- a/pcsx2/Pcsx2Config.cpp
 +++ b/pcsx2/Pcsx2Config.cpp
-@@ -1134,6 +1134,7 @@ void Pcsx2Config::GSOptions::LoadSave(SettingsWrapper& wrap)
+@@ -1175,6 +1175,7 @@
  	SettingsWrapBitBool(HWROVBarriersVK);
  	SettingsWrapBitBool(CoalesceRenderPasses);
  	SettingsWrapIntEnumEx(AccurateBlendingUnit, "accurate_blending_unit");
 +	SettingsWrapBitBoolEx(AccurateBlendingAuto, "accurate_blending_auto");
  	SettingsWrapIntEnumEx(TextureFiltering, "filter");
  	SettingsWrapIntEnumEx(TexturePreloading, "texture_preloading");
- 	SettingsWrapIntEnumEx(GSDumpCompression, "GSDumpCompression");
+ 	{
