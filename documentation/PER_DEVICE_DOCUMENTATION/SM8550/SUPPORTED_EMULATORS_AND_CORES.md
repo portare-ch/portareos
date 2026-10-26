@@ -10,8 +10,8 @@ the emulator expects.
 **Use CHD for disc games; cartridge games keep their ROM formats.**
 PlayStation, PlayStation 2, Dreamcast, Saturn, Sega CD and Neo Geo CD
 enforce CHD-only images. All but Neo Geo CD also accept `.m3u`
-playlists naming CHDs. Xbox takes XISO (`.iso`) images until hakuX reads
-CHD. PSP takes CHD, or PBP for homebrew, PSN titles and Minis.
+playlists naming CHDs. Xbox takes XISO (`.iso`) images, or CHDs
+made from them with `chdman createdvd`. PSP takes CHD, or PBP for homebrew, PSN titles and Minis.
 GameCube and Wii take RVZ,
 Dolphin's lossless format, which compresses these discs far better than CHD;
 `.dol` homebrew and `.wad` channels stay. Arcade sets and floppy-disk images
@@ -46,7 +46,7 @@ for setup and examples.
 |&#xf013; System|Screenshots (imageviewer)|System|`screenshots`|.jpg .jpeg .png .bmp .psd .tga .gif .hdr .pic .ppm .pgm .mkv .pdf .mp4 .avi||
 |&#xf013; System|Tools (tools)|System|`/storage/.config/modules`|.sh||
 |Arcade|Arcade (arcade)|0000|`arcade`|.zip .7z|**retroarch:** fbneo (default)<br>|
-|Microsoft|Xbox (xbox)|2001|`xbox`|.iso|**retroarch:** hakux (default)<br>|
+|Microsoft|Xbox (xbox)|2001|`xbox`|.iso .chd|**retroarch:** hakux (default)<br>|
 |Nintendo|Game Boy (gb)|1989|`gb`|.gb .gbc .zip .7z|**retroarch:** gambatte (default)<br>|
 |Nintendo|Game Boy Advance (gba)|2001|`gba`|.gba .zip .7z|**retroarch:** mgba (default)<br>|
 |Nintendo|Game Boy Color (gbc)|1998|`gbc`|.gb .gbc .zip .7z|**retroarch:** gambatte (default)<br>|
