@@ -115,7 +115,7 @@ such as `.sfc`, `.nes`, `.gba` and `.z64`, or supported cartridge archives.
 PlayStation, PlayStation 2, Dreamcast, Saturn, Sega CD and Neo Geo CD
 accept only `.chd` images. All but Neo Geo CD also accept `.m3u`
 playlists naming CHDs for multi-disc games. Xbox takes XISO (`.iso`)
-images until hakuX reads CHD. PSP takes `.chd`, or `.pbp` for homebrew,
+images, or CHDs made from them with `chdman createdvd`. PSP takes `.chd`, or `.pbp` for homebrew,
 PSN titles and Minis. GameCube and Wii take `.rvz`, Dolphin's lossless
 format, plus `.dol` homebrew and `.wad` channels. Copying an ISO, CSO,
 CUE/BIN, GDI, GCZ or WBFS directly into the other disc systems' folders
