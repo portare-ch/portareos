@@ -1,0 +1,78 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] Input: qcom-hv-haptics: the LRA's frequency from its device
+ tree period
+
+The boot check from b/339117433 recalibrates an LRA measured outside
+185-215 Hz up to three times and then forces it to 205 Hz: the limits
+of b/311643110's 200 Hz LRA. The Nova's LRA is 170 Hz (Android's
+qcom,lra-period-us of 5880 us) and measures 166-167 Hz, so every boot
+it was recalibrated three times and then driven 20% off resonance.
+
+Take the range from the board's qcom,lra-period-us, +/-10%, and fall
+back to that period when the measurement stays outside it.
+---
+--- a/drivers/input/misc/qcom-hv-haptics.c
++++ b/drivers/input/misc/qcom-hv-haptics.c
+@@ -361,14 +361,6 @@
+ #define DEFAULT_SWEEP_STEP_FREQUENCY		1
+ #define DEFAULT_SWEEP_STEP_DURATION_MS		100
+ #define DEFAULT_AMPLITUDE_FOR_SWEEP		0xFF
+-
+-// b/311643110
+-// The spec of LRA's f0 is 200 ± 10%
+-// But there is a 5 Hz shift in SW value compared to the f0 measured by IMU.
+-#define LRA_SPEC_MIN_FREQUENCY 185
+-#define LRA_SPEC_MAX_FREQUENCY 215
+-#define LRA_SPEC_DEFAULT_FREQUENCY 205
+-#define LRA_SPEC_DEFAULT_PERIOD_US (USEC_PER_SEC / LRA_SPEC_DEFAULT_FREQUENCY)
+ 
+ enum hap_status_sel {
+ 	CAL_TLRA_CL_STS = 0x00,
+@@ -3366,7 +3358,7 @@
+ {
+ 	int rc;
+ 	int retry = 0;
+-	u32 cl_f_lra;
++	u32 cl_f_lra, f_lra, f_min, f_max;
+ 
+ 	rc = haptics_config_wa(chip);
+ 	if (rc < 0)
+@@ -3394,25 +3386,30 @@
+ 	rc = haptics_init_lra_period_config(chip);
+ 	if (rc < 0)
+ 		return rc;
+-	// Workaround for b/339117433 since we can't reproduce it
++	/*
++	 * Workaround for b/339117433 since we can't reproduce it. The range is
++	 * this board's LRA, its qcom,lra-period-us +/-10%, not the 200 Hz one of
++	 * b/311643110: a 170 Hz LRA never measures inside that.
++	 */
++	f_lra = USEC_PER_SEC / chip->config.t_lra_us;
++	f_min = f_lra * 9 / 10;
++	f_max = f_lra * 11 / 10;
+ 	cl_f_lra = USEC_PER_SEC / chip->config.cl_t_lra_us;
+ 	dev_info(chip->dev, "lra frequency detected at boot: %d Hz\n", cl_f_lra);
+-	while ((cl_f_lra < LRA_SPEC_MIN_FREQUENCY || cl_f_lra > LRA_SPEC_MAX_FREQUENCY) &&
+-				retry < 3) {
++	while ((cl_f_lra < f_min || cl_f_lra > f_max) && retry < 3) {
+ 		haptics_start_lra_calibrate(chip);
+ 		cl_f_lra = USEC_PER_SEC / chip->config.cl_t_lra_us;
+ 		retry++;
+ 		dev_info(chip->dev, "frequency after [%d] calibration: %d Hz\n", retry, cl_f_lra);
+ 	}
+ 
+-	if (cl_f_lra < LRA_SPEC_MIN_FREQUENCY ||
+-			cl_f_lra > LRA_SPEC_MAX_FREQUENCY) {
++	if (cl_f_lra < f_min || cl_f_lra > f_max) {
+ 		// HACK: forced set the frequency
+-		rc = haptics_config_openloop_lra_period(chip, LRA_SPEC_DEFAULT_PERIOD_US);
+-		chip->config.cl_t_lra_us = LRA_SPEC_DEFAULT_PERIOD_US;
++		rc = haptics_config_openloop_lra_period(chip, chip->config.t_lra_us);
++		chip->config.cl_t_lra_us = chip->config.t_lra_us;
+ 		dev_err(chip->dev,
+ 			"lra frequency is still out of range, forced set to %d Hz, ret: %d\n",
+-			LRA_SPEC_DEFAULT_FREQUENCY, rc);
++			f_lra, rc);
+ 	}
+ 
+ 	rc = haptics_init_preload_pattern_effect(chip);
