@@ -2,11 +2,11 @@
 # Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
 
 PKG_NAME="hakux-lr"
-PKG_VERSION="0.8.0"
-PKG_SHA256="fe03dfa138f2ea2c840381915df105e01fc8c469720cfd66807ea175dc2bf7c5"
+PKG_VERSION="0.9.0"
+PKG_SHA256="f6b5c65e31de62e096c67d12fedbf084698d0913119bbc6d12c0c1cbc630fe7b"
 PKG_ARCH="aarch64"
 PKG_LICENSE="GPL-3.0-or-later"
-PKG_SITE="https://github.com/portare-ch/hakuX"
+PKG_SITE="https://github.com/portare-ch/hakuX-lr"
 PKG_URL="${PKG_SITE}/releases/download/linux-v${PKG_VERSION}/hakux-${PKG_VERSION}-aarch64.tar.gz"
 PKG_SOURCE_DIR="hakux-${PKG_VERSION}"
 PKG_DEPENDS_TARGET="toolchain zlib"
