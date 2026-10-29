@@ -104,7 +104,7 @@ fixed-refresh test falls back to the default for a system with its own row.
 Game running, in the launched config:
 
 ```
-video_max_swapchain_images = "2"  # 3 for ParaLLEl N64 and Dolphin
+video_max_swapchain_images = "2"  # 3 for Dolphin
 video_threaded = "false"
 video_swap_interval = "0"      # RetroArch takes 1 under Sync to Exact Content Framerate
 video_black_frame_insertion = "0"
