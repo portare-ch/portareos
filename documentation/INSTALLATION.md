@@ -111,7 +111,7 @@ connect with `ssh root@<address>` using that password.
 ### Game formats
 
 **Use CHD for disc games. Cartridge games keep their native ROM formats**,
-such as `.sfc`, `.nes`, `.gba` and `.z64`, or supported cartridge archives.
+such as `.sfc`, `.nes`, `.gba` and `.z64`, or ZIP archives.
 PlayStation, PlayStation 2, Dreamcast, Saturn, Sega CD and Neo Geo CD
 accept only `.chd` images. All but Neo Geo CD also accept `.m3u`
 playlists naming CHDs for multi-disc games. Xbox takes only CHDs made

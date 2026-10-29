@@ -16,6 +16,7 @@ GameCube and Wii take RVZ,
 Dolphin's lossless format, which compresses these discs far better than CHD;
 `.dol` homebrew and `.wad` channels stay. Arcade sets and floppy-disk images
 keep their own formats.
+ZIP is the supported ROM archive format.
 
 **One folder per system, named for the US console.** A region's, a
 console add-on's or a ROM hack's games go in their console's folder:
@@ -45,27 +46,27 @@ for setup and examples.
 |&#xf013; System|Music Player (music)|System|`music`|.aac .ape .flac .m3u .m4a .mp2 .mp3 .oga .ogg .opus .wav .wma .wv folders|**portamp:** portamp (default)<br>|
 |&#xf013; System|Screenshots (imageviewer)|System|`screenshots`|.jpg .jpeg .png .bmp .psd .tga .gif .hdr .pic .ppm .pgm .mkv .pdf .mp4 .avi||
 |&#xf013; System|Tools (tools)|System|`/storage/.config/modules`|.sh||
-|Arcade|Arcade (arcade)|0000|`arcade`|.zip .7z|**retroarch:** fbneo (default)<br>|
+|Arcade|Arcade (arcade)|0000|`arcade`|.zip|**retroarch:** fbneo (default)<br>|
 |Microsoft|Xbox (xbox)|2001|`xbox`|.chd|**retroarch:** hakux (default)<br>|
-|Nintendo|Game Boy (gb)|1989|`gb`|.gb .gbc .zip .7z|**retroarch:** gambatte (default)<br>|
-|Nintendo|Game Boy Advance (gba)|2001|`gba`|.gba .zip .7z|**retroarch:** mgba (default)<br>|
-|Nintendo|Game Boy Color (gbc)|1998|`gbc`|.gb .gbc .zip .7z|**retroarch:** gambatte (default)<br>|
+|Nintendo|Game Boy (gb)|1989|`gb`|.gb .gbc .zip|**retroarch:** gambatte (default)<br>|
+|Nintendo|Game Boy Advance (gba)|2001|`gba`|.gba .zip|**retroarch:** mgba (default)<br>|
+|Nintendo|Game Boy Color (gbc)|1998|`gbc`|.gb .gbc .zip|**retroarch:** gambatte (default)<br>|
 |Nintendo|GameCube (gamecube)|2001|`gamecube`|.rvz .dol .m3u|**retroarch:** dolphin (default)<br>|
-|Nintendo|Nintendo 64 (n64)|1996|`n64`|.z64 .n64 .v64 .ndd .zip .7z|**retroarch:** parallel_n64 (default)<br>|
-|Nintendo|Nintendo Entertainment System (nes)|1985|`nes`|.nes .unif .unf .fds .zip .7z|**retroarch:** mesen2 (default)<br>|
-|Nintendo|Super Nintendo (snes)|1991|`snes`|.smc .fig .sfc .swc .bs .bsx .zip .7z|**retroarch:** snes9x (default)<br>|
+|Nintendo|Nintendo 64 (n64)|1996|`n64`|.z64 .n64 .v64 .ndd .zip|**retroarch:** parallel_n64 (default)<br>|
+|Nintendo|Nintendo Entertainment System (nes)|1985|`nes`|.nes .unif .unf .fds .zip|**retroarch:** mesen2 (default)<br>|
+|Nintendo|Super Nintendo (snes)|1991|`snes`|.smc .fig .sfc .swc .bs .bsx .zip|**retroarch:** snes9x (default)<br>|
 |Nintendo|Wii (wii)|2006|`wii`|.rvz .dol .wad .m3u|**retroarch:** dolphin (default)<br>|
-|Sammy|Atomiswave (atomiswave)|2003|`atomiswave`|.lst .bin .dat .zip .7z|**retroarch:** flycast (default)<br>|
+|Sammy|Atomiswave (atomiswave)|2003|`atomiswave`|.lst .bin .dat .zip|**retroarch:** flycast (default)<br>|
 |Sega|Dreamcast (dreamcast)|1998|`dreamcast`|.chd .m3u|**retroarch:** flycast (default)<br>|
-|Sega|Game Gear (gamegear)|1990|`gamegear`|.bin .gg .zip .7z|**retroarch:** genesis_plus_gx (default)<br>|
-|Sega|Genesis (genesis)|1989|`genesis`|.bin .gen .md .sg .smd .zip .7z|**retroarch:** genesis_plus_gx (default)<br>|
-|Sega|Master System (mastersystem)|1985|`mastersystem`|.bin .sms .zip .7z|**retroarch:** genesis_plus_gx (default)<br>|
-|Sega|Naomi (naomi)|1998|`naomi`|.lst .bin .dat .zip .7z|**retroarch:** flycast (default)<br>|
+|Sega|Game Gear (gamegear)|1990|`gamegear`|.bin .gg .zip|**retroarch:** genesis_plus_gx (default)<br>|
+|Sega|Genesis (genesis)|1989|`genesis`|.bin .gen .md .sg .smd .zip|**retroarch:** genesis_plus_gx (default)<br>|
+|Sega|Master System (mastersystem)|1985|`mastersystem`|.bin .sms .zip|**retroarch:** genesis_plus_gx (default)<br>|
+|Sega|Naomi (naomi)|1998|`naomi`|.lst .bin .dat .zip|**retroarch:** flycast (default)<br>|
 |Sega|Saturn (saturn)|1994|`saturn`|.chd .m3u|**retroarch:** ymir (default)<br>|
-|Sega|Sega 32X (sega32x)|1994|`sega32x`|.32x .smd .bin .md .zip .7z|**retroarch:** picodrive (default)<br>|
+|Sega|Sega 32X (sega32x)|1994|`sega32x`|.32x .smd .bin .md .zip|**retroarch:** picodrive (default)<br>|
 |Sega|Sega CD (segacd)|1991|`segacd`|.chd .m3u|**retroarch:** genesis_plus_gx (default)<br>|
-|Sega|SG-1000 (sg-1000)|1983|`sg-1000`|.bin .sg .zip .7z|**retroarch:** genesis_plus_gx (default)<br>|
-|SNK|Neo Geo (neogeo)|1990|`neogeo`|.7z .zip .neo|**retroarch:** fbneo (default)<br>|
+|Sega|SG-1000 (sg-1000)|1983|`sg-1000`|.bin .sg .zip|**retroarch:** genesis_plus_gx (default)<br>|
+|SNK|Neo Geo (neogeo)|1990|`neogeo`|.zip .neo|**retroarch:** fbneo (default)<br>|
 |SNK|Neo Geo CD (neocd)|1994|`neocd`|.chd|**retroarch:** neocd (default)<br>|
 |Sony|PlayStation (psx)|1994|`psx`|.chd .m3u|**retroarch:** swanstation (default)<br>|
 |Sony|PlayStation 2 (ps2)|2000|`ps2`|.chd .m3u|**retroarch:** armsx2 (default)<br>|
