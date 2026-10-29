@@ -301,7 +301,7 @@ makeinstall_target() {
   add_es_system sg-1000
 
   ### Microsoft Xbox: hakuX's libretro core, an aarch64 build tested on the
-  ### Nova (RetroArch's VRR path). It reads XISO images and their CHDs.
+  ### Nova (RetroArch's VRR path). Xbox games use CHDs made from XISO images.
   case ${DEVICE} in
     SM8550)
       add_emu_core xbox retroarch hakux true

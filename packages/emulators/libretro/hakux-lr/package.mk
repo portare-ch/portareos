@@ -21,5 +21,9 @@ makeinstall_target() {
   mkdir -p ${INSTALL}/usr/lib/libretro ${INSTALL}/usr/share/licenses/hakux
   cp -p ${PKG_BUILD}/lib/libretro/hakux_libretro.so ${PKG_BUILD}/lib/libretro/hakux_libretro.info \
     ${INSTALL}/usr/lib/libretro
+  sed -i 's/^supported_extensions = "iso|chd"$/supported_extensions = "chd"/' \
+    ${INSTALL}/usr/lib/libretro/hakux_libretro.info
+  grep -q '^supported_extensions = "chd"$' \
+    ${INSTALL}/usr/lib/libretro/hakux_libretro.info || exit 1
   cp -p ${PKG_BUILD}/share/licenses/hakux/* ${PKG_BUILD}/BUILD-INFO ${INSTALL}/usr/share/licenses/hakux
 }

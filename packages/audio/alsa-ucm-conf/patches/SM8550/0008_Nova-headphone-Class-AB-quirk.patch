@@ -1,0 +1,37 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] Nova: Class-AB headphones and RX compander initialization
+
+Use Class-AB LOHIFI for the Nova's remaining headphone distortion and
+initialize both RX companders explicitly off at boot.
+The device-specific settings live in UCM quirks selected by the root DT
+model, since the Nova shares its AYN-Odin2 sound card identity.
+
+The LOHIFI default and removal of RX compander enable writes are already
+provided by alsa-ucm-conf 1.2.16.1. Keep the mode write in its upstream
+position before RX routing is enabled.
+
+Reference: https://github.com/ROCKNIX/distribution/pull/3481
+---
+--- a/ucm2/codecs/wcd938x/HeadphoneEnableSeq.conf
++++ b/ucm2/codecs/wcd938x/HeadphoneEnableSeq.conf
+@@ -1,3 +1,6 @@
++Define.WcdHphMode "CLS_H_LOHIFI"
++Include.nova.File "/Retroid/Nova/HeadphoneMode.conf"
++
+ EnableSequence [
+ 	cset "name='HPHL_RDAC Switch' 1"
+ 	cset "name='HPHR_RDAC Switch' 1"
+@@ -7,5 +10,5 @@
+ 	cset "name='HPHL_COMP Switch' 0"
+ 	cset "name='CLSH Switch' 1"
+ 	cset "name='LO Switch' 1"
+-	cset "name='RX HPH Mode' CLS_H_LOHIFI"
++	cset "name='RX HPH Mode' ${var:WcdHphMode}"
+ ]
+--- a/ucm2/AYN/Odin2/AYN-Odin2.conf
++++ b/ucm2/AYN/Odin2/AYN-Odin2.conf
+@@ -29,3 +29,4 @@
+ Include.card-init.File "/lib/card-init.conf"
+ Include.ctl-remap.File "/lib/ctl-remap.conf"
+ Include.wcd-init.File "/codecs/wcd938x/init.conf"
++Include.nova-init.File "/Retroid/Nova/init.conf"

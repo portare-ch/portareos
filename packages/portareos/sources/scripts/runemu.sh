@@ -28,6 +28,11 @@ ROMNAME="$1"
 BASEROMNAME=${ROMNAME##*/}
 GAMEFOLDER="${ROMNAME//${BASEROMNAME}}"
 
+if [[ "${PLATFORM}" == xbox && "${ROMNAME,,}" != *.chd ]]; then
+  printf '%s\n' 'Xbox games require CHD images made from XISO with chdman createdvd.' >&2
+  exit 1
+fi
+
 ### A KMS launch hands the panel to the emulator itself, which page flips
 ### straight to the display with no compositor to composite and blit
 ### through. Nothing has to be stopped for that any more: portarelauncher
