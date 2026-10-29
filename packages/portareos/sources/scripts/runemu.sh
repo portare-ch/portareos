@@ -28,6 +28,11 @@ ROMNAME="$1"
 BASEROMNAME=${ROMNAME##*/}
 GAMEFOLDER="${ROMNAME//${BASEROMNAME}}"
 
+if [[ "${ROMNAME,,}" == *.7z || "${ROMNAME,,}" == *.rar ]]; then
+  printf '%s\n' 'ROM archives must use ZIP.' >&2
+  exit 1
+fi
+
 if [[ "${PLATFORM}" == xbox && "${ROMNAME,,}" != *.chd ]]; then
   printf '%s\n' 'Xbox games require CHD images made from XISO with chdman createdvd.' >&2
   exit 1

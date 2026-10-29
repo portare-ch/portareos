@@ -56,8 +56,7 @@ case "${PKG_SOURCE_NAME}" in
     zstdcat "${FULL_SOURCE_PATH}" | tar xf - ${TAR_OPTS} -C "${DESTDIR}"
     ;;
   *.7z)
-    mkdir -p "${2}/${1}"
-    7z x -o"${2}/${1}" "${FULL_SOURCE_PATH}"
+    die "${PKG_NAME}: 7z source archives are unsupported; use ZIP or tar"
     ;;
   *.zip)
     unzip -o -q "${FULL_SOURCE_PATH}" -d "${2}"
