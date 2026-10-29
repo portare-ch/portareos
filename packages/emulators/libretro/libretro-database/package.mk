@@ -3,8 +3,8 @@
 # Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
 
 PKG_NAME="libretro-database"
-PKG_VERSION="25da22340889d04bd6e3a8c116d2750af4157d4f"
-PKG_SHA256="a8af7284e62fa534bb5c1509120389dc5b5a647cd8bb8bdf15328fdbe7806a89"
+PKG_VERSION="da577d2865c2b1b834b2d5f2fd1368fc5110a01c"
+PKG_SHA256="124fd358bc2de647ddf1695a23ce6b96bf6e30003e4fca7aee154a80fc1d1675"
 PKG_LICENSE=""
 PKG_SITE="https://github.com/libretro/libretro-database"
 PKG_URL="${PKG_SITE}/archive/${PKG_VERSION}.tar.gz"
