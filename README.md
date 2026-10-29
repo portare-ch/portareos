@@ -39,18 +39,6 @@ PortareOS**: **Dualboot** keeps Android but resets its data on a first install;
 The installation guide covers backups and initial bootloader flashing.
 PortareOS updates also update Portare BIOS in both bootloader slots.
 
-**Use CHD for disc games; cartridge games keep their native ROM formats.**
-PlayStation, PS2, Dreamcast, Saturn, Sega CD and Neo Geo CD enforce
-CHD-only images; PSP takes CHD, or PBP for homebrew. Xbox takes XISO
-(`.iso`) images, or CHDs made from them with `chdman createdvd`.
-GameCube and Wii take
-RVZ, Dolphin's lossless format, which compresses them far better than CHD.
-Use **[PortareOS tools / nova-push](https://github.com/portare-ch/portareos_tools)**
-to convert and verify CUE, GDI or ISO images while transferring them over
-SSH. It also copies existing CHDs and cartridge ROMs. See the installation
-guide for setup, multi-disc playlists and experimental systems with other
-format requirements.
-
 [portarelauncher](https://github.com/portare-ch/portarelauncher) provides
 consoles, games and settings for Wi-Fi, Bluetooth, SSH, USB mode, language
 and time zone, and updates, in English or Japanese. Each device generates a root password on first boot, shown
@@ -78,27 +66,35 @@ an external display, disabled suspend or active SSH prevents it.
 **Early development: things may break.** Compatibility and performance vary
 by game. Status notes below cover specific tests, not every included system.
 
-| System | Emulator / player | Status notes |
-| --- | --- | --- |
-| Arcade, Neo Geo | FBNeo | — |
-| Neo Geo CD | [NeoCD](documentation/emulators/NeoCD.md) | ✅ Tested and tuned: full-screen 4:3, scanlines, one preemptive frame; optimization finished ([#666](https://github.com/portare-ch/portareos/issues/666)) |
-| Game Boy, Game Boy Color | Gambatte | — |
-| Game Boy Advance | mGBA | — |
-| NES, Famicom, Famicom Disk System | MesenCE | — |
-| Super Nintendo | Snes9x | ✅ Tested; bsnes was too costly |
-| Nintendo 64 | ParaLLEl N64 with ParaLLEl-RDP on Vulkan | — |
-| GameCube, Wii | Dolphin (libretro) | ❌ GameCube: hangs, no sound ([#463](https://github.com/portare-ch/portareos/issues/463)) |
-| Master System, Game Gear, Mega Drive, Sega CD | [Genesis Plus GX](documentation/emulators/Genesis.md) | 🚧 Mega Drive baseline measured on Thunder Force IV; savestates made deterministic; scanlines undecided ([#691](https://github.com/portare-ch/portareos/issues/691)) |
-| 32X | PicoDrive | — |
-| Dreamcast, NAOMI, Atomiswave | Flycast | — |
-| PlayStation | [SwanStation](documentation/emulators/SwanStation.md) | ✅ Tested |
-| Saturn | Ymir | — |
-| PlayStation 2 | [ARMSX2 (libretro)](documentation/emulators/ARMSX2.md) | 🚧 Playable; optimization ongoing ([#477](https://github.com/portare-ch/portareos/issues/477)) |
-| PSP | PPSSPP | — |
-| Xbox | [hakuX](https://github.com/portare-ch/hakuX), our Linux port, as a libretro core | 🚧 XISO (`.iso`) images or their CHDs; BLACK and Burnout 3 play; no rumble |
-| Point-and-click | ScummVM | — |
-| PC (x86 through FEX) | Steam on gamescope | ✅ Tested 2026-10-05; details below |
-| Movies, music | mpv, PORTAMP | — |
+| System | Emulator / player | File formats | Status notes |
+| --- | --- | --- | --- |
+| Arcade | FBNeo | `.zip` `.7z` | — |
+| Neo Geo | FBNeo | `.zip` `.7z` `.neo` | — |
+| Neo Geo CD | [NeoCD](documentation/emulators/NeoCD.md) | `.chd` | ✅ Tested and tuned: full-screen 4:3, scanlines, one preemptive frame; optimization finished ([#666](https://github.com/portare-ch/portareos/issues/666)) |
+| Game Boy, Game Boy Color | Gambatte | `.gb` `.gbc` `.zip` `.7z` | — |
+| Game Boy Advance | mGBA | `.gba` `.zip` `.7z` | — |
+| NES, Famicom, Famicom Disk System | MesenCE | `.nes` `.unif` `.unf` `.fds` `.zip` `.7z` | — |
+| Super Nintendo | Snes9x | `.smc` `.fig` `.sfc` `.swc` `.bs` `.bsx` `.zip` `.7z` | ✅ Tested; bsnes was too costly |
+| Nintendo 64 | ParaLLEl N64 with ParaLLEl-RDP on Vulkan | `.z64` `.n64` `.v64` `.ndd` `.zip` `.7z` | — |
+| GameCube | Dolphin (libretro) | `.rvz` `.dol` `.m3u` | ❌ Hangs, no sound ([#463](https://github.com/portare-ch/portareos/issues/463)) |
+| Wii | Dolphin (libretro) | `.rvz` `.dol` `.wad` `.m3u` | — |
+| SG-1000 | [Genesis Plus GX](documentation/emulators/Genesis.md) | `.bin` `.sg` `.zip` `.7z` | — |
+| Master System | [Genesis Plus GX](documentation/emulators/Genesis.md) | `.bin` `.sms` `.zip` `.7z` | — |
+| Game Gear | [Genesis Plus GX](documentation/emulators/Genesis.md) | `.bin` `.gg` `.zip` `.7z` | — |
+| Mega Drive | [Genesis Plus GX](documentation/emulators/Genesis.md) | `.bin` `.gen` `.md` `.sg` `.smd` `.zip` `.7z` | 🚧 Baseline measured on Thunder Force IV; savestates made deterministic; scanlines undecided ([#691](https://github.com/portare-ch/portareos/issues/691)) |
+| Sega CD | [Genesis Plus GX](documentation/emulators/Genesis.md) | `.chd` `.m3u` | — |
+| 32X | PicoDrive | `.32x` `.smd` `.bin` `.md` `.zip` `.7z` | — |
+| Dreamcast | Flycast | `.chd` `.m3u` | — |
+| NAOMI, Atomiswave | Flycast | `.lst` `.bin` `.dat` `.zip` `.7z` | — |
+| PlayStation | [SwanStation](documentation/emulators/SwanStation.md) | `.chd` `.m3u` | ✅ Tested |
+| Saturn | Ymir | `.chd` `.m3u` | — |
+| PlayStation 2 | [ARMSX2 (libretro)](documentation/emulators/ARMSX2.md) | `.chd` `.m3u` | 🚧 Playable; optimization ongoing ([#477](https://github.com/portare-ch/portareos/issues/477)) |
+| PSP | PPSSPP | `.chd`; `.pbp` for homebrew, PSN titles and Minis | — |
+| Xbox | [hakuX](https://github.com/portare-ch/hakuX), our Linux port, as a libretro core | `.chd` | 🚧 BLACK and Burnout 3 play; no rumble |
+| Point-and-click | ScummVM | `.scummvm` `.svm` | — |
+| PC (x86 through FEX) | Steam on gamescope | `.desktop` | ✅ Tested 2026-10-05; details below |
+| Movies | mpv | `.3g2` `.3gp` `.asf` `.avi` `.divx` `.f4v` `.flv` `.m2ts` `.m3u` `.m4v` `.mkv` `.mov` `.mp4` `.mpeg` `.mpg` `.mts` `.ogm` `.ogv` `.ts` `.vob` `.webm` `.wmv` | — |
+| Music | PORTAMP | `.aac` `.ape` `.flac` `.m3u` `.m4a` `.mp2` `.mp3` `.oga` `.ogg` `.opus` `.wav` `.wma` `.wv`; album folders | — |
 
 Steam launches from the launcher again ([#533](https://github.com/portare-ch/portareos/pull/533));
 SUPERHOT runs with sound ([#535](https://github.com/portare-ch/portareos/pull/535),
