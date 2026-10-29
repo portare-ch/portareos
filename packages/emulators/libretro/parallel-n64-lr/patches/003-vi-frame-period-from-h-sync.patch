@@ -19,11 +19,14 @@ Audio needs no change: the AI DMA duration already counts in VI clocks.
 For PortareOS this lets the panel run at exactly twice the console's rate
 (119.652 Hz) with one game frame per two refreshes, instead of a mode that
 fits the emulator's old approximation.
+
+Rebased onto upstream's 10-bit V_SYNC (0425175b): the register is still
+masked as it is written, and the period then computed from it here.
 diff --git a/libretro/libretro.c b/libretro/libretro.c
-index 5394a3dc..eb48aee0 100644
+index 0468fe45..cf2bbff0 100644
 --- a/libretro/libretro.c
 +++ b/libretro/libretro.c
-@@ -1258,10 +1258,14 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
+@@ -1445,10 +1445,14 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
  
        if (fps <= 0.0)
        {
@@ -43,7 +46,7 @@ index 5394a3dc..eb48aee0 100644
           fps = (delay != 0) ? (double)clock / (double)delay : (double)rr;
        }
 diff --git a/mupen64plus-core/src/device/rcp/vi/vi_controller.c b/mupen64plus-core/src/device/rcp/vi/vi_controller.c
-index 84e56472..49d14b63 100644
+index a9fa34b5..55931386 100644
 --- a/mupen64plus-core/src/device/rcp/vi/vi_controller.c
 +++ b/mupen64plus-core/src/device/rcp/vi/vi_controller.c
 @@ -57,21 +57,46 @@ unsigned int vi_expected_refresh_rate_from_tv_standard(m64p_system_type tv_stand
@@ -107,10 +110,10 @@ index 84e56472..49d14b63 100644
  double vi_actual_refresh_rate(const struct vi_controller* vi)
  {
      if (vi == NULL || vi->delay == 0)
-@@ -167,16 +192,23 @@ void write_vi_regs(void* opaque, uint32_t address, uint32_t value, uint32_t mask
-         if ((vi->regs[VI_V_SYNC_REG] & mask) != (value & mask))
+@@ -179,16 +204,23 @@ void write_vi_regs(void* opaque, uint32_t address, uint32_t value, uint32_t mask
          {
              masked_write(&vi->regs[VI_V_SYNC_REG], value, mask);
+             vi->regs[VI_V_SYNC_REG] &= UINT32_C(0x3ff);
 -            if(!CountPerScanlineOverride) {
 -                vi->count_per_scanline = (vi->clock / vi->expected_refresh_rate) / (vi->regs[VI_V_SYNC_REG] + 1);
 -            } else {
