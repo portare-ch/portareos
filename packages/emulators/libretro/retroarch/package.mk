@@ -25,6 +25,7 @@ case ${ARCH} in
 esac
 
 PKG_CONFIGURE_OPTS_TARGET="--disable-qt \
+                           --disable-7zip \
                            --disable-pulse \
                            --enable-alsa \
                            --enable-udev \

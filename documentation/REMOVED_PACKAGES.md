@@ -17,6 +17,9 @@ Saturn. Both have since been replaced, and have their rows below.
 [PACKAGE_INVENTORY.md](PACKAGE_INVENTORY.md) covers the separate question of what was
 trimmed out of the image, with sizes.
 
+`p7zip` and `7-zip` are removed. ROM archives use ZIP, no recipe downloads a
+7z source archive, and add-on ZIPs are made with the build host's `zip`.
+
 ## Emulators and cores, with a reason of their own
 
 | Removed | Why |

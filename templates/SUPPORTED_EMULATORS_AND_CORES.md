@@ -16,6 +16,7 @@ GameCube and Wii take RVZ,
 Dolphin's lossless format, which compresses these discs far better than CHD;
 `.dol` homebrew and `.wad` channels stay. Arcade sets and floppy-disk images
 keep their own formats.
+ZIP is the supported ROM archive format.
 
 The extension list describes what the launcher recognizes, not a guarantee
 of compatibility or tested performance. See [known issues](../../../BUGS.md)

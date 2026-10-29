@@ -65,27 +65,28 @@ an external display, disabled suspend or active SSH prevents it.
 
 **Early development: things may break.** Compatibility and performance vary
 by game. Status notes below cover specific tests, not every included system.
+ZIP is the supported ROM archive format.
 
 | System | Emulator / player | File formats | Status notes |
 | --- | --- | --- | --- |
-| Arcade | FBNeo | `.zip` `.7z` | — |
-| Neo Geo | FBNeo | `.zip` `.7z` `.neo` | — |
+| Arcade | FBNeo | `.zip` | — |
+| Neo Geo | FBNeo | `.zip` `.neo` | — |
 | Neo Geo CD | [NeoCD](documentation/emulators/NeoCD.md) | `.chd` | ✅ Tested and tuned: full-screen 4:3, scanlines, one preemptive frame; optimization finished ([#666](https://github.com/portare-ch/portareos/issues/666)) |
-| Game Boy, Game Boy Color | Gambatte | `.gb` `.gbc` `.zip` `.7z` | — |
-| Game Boy Advance | mGBA | `.gba` `.zip` `.7z` | — |
-| NES, Famicom, Famicom Disk System | MesenCE | `.nes` `.unif` `.unf` `.fds` `.zip` `.7z` | — |
-| Super Nintendo | Snes9x | `.smc` `.fig` `.sfc` `.swc` `.bs` `.bsx` `.zip` `.7z` | ✅ Tested; bsnes was too costly |
-| Nintendo 64 | ParaLLEl N64 with ParaLLEl-RDP on Vulkan | `.z64` `.n64` `.v64` `.ndd` `.zip` `.7z` | — |
+| Game Boy, Game Boy Color | Gambatte | `.gb` `.gbc` `.zip` | — |
+| Game Boy Advance | mGBA | `.gba` `.zip` | — |
+| NES, Famicom, Famicom Disk System | MesenCE | `.nes` `.unif` `.unf` `.fds` `.zip` | — |
+| Super Nintendo | Snes9x | `.smc` `.fig` `.sfc` `.swc` `.bs` `.bsx` `.zip` | ✅ Tested; bsnes was too costly |
+| Nintendo 64 | ParaLLEl N64 with ParaLLEl-RDP on Vulkan | `.z64` `.n64` `.v64` `.ndd` `.zip` | — |
 | GameCube | Dolphin (libretro) | `.rvz` `.dol` `.m3u` | ❌ Hangs, no sound ([#463](https://github.com/portare-ch/portareos/issues/463)) |
 | Wii | Dolphin (libretro) | `.rvz` `.dol` `.wad` `.m3u` | — |
-| SG-1000 | [Genesis Plus GX](documentation/emulators/Genesis.md) | `.bin` `.sg` `.zip` `.7z` | — |
-| Master System | [Genesis Plus GX](documentation/emulators/Genesis.md) | `.bin` `.sms` `.zip` `.7z` | — |
-| Game Gear | [Genesis Plus GX](documentation/emulators/Genesis.md) | `.bin` `.gg` `.zip` `.7z` | — |
-| Mega Drive | [Genesis Plus GX](documentation/emulators/Genesis.md) | `.bin` `.gen` `.md` `.sg` `.smd` `.zip` `.7z` | 🚧 Baseline measured on Thunder Force IV; savestates made deterministic; scanlines undecided ([#691](https://github.com/portare-ch/portareos/issues/691)) |
+| SG-1000 | [Genesis Plus GX](documentation/emulators/Genesis.md) | `.bin` `.sg` `.zip` | — |
+| Master System | [Genesis Plus GX](documentation/emulators/Genesis.md) | `.bin` `.sms` `.zip` | — |
+| Game Gear | [Genesis Plus GX](documentation/emulators/Genesis.md) | `.bin` `.gg` `.zip` | — |
+| Mega Drive | [Genesis Plus GX](documentation/emulators/Genesis.md) | `.bin` `.gen` `.md` `.sg` `.smd` `.zip` | 🚧 Baseline measured on Thunder Force IV; savestates made deterministic; scanlines undecided ([#691](https://github.com/portare-ch/portareos/issues/691)) |
 | Sega CD | [Genesis Plus GX](documentation/emulators/Genesis.md) | `.chd` `.m3u` | — |
-| 32X | PicoDrive | `.32x` `.smd` `.bin` `.md` `.zip` `.7z` | — |
+| 32X | PicoDrive | `.32x` `.smd` `.bin` `.md` `.zip` | — |
 | Dreamcast | Flycast | `.chd` `.m3u` | — |
-| NAOMI, Atomiswave | Flycast | `.lst` `.bin` `.dat` `.zip` `.7z` | — |
+| NAOMI, Atomiswave | Flycast | `.lst` `.bin` `.dat` `.zip` | — |
 | PlayStation | [SwanStation](documentation/emulators/SwanStation.md) | `.chd` `.m3u` | ✅ Tested |
 | Saturn | Ymir | `.chd` `.m3u` | — |
 | PlayStation 2 | [ARMSX2 (libretro)](documentation/emulators/ARMSX2.md) | `.chd` `.m3u` | 🚧 Playable; optimization ongoing ([#477](https://github.com/portare-ch/portareos/issues/477)) |
