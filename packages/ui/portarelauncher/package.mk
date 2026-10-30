@@ -2,8 +2,8 @@
 # Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
 
 PKG_NAME="portarelauncher"
-PKG_VERSION="0.9.2"
-PKG_SHA256="6771b8d3d7152f9e17be29a412144c8159017a85856beac0856735983c02f53c"
+PKG_VERSION="0.10.0"
+PKG_SHA256="745cfb68c34dccc3fb1d0f4326b1ed5a00bd9cb4fd440ca14567bcd2612b050e"
 PKG_LICENSE="GPL-2.0"
 PKG_SITE="https://github.com/portare-ch/portarelauncher"
 # A release, not a commit: the tarball is made once by the launcher's release
@@ -18,11 +18,11 @@ PKG_TOOLCHAIN="make"
 # a text screen on a black field is a dumb buffer and a memcpy, so the GPU
 # never leaves idle while the menu is up. The CHD decoder lives in ps-chd-id,
 # the helper the launcher runs to name a PS1, PS2, PSP or Neo Geo CD disc
-# image; it is built by the Makefile through CMake with the toolchain's
-# $CMAKE, and links only the libchdr it vendors.
+# image, or an Xbox ISO or CHD; it is built by the Makefile through CMake
+# with the toolchain's $CMAKE, and links only the libchdr it vendors.
 
-# The default target also regenerates the PlayStation title tables from the
-# vendored PCSX2 index and libretro DATs, with Python and PyYAML. The tables
+# The default target also regenerates the title tables from the vendored
+# PCSX2 index and libretro DATs, with Python and PyYAML. The tables
 # are in the tarball, so build the three binaries and install them as shipped.
 #
 # The toolchain exports CMAKE as "cmake -DCMAKE_TOOLCHAIN_FILE=... -D...", and
@@ -52,7 +52,7 @@ makeinstall_target() {
     # install-disc-titles, without its dependency on regenerating the tables.
     cp -a ${PKG_BUILD}/data/ps2-titles.tsv ${PKG_BUILD}/data/psx-titles.tsv \
           ${PKG_BUILD}/data/psp-titles.tsv ${PKG_BUILD}/data/neocd-titles.tsv \
-          ${INSTALL}/usr/share/portarelauncher
+          ${PKG_BUILD}/data/xbox-titles.tsv ${INSTALL}/usr/share/portarelauncher
   mkdir -p ${INSTALL}/usr/share/portarelauncher/notices
     cp -a ${PKG_BUILD}/third_party/libretro/NOTICE ${INSTALL}/usr/share/portarelauncher/notices/LIBRETRO-NOTICE.txt
     cp -a ${PKG_BUILD}/third_party/libretro/LICENSE ${INSTALL}/usr/share/portarelauncher/notices/LIBRETRO-LICENSE.txt
