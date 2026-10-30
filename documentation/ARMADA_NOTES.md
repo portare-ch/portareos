@@ -23,6 +23,29 @@ mpv or panel refresh modes; its display work is gamescope and HDR.
 | ath12k scan priority never sent, scan timeout deadlock | `1020`, `1021` | patches 1104, 1105; 1106 and the timezone's country are ours |
 | GPU submitqueue priorities mapped onto HIGH through LOW, keeping KERNEL for VM_BIND | kernel `0619` | kernel patch 1113; imported, device verification pending |
 | libliftoff stacking across multiple primary planes | gamescope `0020` | gamescope patch 0009, including its nine regression cases; imported, device verification pending |
+| DPU resource cleanup writes through `cstate` before initializing it | corrected kernel `0010` | 7.3 resource-cleanup patch initializes the pointer before resetting `num_mixers` |
+| UART frame tails and large receive batches; trigger conversion independent of calibration | kernel `0515`, `0515a`, `1301` | patches 1141 and 1142; preserve our MCU handshake and rebind guard |
+| SMP2P state reset on ordinary DSP notifications; UHID output queue read without the producer's lock | kernel `0569`, `1008` | patches 1143 and 1144 |
+| Iris H.264 POC, HEVC tier overwritten by the AV1 setter, resolution-change buffers falsely marked as errors | kernel `1030`, `1031`, `1370` | patches 1145-1147 |
+
+## Kernel: checked again on 30 October 2026
+
+The follow-ups above use [Armada at `b58df0a1`](https://github.com/armada-os/armada/tree/b58df0a1ae086da5f39ef3647f63db5a2288f82f/packages/kernel)
+and our Linux 7.3 base. RSInput retains a partial frame between callbacks and
+leaves excess bytes with serdev for another receive call. After each MCU reset,
+the receive callback discards its old tail before accepting the new stream;
+the init path requests this without modifying the callback's buffer state.
+The trigger fix changes behavior when a calibrated maximum differs from the
+MCU's fixed release reference.
+
+All seven affected kernel objects compile in an ARM64 Linux container with
+the Nova configuration. Executable probes extracted from the patched source
+fail before the changes and pass afterwards: all 22 UART frame splits, byte
+delivery, a 100-frame batch, malformed-length recovery, trigger calibration,
+SMP2P restart detection and H.264 POC values. The final patch files reproduce
+the compiled sources and reverse cleanly. Required config assertions pass and
+detect a deliberately disabled UHID. Device validation of controller resume,
+Steam input and hardware video playback remains pending.
 
 ## Steam: checked again on 18 October 2026
 
