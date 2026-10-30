@@ -149,6 +149,12 @@ The vendor sends three more after the display is on: page `0x22`, register
 patch `1130` (#727) now sends them too, matching Android's on-command and
 Retroid's driver. What `0xe1` controls remains undocumented.
 
+Patch `1140` splits the sequence at DRM's prepare and enable, as Armada's
+driver does: prepare runs it up to sleep out with the brightness at `0`, not
+`0x0d75`; enable turns the display on and sends the three `0xe1` writes. DRM
+writes the user's brightness after enable, so the panel no longer lights at
+full brightness between display on and that write.
+
 ### Why video mode, when the vendor uses command mode
 
 That node drives the panel in command mode, with a hardware TE pin. This
