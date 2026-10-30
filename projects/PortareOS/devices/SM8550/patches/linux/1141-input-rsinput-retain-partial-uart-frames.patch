@@ -1,0 +1,136 @@
+From: Armada <noreply@armada.local>
+Subject: [PATCH] input: rsinput: retain partial UART frames and retry large batches
+
+serdev callbacks may end anywhere in a frame. Keep the incomplete tail
+between callbacks, resynchronise on the header, and reject lengths larger
+than the buffer. Accept only the available capacity so serdev retries the
+rest of a large batch after complete frames have been drained.
+
+Adapt Armada's 0515 and 0515a to our parser and keep the probe/rebind guard
+and MCU version handshake. Each MCU reset asks the receive callback to
+discard its old tail; the callback owns rx_len, so init does not race it.
+
+Link: https://github.com/armada-os/armada/blob/b58df0a1ae086da5f39ef3647f63db5a2288f82f/packages/kernel/patches/0515-input-rsinput-reassemble-uart-frames-instead-of-dropping-them.patch
+Link: https://github.com/armada-os/armada/blob/b58df0a1ae086da5f39ef3647f63db5a2288f82f/packages/kernel/patches/0515a-input-rsinput-accept-large-uart-batches.patch
+---
+--- a/drivers/input/joystick/rsinput.c
++++ b/drivers/input/joystick/rsinput.c
+@@ -6,6 +6,7 @@
+  *
+  */
+ 
++#include <linux/atomic.h>
+ #include <linux/completion.h>
+ #include <linux/errno.h>
+ #include <linux/gpio/consumer.h>
+@@ -181,6 +182,8 @@
+     bool invert_rx;
+     bool invert_ry;
+     uint8_t rx_buf[1024];
++    size_t rx_len;
++    unsigned int rx_reset_pending;
+     uint8_t sequence_number;
+     struct completion version_ack;
+     /*
+@@ -367,6 +370,9 @@
+      */
+     for (attempt = 1; attempt <= MCU_INIT_MAX_ATTEMPTS; attempt++) {
+         rsinput_power_on_mcu(drv);
++
++        /* Drop the pre-reset tail in the serialized receive callback. */
++        WRITE_ONCE(drv->rx_reset_pending, 1);
+ 
+         /*
+          * Arm the ack window before sending the request so a fast reply that
+@@ -598,6 +604,7 @@
+ 
+ static size_t rsinput_rx(struct serdev_device *serdev, const u8 *data, size_t count) {
+     struct rsinput_driver *drv = serdev_device_get_drvdata(serdev);
++    size_t consumed = 0, avail;
+ 
+     /*
+      * drv->input is NULL between probe setting drvdata and registering the
+@@ -605,32 +612,57 @@
+      */
+     if (!drv || !drv->input || !data || count == 0) {
+         dev_warn_ratelimited(&serdev->dev, "Invalid RX data\n");
+-        goto error;
+-    }
+-
+-    if (count > sizeof(drv->rx_buf)) {
+-        dev_warn_ratelimited(&serdev->dev, "RX buffer overflow\n");
+-        goto error;
+-    }
+-
+-    memcpy(drv->rx_buf, data, count);
+-
+-    /*
+-     * No checksum here. serdev hands over whatever the tty layer has
+-     * accumulated, which is not necessarily one frame: it can be two frames
+-     * back to back, a frame behind power-cycle noise, or a partial frame.
+-     * Checksumming the batch as though it were a single frame fails in all
+-     * three cases and discarded the whole thing, valid frames included. That
+-     * is what made the MCU version handshake at resume time out three times
+-     * and give up with -ETIMEDOUT.
+-     *
+-     * rsinput_process_data() already walks the batch frame by frame and
+-     * validates each checksum on its own, dropping only the frame that is
+-     * really bad. Let it.
+-     */
+-    rsinput_process_data(drv, drv->rx_buf, count);
+-
+-error:
++        return count;
++    }
++
++    if (xchg(&drv->rx_reset_pending, 0))
++        drv->rx_len = 0;
++
++    /* Leave excess bytes with serdev to retry after this buffer is drained. */
++    count = min(count, sizeof(drv->rx_buf) - drv->rx_len);
++    memcpy(drv->rx_buf + drv->rx_len, data, count);
++    drv->rx_len += count;
++    avail = drv->rx_len;
++
++    while (avail >= MCU_PKT_SIZE_MIN) {
++        const uint8_t *frame = drv->rx_buf + consumed;
++        uint16_t payload_length;
++        size_t frame_length;
++
++        if (frame[0] != FRAME_HEAD_1 || frame[1] != FRAME_HEAD_2 ||
++            frame[2] != FRAME_HEAD_3 || frame[3] != FRAME_HEAD_4) {
++            consumed++;
++            avail--;
++            continue;
++        }
++
++        payload_length = frame[FRAME_POS_LEN_L] |
++                         (frame[FRAME_POS_LEN_H] << 8);
++        frame_length = MCU_PKT_SIZE_MIN + payload_length;
++
++        if (frame_length > sizeof(drv->rx_buf)) {
++            consumed++;
++            avail--;
++            continue;
++        }
++
++        if (avail < frame_length)
++            break;
++
++        if (compute_checksum(frame, frame_length) == frame[frame_length - 1])
++            rsinput_process_data(drv, frame, frame_length);
++        else
++            dev_warn_ratelimited(&serdev->dev, "Checksum mismatch\n");
++
++        consumed += frame_length;
++        avail -= frame_length;
++    }
++
++    if (consumed) {
++        memmove(drv->rx_buf, drv->rx_buf + consumed, avail);
++        drv->rx_len = avail;
++    }
++
+     return count;
+ }
+ 
