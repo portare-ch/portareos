@@ -493,6 +493,23 @@ migrate_hakux_saves() {
   mv /storage/.config/hakux/* /storage/saves/xbox/ && rmdir /storage/.config/hakux
 }
 
+# Nothing made /storage/saves/xbox on a fresh install (hakux-lr's tmpfiles.d
+# does now), so RetroArch ignored the override that points hakuX there and
+# gave it its own save directory: the console's disk (hdd/, with eeprom.bin)
+# and the renderer's caches (cache/, hle_*) went to
+# /storage/.config/retroarch/saves. They move where the override leads.
+migrate_hakux_saves_retroarch() {
+  local from=/storage/.config/retroarch/saves
+  [ -f "${from}/hdd/eeprom.bin" ] || return 0
+  [ -e /storage/saves/xbox/hdd ] && return 0
+  mkdir -p /storage/saves/xbox
+  mv "${from}/hdd" /storage/saves/xbox/ || return 1
+  if [ -d "${from}/cache" ] && [ ! -e /storage/saves/xbox/cache ] && ls "${from}/cache" | grep -q '^hle_'; then
+    mv "${from}/cache" /storage/saves/xbox/
+  fi
+  return 0
+}
+
 migrate cpugovernor-schedutil migrate_cpugovernor
 migrate audiolatency-24 migrate_audiolatency_24
 migrate audiolatency-8 migrate_audiolatency_8
@@ -507,3 +524,4 @@ migrate nes-ratio-core migrate_nes_ratio_core
 migrate snes-ratio-core migrate_snes_ratio_core
 migrate led-battery-off migrate_led_battery_off
 migrate hakux-saves migrate_hakux_saves
+migrate hakux-saves-retroarch migrate_hakux_saves_retroarch
