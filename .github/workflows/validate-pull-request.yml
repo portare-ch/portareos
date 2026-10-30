@@ -66,6 +66,10 @@ jobs:
           # noticing.
           python3 .github/scripts/check-patch-hunks.py
 
+      - name: Check that RetroArch settings survive updates
+        if: github.event_name == 'pull_request'
+        run: python3 .github/scripts/test-retroarch-update.py
+
       - name: Validate pull request
         if: github.event_name == 'pull_request'
         run: |

@@ -512,8 +512,15 @@ matches what was set.
 Settings > About > Update on the nightly channel: the newest nightly
 downloads to `/storage/.update/`, the sha256 check passes, the device reboots into it
 and About shows the new version. User settings in `system.cfg` survive
-except for explicit migrations; managed RetroArch defaults are refreshed.
+except for explicit migrations. RetroArch's main `retroarch.cfg` is refreshed;
+saved core options and core, folder and game overrides survive. New override
+files and missing keys in `retroarch-core-options.cfg` are added.
 `.migrations` gains any new marker.
+
+Run `python3 .github/scripts/test-retroarch-update.py` for the configuration
+sync regression checks. On the device, save a core override and a core option
+in RetroArch, update twice, then relaunch the same game and confirm both
+settings still apply.
 
 ### L5 Per-device root password on first boot (auto+human)
 

@@ -502,20 +502,13 @@ update. Two exist, for `system.cpugovernor` and `FpsLimit`.
 The trap to remember: shipping a new default in a config file is not enough on
 its own. Ask whether an existing device can receive it.
 
-And the thing to know about the other direction: parts of `/usr/config` are
-copied over the top on every update, not merged, so shipping a file into one
-of those paths hands the image ownership of it. `retroarch.cfg` and the whole
-of `retroarch/config/`, `.opt` files included, work this way on purpose.
-
-That is a deliberate trade, not an accident to be guarded against. A core
-option changed in the RetroArch menu does not survive an update for any core
-the image seeds. In exchange, an updated device and a freshly flashed one are
-in the same state, and a build can be tested without first working out which
-of the settings on the device came from it. One copy of what was there is kept
-the first time, at `config.pre-refresh`.
-
-So the question to ask about a new default is still whether an existing device
-can receive it - and for these paths the answer is now yes, by overwriting.
+`retroarch.cfg` is still refreshed on every update. Core overrides under
+`retroarch/config/` (`.cfg` and `.opt`) used to be overwritten too, along
+with `retroarch-core-options.cfg`, which reset settings saved in RetroArch.
+The overrides now use the general `--ignore-existing` pass, and the shared
+core-options file only gains keys it does not already contain. Existing
+values survive; changing one still needs an explicit migration. Old
+`config.pre-refresh` backups are left in place.
 
 ### Do not reuse a merged branch
 

@@ -92,6 +92,8 @@ rsync -a /usr/config/modules /storage/.config/
 ### a migration at the bottom of this script. system/ is excluded because the
 ### block above already syncs it deliberately, and the es configs because they
 ### are symlinks into /usr/config.
+### This also seeds RetroArch's config/ tree: existing core, folder and game
+### overrides (.cfg and .opt) belong to the user and must survive updates.
 rsync -a --ignore-existing --exclude=system \
       --exclude={es_features.cfg,es_systems.cfg} \
       /usr/config/* /storage/.config/ >>${LOG} 2>&1
@@ -107,7 +109,33 @@ rsync -a /usr/config/modules/* /storage/.config/modules/
 # The sync only adds. A tool the image dropped would stay in Tools and fail
 # when started, so remove those by name.
 rm -f /storage/.config/modules/GPcal.sh
-cp -f /usr/config/retroarch/retroarch-core-options.cfg /storage/.config/retroarch/retroarch-core-options.cfg
+
+# RetroArch saves core options here. Add new defaults without replacing a
+# saved value, including options not exposed by the launcher. The general
+# sync above supplies the complete file when it does not exist yet.
+CORE_OPTIONS=/storage/.config/retroarch/retroarch-core-options.cfg
+if [ -f "${CORE_OPTIONS}" ]; then
+  if awk '
+    function key(line) {
+      sub(/=.*/, "", line)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+      return line
+    }
+    FILENAME == ARGV[1] {
+      if (!/^[[:space:]]*#/ && index($0, "=")) have[key($0)]
+      next
+    }
+    !/^[[:space:]]*#/ && index($0, "=") && !(key($0) in have) {
+      have[key($0)]
+      print
+    }
+  ' "${CORE_OPTIONS}" /usr/config/retroarch/retroarch-core-options.cfg \
+      >/tmp/retroarch-core-options.new && [ -s /tmp/retroarch-core-options.new ]; then
+    [ -n "$(tail -c1 "${CORE_OPTIONS}")" ] && echo >>"${CORE_OPTIONS}"
+    cat /tmp/retroarch-core-options.new >>"${CORE_OPTIONS}"
+  fi
+  rm -f /tmp/retroarch-core-options.new
+fi
 
 # ...and retroarch.cfg itself, which was not refreshed here and so froze at
 # whatever first boot wrote. Every change the image makes to it - the video
@@ -126,32 +154,6 @@ then
   cp /storage/.config/retroarch/retroarch.cfg /storage/.config/retroarch/retroarch.cfg.pre-refresh
 fi
 cp -f /usr/config/retroarch/retroarch.cfg /storage/.config/retroarch/retroarch.cfg
-
-# The per-core overrides have the same problem: nothing copied them either,
-# so an override added to the image - PPSSPP's, most recently - never
-# reached a device that already had a config directory. No --delete: these
-# are keyed by core name, so anything here for a core we no longer ship is
-# inert, and deleting would take a user's own overrides with it.
-#
-# .opt files are included, deliberately, and this is a choice rather than an
-# oversight: what the image ships is what the device runs. A .opt the image
-# does not carry a seed for is untouched, and one it does is replaced.
-#
-# The cost is real and is accepted - a core option changed in the RetroArch
-# menu does not survive an update for any core the image seeds. What is
-# bought is that an updated device and a freshly flashed one are in the same
-# state, so a build can be tested without first working out which of the
-# settings on the device came from it.
-#
-# One copy of whatever was there is kept the first time, for anyone who had
-# set options by hand, the same way retroarch.cfg is handled above.
-if [ -d /storage/.config/retroarch/config ] && \
-   [ ! -d /storage/.config/retroarch/config.pre-refresh ]
-then
-  cp -a /storage/.config/retroarch/config \
-        /storage/.config/retroarch/config.pre-refresh
-fi
-rsync -a /usr/config/retroarch/config/ /storage/.config/retroarch/config/ 2>/dev/null
 
 ### Apply developer ssh keys if they exist
 echo "Apply dev keys if available..." >>${LOG}
