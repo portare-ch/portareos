@@ -1,0 +1,14 @@
+[Unit]
+Description=Reset to stock: remove every setting, keep the games
+# The initramfs starts factory-reset.target alone when the flag is there,
+# so nothing else runs: no service can write a setting back.
+DefaultDependencies=no
+SuccessAction=reboot
+FailureAction=reboot
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/factoryreset --wipe
+
+[Install]
+WantedBy=factory-reset.target
