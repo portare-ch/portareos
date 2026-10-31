@@ -2,8 +2,8 @@
 # Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
 
 PKG_NAME="hakux-lr"
-PKG_VERSION="0.12.2"
-PKG_SHA256="64b7346ac730c7e384724087ed4a63a1acc7a8591c63153a37c4c9989588bcc4"
+PKG_VERSION="0.13.0"
+PKG_SHA256="c5fee76576bc3c09d254a8b84090ee64eec3a23aff57da4a910d0fd3612407d9"
 PKG_ARCH="aarch64"
 PKG_LICENSE="GPL-3.0-or-later"
 PKG_SITE="https://github.com/portare-ch/hakuX-lr"
@@ -25,5 +25,5 @@ makeinstall_target() {
     ${INSTALL}/usr/lib/libretro/hakux_libretro.info
   grep -q '^supported_extensions = "chd"$' \
     ${INSTALL}/usr/lib/libretro/hakux_libretro.info || exit 1
-  cp -p ${PKG_BUILD}/share/licenses/hakux/* ${PKG_BUILD}/BUILD-INFO ${INSTALL}/usr/share/licenses/hakux
+  cp -pR ${PKG_BUILD}/share/licenses/hakux/* ${PKG_BUILD}/BUILD-INFO ${INSTALL}/usr/share/licenses/hakux
 }
