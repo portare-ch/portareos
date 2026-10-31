@@ -22,7 +22,7 @@
     the GS the core's reported frame rate, matching RetroArch's loop.
   - `007-gs-key-the-spirv-cache-on-the-compiler-s-bytes.patch`: keep the
     shader cache through updates whose compiler libraries are unchanged.
-- Settings live in `/storage/roms/bios/pcsx2/inis/armsx2-libretro.ini`, not
+- Settings live in `/storage/bios/ps2/pcsx2/inis/armsx2-libretro.ini`, not
   `PCSX2.ini`. The core rewrites the keys the patches force on every load, and
   keeps everything else. That includes values left behind by an earlier build:
   delete the ini before comparing builds.

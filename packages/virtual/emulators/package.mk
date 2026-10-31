@@ -89,7 +89,9 @@ makeinstall_target() {
 
   add_system_dir /storage/roms/bezels
 
-  add_system_dir /storage/roms/bios
+  add_system_dir /storage/bios
+
+  add_system_dir /storage/saves
 
   add_system_dir /storage/roms/music
 

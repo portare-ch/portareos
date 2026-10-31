@@ -450,7 +450,7 @@ ScummVM to add the game's directory; its Tools > Playlist Generator creates
 the `.scummvm` file the launcher needs. Launch that entry: the intro plays,
 music sounds and a save and load cycle works. Check FluidLite separately
 with a game configured for General MIDI.
-`ls /storage/roms/bios/scummvm` holds the data bundle.
+`ls /storage/bios/scummvm/scummvm` holds the data bundle.
 
 ### E9 No automatic savestate load (auto)
 

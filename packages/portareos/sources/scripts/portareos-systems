@@ -11,55 +11,49 @@ import xml.etree.ElementTree as elementTree
 
 systems = {
     # ---------- Nintendo ---------- #
-    "gamecube":   { "name": "Nintendo GameCube", "biosFiles": [ { "md5": "db92574caab77a7ec99d4605fd6f2450", "file": "bios/GC/EUR/IPL.bin" },
-                                                                { "md5": "b17148254a5799684c7d783206504926", "file": "bios/GC/JAP/IPL.bin" },
-                                                                { "md5": "b17148254a5799684c7d783206504926", "file": "bios/GC/USA/IPL.bin" } ] },
+    "nds":        { "name": "Nintendo DS", "biosFiles": [ { "md5": "94bc5094607c5e6598d50472c52f27f2", "file": "bios/nds/firmware.bin" },
+                                                          { "md5": "df692a80a5b1bc90728bc3dfc76cd948", "file": "bios/nds/bios7.bin" },
+                                                          { "md5": "a392174eb3e572fed6447e956bde4b25", "file": "bios/nds/bios9.bin" },
+                                                          { "md5": "559dae4ea78eb9d67702c56c1d791e81", "file": "bios/nds/dsi_bios7.bin" },
+                                                          { "md5": "87b665fce118f76251271c3732532777", "file": "bios/nds/dsi_bios9.bin" },
+                                                          { "md5": "74f23348012d7b3e1cc216c47192ffeb", "file": "bios/nds/dsi_firmware.bin" },
+                                                          { "md5": "d71edf897ddd06bf335feeb68edeb272", "file": "bios/nds/dsi_nand.bin" } ] },
 
-    "nds":        { "name": "Nintendo DS", "biosFiles": [ { "md5": "94bc5094607c5e6598d50472c52f27f2", "file": "bios/firmware.bin" },
-                                                          { "md5": "df692a80a5b1bc90728bc3dfc76cd948", "file": "bios/bios7.bin" },
-                                                          { "md5": "a392174eb3e572fed6447e956bde4b25", "file": "bios/bios9.bin" },
-                                                          { "md5": "559dae4ea78eb9d67702c56c1d791e81", "file": "bios/dsi_bios7.bin" },
-                                                          { "md5": "87b665fce118f76251271c3732532777", "file": "bios/dsi_bios9.bin" },
-                                                          { "md5": "74f23348012d7b3e1cc216c47192ffeb", "file": "bios/dsi_firmware.bin" },
-                                                          { "md5": "d71edf897ddd06bf335feeb68edeb272", "file": "bios/dsi_nand.bin" } ] },
+    "gb":         { "name": "Nintendo Gameboy", "biosFiles": [ { "md5": "32fbbd84168d3482956eb3c5051637f5", "file": "bios/gb/gb_bios.bin" } ] },
 
-    "gb":         { "name": "Nintendo Gameboy", "biosFiles": [ { "md5": "32fbbd84168d3482956eb3c5051637f5", "file": "bios/gb_bios.bin" } ] },
+    "gba":        { "name": "Nintendo Gameboy Advance", "biosFiles": [ { "md5": "a860e8c0b6d573d191e4ec7db1b1e4f6", "file": "bios/gba/gba_bios.bin" } ] },
 
-    "gba":        { "name": "Nintendo Gameboy Advance", "biosFiles": [ { "md5": "a860e8c0b6d573d191e4ec7db1b1e4f6", "file": "bios/gba_bios.bin" } ] },
-
-    "gbc":        { "name": "Nintendo Gameboy Color", "biosFiles": [ { "md5": "dbfce9db9deaa2567f6a84fde55f9680", "file": "bios/gbc_bios.bin" } ] },
+    "gbc":        { "name": "Nintendo Gameboy Color", "biosFiles": [ { "md5": "dbfce9db9deaa2567f6a84fde55f9680", "file": "bios/gbc/gbc_bios.bin" } ] },
 
     # ---------- Sega ---------- #
-    "dreamcast":    { "name": "Sega Dreamcast", "biosFiles": [ { "md5": "e10c53c2f8b90bab96ead2d368858623", "file": "bios/dc/dc_boot.bin" },
-                                                               { "md5": "0a93f7940c455905bea6e392dfde92a4", "file": "bios/dc/dc_flash.bin" },
-                                                               { "md5": "3bffafac42a7767d8dcecf771f5552ba", "file": "bios/dc/naomi_boot.bin" } ] },
+    "dreamcast":    { "name": "Sega Dreamcast", "biosFiles": [ { "md5": "e10c53c2f8b90bab96ead2d368858623", "file": "bios/dreamcast/dc/dc_boot.bin" } ] },
 
-    "gamegear":     { "name": "Sega Game Gear", "biosFiles": [ { "md5": "672e104c3be3a238301aceffc3b23fd6", "file": "bios/bios.gg" } ] },
+    "gamegear":     { "name": "Sega Game Gear", "biosFiles": [ { "md5": "672e104c3be3a238301aceffc3b23fd6", "file": "bios/gamegear/bios.gg" } ] },
 
-    "mastersystem": { "name": "Sega Master System", "biosFiles": [ { "md5": "840481177270d5642a14ca71ee72844c", "file": "bios/bios.sms" } ] },
+    "mastersystem": { "name": "Sega Master System", "biosFiles": [ { "md5": "840481177270d5642a14ca71ee72844c", "file": "bios/mastersystem/bios_U.sms" } ] },
 
-    "segacd":       { "name": "Sega CD", "biosFiles": [ { "md5": "e66fa1dc5820d254611fdcdba0662372", "file": "bios/bios_CD_E.bin" },
-                                                        { "md5": "2efd74e3232ff260e371b99f84024f7f", "file": "bios/bios_CD_U.bin" },
-                                                        { "md5": "278a9397d192149e84e820ac621a8edd", "file": "bios/bios_CD_J.bin" } ] },
+    "segacd":       { "name": "Sega CD", "biosFiles": [ { "md5": "e66fa1dc5820d254611fdcdba0662372", "file": "bios/segacd/bios_CD_E.bin" },
+                                                        { "md5": "2efd74e3232ff260e371b99f84024f7f", "file": "bios/segacd/bios_CD_U.bin" },
+                                                        { "md5": "278a9397d192149e84e820ac621a8edd", "file": "bios/segacd/bios_CD_J.bin" } ] },
 
-    "saturn":       { "name": "Sega Saturn", "biosFiles": [ { "md5": "85ec9ca47d8f6807718151cbcca8b964", "file": "bios/sega_101.bin" },
-                                                            { "md5": "3240872c70984b6cbfda1586cab68dbe", "file": "bios/mpr-17933.bin" },
-                                                            { "md5": "255113ba943c92a54facd25a10fd780c", "file": "bios/mpr-18811-mx.ic1" },
-                                                            { "md5": "1cd19988d1d72a3e7caa0b73234c96b4", "file": "bios/mpr-19367-mx.ic1" },
-                                                            { "md5": "af5828fdff51384f99b3c4926be27762", "file": "bios/saturn_bios.bin" } ] },
+    "saturn":       { "name": "Sega Saturn", "biosFiles": [ { "md5": "85ec9ca47d8f6807718151cbcca8b964", "file": "bios/saturn/sega_101.bin" },
+                                                            { "md5": "3240872c70984b6cbfda1586cab68dbe", "file": "bios/saturn/mpr-17933.bin" },
+                                                            { "md5": "255113ba943c92a54facd25a10fd780c", "file": "bios/saturn/mpr-18811-mx.ic1" },
+                                                            { "md5": "1cd19988d1d72a3e7caa0b73234c96b4", "file": "bios/saturn/mpr-19367-mx.ic1" },
+                                                            { "md5": "af5828fdff51384f99b3c4926be27762", "file": "bios/saturn/saturn_bios.bin" } ] },
 
     # ---------- Sony ---------- #
-    "psx": { "name": "PSX", "biosFiles": [ { "md5": "c53ca5908936d412331790f4426c6c33", "file": "bios/psxonpsp660.bin" },
-                                           { "md5": "6e3735ff4c7dc899ee98981385f6f3d0", "file": "bios/scph101.bin" },
-                                           { "md5": "dc2b9bf8da62ec93e868cfd29f0d067d", "file": "bios/scph1001.bin" },
-                                           { "md5": "8dd7d5296a650fac7319bce665a6a53c", "file": "bios/scph5500.bin" },
-                                           { "md5": "490f666e1afb15b7362b406ed1cea246", "file": "bios/scph5501.bin" },
-                                           { "md5": "32736f17079d0b2b7024407c39bd3050", "file": "bios/scph5502.bin" },
-                                           { "md5": "1e68c231d0896b7eadcad1d7d8e76129", "file": "bios/scph7001.bin" } ] },
+    "psx": { "name": "PSX", "biosFiles": [ { "md5": "c53ca5908936d412331790f4426c6c33", "file": "bios/psx/psxonpsp660.bin" },
+                                           { "md5": "6e3735ff4c7dc899ee98981385f6f3d0", "file": "bios/psx/scph101.bin" },
+                                           { "md5": "dc2b9bf8da62ec93e868cfd29f0d067d", "file": "bios/psx/scph1001.bin" },
+                                           { "md5": "8dd7d5296a650fac7319bce665a6a53c", "file": "bios/psx/scph5500.bin" },
+                                           { "md5": "490f666e1afb15b7362b406ed1cea246", "file": "bios/psx/scph5501.bin" },
+                                           { "md5": "32736f17079d0b2b7024407c39bd3050", "file": "bios/psx/scph5502.bin" },
+                                           { "md5": "1e68c231d0896b7eadcad1d7d8e76129", "file": "bios/psx/scph7001.bin" } ] },
 
-    "ps2": { "name": "PS2", "biosFiles": [ { "md5": "21038400dc633070a78ad53090c53017", "file": "bios/pcsx2/bios/ps2-0230a-20080220.bin" } ] },
+    "ps2": { "name": "PS2", "biosFiles": [ { "md5": "21038400dc633070a78ad53090c53017", "file": "bios/ps2/pcsx2/bios/ps2-0230a-20080220.bin" } ] },
 
-    "ps3": { "name": "PS3", "biosFiles": [ { "md5": "a2b60b6ac1d2e49e230144345616927c", "file": "bios/PS3UPDAT.PUP" } ] }, #4.93
+    "ps3": { "name": "PS3", "biosFiles": [ { "md5": "a2b60b6ac1d2e49e230144345616927c", "file": "bios/ps3/PS3UPDAT.PUP" } ] }, #4.93
 
     #"psvita":   { "name": "PS Vita", "biosFiles": [ { "md5": "59dcf059d3328fb67be7e51f8aa33418", "file": "bios/psvita/PSP2UPDAT.PUP" },
     #                                                { "md5": "f2c7b12fe85496ec88a0391b514d6e3b", "file": "bios/psvita/PSVUPDAT.PUP"} ] },
@@ -213,15 +207,15 @@ def createReadme(systems):
 
 if __name__ == '__main__':
     if len(sys.argv) == 1:
-        prefix = "/storage/roms"
+        prefix = "/storage"
         displayMissingBios(systems, checkBios(systems, prefix, True))
     elif sys.argv[1] == "--noFilter":
-        prefix = "/storage/roms"
+        prefix = "/storage"
         displayMissingBios(systems, checkBios(systems, prefix, False))
     elif sys.argv[1] == "--createReadme":
         createReadme(systems)
     elif len(sys.argv) == 3 and sys.argv[1] == "--filter":
-        prefix = "/storage/roms"
+        prefix = "/storage"
         lowered_name = sys.argv[2].lower()
 
         filtered_systems = {}

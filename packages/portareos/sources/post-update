@@ -203,23 +203,31 @@ fi
 echo "Merge the old systems' folders..." >>${LOG}
 /usr/bin/system-merge >>${LOG} 2>&1
 
-### ScummVM's core looks for its themes and engine data under RetroArch's
-### system directory, and they have to match the core's version, so they
-### are copied from the image after every update. The ini next to them is
-### where added games live, so it is only put in place when there is none.
-mkdir -p /storage/roms/bios/scummvm
-rsync -a /usr/share/scummvm/ /storage/roms/bios/scummvm/
-if [ ! -f /storage/roms/bios/scummvm.ini ]; then
-  cp /usr/config/scummvm/scummvm.ini /storage/roms/bios/scummvm.ini
+### One storage layout for every emulator (#753): /storage/bios/<console>,
+### /storage/roms/<system>, /storage/saves/<system>. An install from before
+### it gets its BIOS files and the saves next to its games moved there,
+### once (storage-migrate), marked as the migrations below are. It runs
+### after system-merge: what follows writes into the layout.
+if [ ! -e /storage/.config/system/.migrations/storage-layout ]; then
+  mkdir -p /storage/.config/system/.migrations
+  echo "Migration: storage-layout" >>${LOG}
+  if /usr/bin/storage-migrate >>${LOG} 2>&1; then
+    touch /storage/.config/system/.migrations/storage-layout
+  else
+    echo "Storage migration incomplete; retrying after the next update." >>${LOG}
+  fi
 fi
 
-### The PS2 core reads its BIOS from bios/pcsx2/bios only. The standalone
-### emulators before it used bios/armsx2 and bios/aethersx2/bios, so copy
-### what is there across, leaving any file already in place alone.
-mkdir -p /storage/roms/bios/pcsx2/bios
-for dir in /storage/roms/bios/armsx2 /storage/roms/bios/aethersx2/bios; do
-  [ -d "${dir}" ] && rsync -a --ignore-existing "${dir}/" /storage/roms/bios/pcsx2/bios/
-done
+### ScummVM's core looks for its themes and engine data under RetroArch's
+### system directory, its BIOS folder, and they have to match the core's
+### version, so they are copied from the image after every update. The ini
+### next to them is where added games live, so it is only put in place when
+### there is none.
+mkdir -p /storage/bios/scummvm/scummvm
+rsync -a /usr/share/scummvm/ /storage/bios/scummvm/scummvm/
+if [ ! -f /storage/bios/scummvm/scummvm.ini ]; then
+  cp /usr/config/scummvm/scummvm.ini /storage/bios/scummvm/scummvm.ini
+fi
 
 ### The core reads its GameDB, shaders, armsx2_overrides.yaml and patches.zip
 ### from bios/pcsx2/resources, which tmpfiles.d links to the image's copy -
@@ -229,7 +237,7 @@ done
 ### at all: desktop GS settings on an Adreno. rmdir only removes it empty;
 ### a directory with content is someone's and stays. tmpfiles ran at boot
 ### already, before this script, so make the link now.
-rmdir /storage/roms/bios/pcsx2/resources 2>/dev/null
+rmdir /storage/bios/ps2/pcsx2/resources 2>/dev/null
 systemd-tmpfiles --create /usr/lib/tmpfiles.d/z_06_armsx2.conf
 
 ### And a system or game pinned to the standalone in system.cfg would
