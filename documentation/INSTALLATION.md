@@ -171,14 +171,17 @@ Each system has three folders: `/storage/roms/<system>/` for the games,
 `/storage/bios/<system>/` for its BIOS files and `/storage/saves/<system>/`
 for its saves, for example `/storage/roms/snes/`, `/storage/bios/snes/` and
 `/storage/saves/snes/`. A variant system shares its console's BIOS folder
-(`/storage/bios/gbah` is a link to `/storage/bios/gba`). BIOS files go in the
-layout the emulator expects within that folder (Dreamcast: `dc/`, PS2:
-`pcsx2/bios/`). Save states stay in `/storage/roms/savestates/<system>/`. An update from an
-older release moves BIOS files from `/storage/roms/bios/` and the saves
-next to the games into these folders once; anything it does not recognise
-stays where it was, listed in `/var/log/boot.log`. An SFTP client can also connect
-using the same address, `root` username and password to copy prepared games
-and BIOS files. See
+(`/storage/bios/naomi` is a link to `/storage/bios/dreamcast`). BIOS files
+go in the layout the emulator expects within that folder (Dreamcast:
+`dc/`, PS2: `pcsx2/bios/`). Save states stay in
+`/storage/roms/savestates/<system>/`. An update from an older release moves
+BIOS files from `/storage/roms/bios/` and the saves next to the games into
+these folders once; anything it does not recognise stays where it was,
+listed in `/var/log/boot.log`. ScummVM keeps explicit custom save paths;
+entries without one use `/storage/saves/scummvm/`.
+
+An SFTP client can also connect using the same address, `root` username
+and password to copy prepared games and BIOS files. See
 [game folders and supported formats](PER_DEVICE_DOCUMENTATION/SM8550/SUPPORTED_EMULATORS_AND_CORES.md)
 for each system and the [README](../README.md#installation-and-everyday-use)
 for controls and everyday use.

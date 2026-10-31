@@ -211,8 +211,11 @@ echo "Merge the old systems' folders..." >>${LOG}
 if [ ! -e /storage/.config/system/.migrations/storage-layout ]; then
   mkdir -p /storage/.config/system/.migrations
   echo "Migration: storage-layout" >>${LOG}
-  /usr/bin/storage-migrate >>${LOG} 2>&1
-  touch /storage/.config/system/.migrations/storage-layout
+  if /usr/bin/storage-migrate >>${LOG} 2>&1; then
+    touch /storage/.config/system/.migrations/storage-layout
+  else
+    echo "Storage migration incomplete; retrying after the next update." >>${LOG}
+  fi
 fi
 
 ### ScummVM's core looks for its themes and engine data under RetroArch's

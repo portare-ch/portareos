@@ -13,5 +13,7 @@ source /etc/profile
 
 set_kill set "retroarch"
 
+mkdir -p /storage/bios/scummvm /storage/saves/scummvm
 /usr/bin/retroarch -L /tmp/cores/scummvm_libretro.so \
-  --config /storage/.config/retroarch/retroarch.cfg >/dev/null 2>&1
+  --config /storage/.config/retroarch/retroarch.cfg \
+  --appendconfig /usr/config/retroarch/scummvm-launcher.cfg >/dev/null 2>&1

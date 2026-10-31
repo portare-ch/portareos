@@ -8,8 +8,8 @@
 #   /storage/roms/<system>    the games
 #   /storage/saves/<system>   the saves
 #
-# A variant system's BIOS folder is a link to its console's (bios/gbah ->
-# gba), and RetroArch gets the system's two folders at every launch
+# A variant system's BIOS folder is a link to its console's (bios/naomi ->
+# dreamcast), and RetroArch gets the system's two folders at every launch
 # (setsettings.sh). Save states stay in /storage/roms/savestates/<system>.
 #
 # This moves an older install's files into the layout, once, from
@@ -27,39 +27,54 @@ OLD="${ROOT}/roms/bios"
 ROMS="${ROOT}/roms"
 BIOS="${ROOT}/bios"
 SAVES="${ROOT}/saves"
+ERRORS=0
 
 log() {
   echo "storage-migrate: $*"
+}
+
+failed() {
+  ERRORS=1
+  log "$*"
+  return 1
 }
 
 # src to dst, a file's full path, unless dst is taken. Across filesystems
 # (the games on a card) the copy is made as dst.part and renamed once whole:
 # a cut-off move never leaves part of a save under the real name.
 move() {
-  local src="$1" dst="$2"
+  local src="$1" dst="$2" src_device dst_device
   [ -e "${src}" ] || [ -L "${src}" ] || return 0
   if [ -e "${dst}" ] || [ -L "${dst}" ]; then
     log "kept ${src}: ${dst} is taken"
     return 1
   fi
-  mkdir -p "${dst%/*}"
-  rm -f "${dst}.part"
-  if [ "$(stat -c %d "${src}")" = "$(stat -c %d "${dst%/*}")" ]; then
-    mv "${src}" "${dst}"
+  mkdir -p "${dst%/*}" || { failed "cannot create ${dst%/*}"; return 1; }
+  src_device=$(stat -c %d "${src}") || { failed "cannot stat ${src}"; return 1; }
+  dst_device=$(stat -c %d "${dst%/*}") || { failed "cannot stat ${dst%/*}"; return 1; }
+  rm -f "${dst}.part" || { failed "cannot remove ${dst}.part"; return 1; }
+  if [ "${src_device}" = "${dst_device}" ]; then
+    mv "${src}" "${dst}" || failed "cannot move ${src} to ${dst}"
   else
-    cp -a "${src}" "${dst}.part" && sync && mv "${dst}.part" "${dst}" && rm -f "${src}"
+    cp -a "${src}" "${dst}.part" && sync && mv "${dst}.part" "${dst}" && rm -f "${src}" ||
+      failed "cannot copy ${src} to ${dst}"
   fi
 }
 
 # The files under src into dst at the same relative paths, but the links
-# named after src: tmpfiles.d makes them in the new place, so the old links
-# go (a link only, never what it points to). The emptied folders go.
+# named after src: tmpfiles.d makes them in the new place, so known generated
+# links go. A custom link stays in the old folder, logged, with its target.
 move_tree() {
   local src="$1" dst="$2" f rel name skip
   shift 2
   [ -d "${src}" ] && [ ! -L "${src}" ] || return 0
   for name in "$@"; do
-    [ -L "${src}/${name}" ] && rm -f "${src}/${name}"
+    [ -L "${src}/${name}" ] || continue
+    case "${name}:$(readlink "${src}/${name}")" in
+      resources:/usr/share/armsx2/resources|memcards:/storage/roms/ps2|Sys:/usr/share/dolphin-emu/Sys)
+        rm -f "${src}/${name}" || failed "cannot remove ${src}/${name}" ;;
+      *) log "kept custom link ${src}/${name}" ;;
+    esac
   done
   while IFS= read -r -d '' f; do
     rel="${f#${src}/}"
@@ -119,20 +134,23 @@ bios() {
   move "${OLD}/gb_bios.bin" "${BIOS}/gb/gb_bios.bin"
   move "${OLD}/gbc_bios.bin" "${BIOS}/gbc/gbc_bios.bin"
   if [ -d "${OLD}/palettes" ]; then
-    mkdir -p "${BIOS}/gbc"
-    cp -an "${OLD}/palettes" "${BIOS}/gbc/" 2>/dev/null
-    move_tree "${OLD}/palettes" "${BIOS}/gb/palettes"
+    if mkdir -p "${BIOS}/gbc" && cp -an "${OLD}/palettes" "${BIOS}/gbc/"; then
+      move_tree "${OLD}/palettes" "${BIOS}/gb/palettes"
+    else
+      failed "cannot copy ${OLD}/palettes to ${BIOS}/gbc"
+    fi
   fi
   move "${OLD}/gba_bios.bin" "${BIOS}/gba/gba_bios.bin"
 
   # Sega (Genesis Plus GX): the Mega Drive's boot ROM and lock-on carts, the
   # Master System's and Game Gear's boot ROMs, the Mega-CD's BIOS.
   for name in bios_MD.bin ggenie.bin areplay.bin sk.bin sk2chip.bin; do
-    move "${OLD}/${name}" "${BIOS}/megadrive/${name}"
+    move "${OLD}/${name}" "${BIOS}/genesis/${name}"
   done
-  for name in bios_U.sms bios_E.sms bios_J.sms bios.sms; do
+  for name in bios_U.sms bios_E.sms bios_J.sms; do
     move "${OLD}/${name}" "${BIOS}/mastersystem/${name}"
   done
+  move "${OLD}/bios.sms" "${BIOS}/mastersystem/bios_U.sms"
   move "${OLD}/bios.gg" "${BIOS}/gamegear/bios.gg"
   for name in bios_CD_U.bin bios_CD_E.bin bios_CD_J.bin; do
     move "${OLD}/${name}" "${BIOS}/segacd/${name}"
@@ -225,11 +243,11 @@ saves() {
         # MesenCE writes its own: .sav and .chr.sav, and a disk's writes as
         # an IPS beside an FDS image (only there: a cart's .ips is a patch).
         move_found "${s}" -iname '*.sav'
-        if [ "${s}" = fds ]; then
-          while IFS= read -r -d '' f; do
-            [ -e "${f%.*}.fds" ] && move "${f}" "${SAVES}/${s}/${f##*/}"
-          done < <(find "${ROMS}/${s}" -type f -iname '*.ips' -print0)
-        fi ;;
+        while IFS= read -r -d '' f; do
+          if [ -e "${f%.*}.fds" ] || [ -e "${f%.*}.FDS" ]; then
+            move "${f}" "${SAVES}/${s}/${f##*/}"
+          fi
+        done < <(find "${ROMS}/${s}" -type f -iname '*.ips' -print0) ;;
       segacd|megacd|megadrive|megadrive-japan|megadriveh|genesis|genh|mastersystem|gamegear|gamegearh|sg-1000)
         # Genesis Plus GX: the Mega-CD's backup RAM and RAM cart. One per
         # folder: copies from game subfolders past the first stay, logged.
@@ -260,26 +278,10 @@ saves() {
   done
 }
 
-### ScummVM keeps a save path in its game list once it has one, so the old
-### one would outlive the move: its saves move to /storage/saves/scummvm and
-### every savepath line points there.
-scummvm() {
-  local ini="${BIOS}/scummvm/scummvm.ini" new="/storage/saves/scummvm" p f
-  [ -f "${ini}" ] || return 0
-  while IFS= read -r p; do
-    p="${p%/}"
-    [ -n "${p}" ] && [ "${p}" != "${new}" ] || continue
-    p="${ROOT}${p#/storage}"
-    [ -d "${p}" ] || continue
-    for f in "${p}"/*.s[0-9][0-9]*; do
-      move "${f}" "${SAVES}/scummvm/${f##*/}"
-    done
-  done < <(sed -n 's/^savepath=//p' "${ini}")
-  sed -i "s|^savepath=.*|savepath=${new}|" "${ini}"
-}
-
-mkdir -p "${BIOS}" "${SAVES}"
+### ScummVM's explicit savepaths stay: engine save formats are not uniform
+### (SCI uses .000, SCUMM .s00), and the directory can also hold game data.
+### Without an explicit path its core uses RetroArch's new save directory.
+mkdir -p "${BIOS}" "${SAVES}" || exit 1
 bios
 saves
-scummvm
-exit 0
+exit "${ERRORS}"
