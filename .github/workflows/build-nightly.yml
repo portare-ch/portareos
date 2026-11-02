@@ -19,44 +19,17 @@ concurrency:
   group: build
   cancel-in-progress: false
 
-# Nightly at 23:00 UTC, which is 01:00 in Aargau on summer time and 00:00 on
-# winter time. A build takes roughly two to four hours incrementally, so it has
-# landed either way by the time anyone is awake.
-#
-# This costs nothing on a quiet day. Automatic triggers consult
-# build-needed.sh, which diffs against the head of the last green build, and
-# the run stops at set-envs when nothing build-affecting has changed. Only
-# workflow_dispatch skips that check, on the grounds that a person who clicked
-# the button asked for an image.
-#
-# The concurrency group is "build" with cancel-in-progress false, so a nightly
-# that collides with a build already running queues behind it rather than
-# killing it.
-#
-# Monthly on the 1st at 00:00 UTC, which set-release-type turns into an
-# official release: OFFICIAL=yes, INCREMENTAL=no, and the publish step tags it
-# release-<date>-<run> rather than nightly-<date>-<run> and drops the
-# --prerelease flag.
-#
-# That cron string has to stay exactly "0 0 1 * *". set-release-type compares
-# github.event.schedule against that literal, so respacing it silently demotes
-# the monthly build to a nightly prerelease.
-#
-# Releases always build cold, so nothing published rests on restored state.
-# A release therefore takes closer to five hours than two.
-#
-# On the 1st both crons fire, an hour apart. Nothing needs to arbitrate that:
-# the concurrency group queues them, and by the time the 23:00 nightly runs
-# build-needed.sh is diffing against the release that landed that morning, so
-# it skips unless something has actually changed since.
+# Nightlies skip unchanged builds. Monthly stable releases always build cold.
+# Both share the build queue because the device caches are shared.
+
 on:
   schedule:
     - cron: '0 23 * * *'
-    - cron: '0 0 1 * *'
+    - cron: '0 0 3 * *'
   workflow_dispatch:
     inputs:
       release:
-        description: 'Official release'
+        description: 'Stable release (PortareOS YY.MM)'
         required: false
         default: false
         type: boolean
@@ -124,57 +97,32 @@ jobs:
         id: set-envs
         run: |
           OWNER_LC="${OWNER,,}"
-          echo "OWNER_OUTPUT=${OWNER_LC}" >> $GITHUB_OUTPUT
+          echo "OWNER_OUTPUT=${OWNER_LC}" >> "$GITHUB_OUTPUT"
         env:
           OWNER: ${{ github.repository_owner }}
       - name: Determine release type
         id: set-release-type
+        env:
+          EVENT_SCHEDULE: ${{ github.event.schedule }}
+          RELEASE_REQUESTED: ${{ inputs.release }}
+          FULL_REQUESTED: ${{ inputs.full }}
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.release }}" == "true" ]]; then
-            echo "OFFICIAL=yes" >> $GITHUB_OUTPUT
-            echo "NIGHTLY=no" >> $GITHUB_OUTPUT
-          elif [[ "${{ github.event_name }}" == "schedule" && "${{ github.event.schedule }}" == "0 0 1 * *" ]]; then
-            echo "OFFICIAL=yes" >> $GITHUB_OUTPUT
-            echo "NIGHTLY=no" >> $GITHUB_OUTPUT
-          else
-            echo "OFFICIAL=no" >> $GITHUB_OUTPUT
-            echo "NIGHTLY=yes" >> $GITHUB_OUTPUT
-          fi
+          python3 .github/scripts/release-policy.py plan >> "$GITHUB_OUTPUT"
 
-          # Incremental is the default now that every stage can restore its own
-          # state: a cold build is the deliberate act, not the other way round.
-          # Each stage still refuses its saved state whenever the recipes it
-          # was built against have moved, so "incremental" never means "stale".
-          #
-          # A release always builds cold regardless, so nothing we publish can
-          # rest on restored state, and ticking "full" forces the same for an
-          # ordinary run when you want to rule the cache out of an investigation.
-          if [[ "${{ inputs.release }}" == "true" || "${{ inputs.full }}" == "true" ]]; then
-            echo "INCREMENTAL=no" >> $GITHUB_OUTPUT
-          else
-            echo "INCREMENTAL=yes" >> $GITHUB_OUTPUT
-          fi
-      # Whether anything since the last green build can affect what gets built.
-      # Only consulted for automatic triggers: a workflow_dispatch means a
-      # person asked for an image and gets one either way.
-      #
-      # The monthly release is not exempt. A month in which nothing changed
-      # produces no release, because a release whose contents are identical to
-      # the last one is noise: it invites people to download it, and tells them
-      # nothing by existing. The cadence is a ceiling, not a promise.
       - name: Is a build needed
         id: build-needed
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OFFICIAL: ${{ steps.set-release-type.outputs.OFFICIAL }}
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "NEEDED=yes" >> $GITHUB_OUTPUT
-            echo "dispatched by hand - building regardless." >> $GITHUB_STEP_SUMMARY
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" || "${OFFICIAL}" == "yes" ]]; then
+            echo "NEEDED=yes" >> "$GITHUB_OUTPUT"
+            echo "Stable release or manual build - building regardless." >> "$GITHUB_STEP_SUMMARY"
           else
             NEEDED="$(.github/scripts/build-needed.sh)"
-            echo "NEEDED=${NEEDED}" >> $GITHUB_OUTPUT
+            echo "NEEDED=${NEEDED}" >> "$GITHUB_OUTPUT"
             if [[ "${NEEDED}" == "no" ]]; then
-              echo "No build-affecting change since the last successful build - skipping." >> $GITHUB_STEP_SUMMARY
+              echo "No build-affecting change since the last successful build - skipping." >> "$GITHUB_STEP_SUMMARY"
             fi
           fi
 
@@ -191,7 +139,7 @@ jobs:
           if [[ "${{ github.event_name }}" == "schedule" ]]; then
             SCHEDULE_VAR="${{ vars.SCHEDULE_DEVICES }}"
             if [[ -z "$SCHEDULE_VAR" ]]; then
-              echo "matrix=$ALL_DEVICES" >> $GITHUB_OUTPUT
+              echo "matrix=$ALL_DEVICES" >> "$GITHUB_OUTPUT"
               exit 0
             fi
             IFS=',' read -ra DEVICES <<< "$SCHEDULE_VAR"
@@ -217,7 +165,7 @@ jobs:
             MATRIX="[$SELECTED_MATRIX]"
           fi
           
-          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
 
   build-docker:
     name: Docker
@@ -267,19 +215,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run retry-workflow.yml -F run_id=${{ github.run_id }}
 
-  # Publishing a build from a fork.
-  #
-  # release-nightly and release-official below cannot run here, and the fence
-  # on the owner is the least of it: both need secrets this repository does not
-  # have (NIGHTLY_APP_ID, NIGHTLY_APP_PRIVATE_KEY, SF_SSH_KEY), both push tags
-  # and releases into a companion distribution-nightly repository that does not
-  # exist for this owner, and the nightly one rsyncs the images to the PortareOS
-  # SourceForge project. Dropping the owner check would just move the failure
-  # to the app-token step. So this is a separate job rather than an edit to
-  # theirs, which also keeps upstream merges of those two jobs clean.
-  #
-  # This publishes into this repository's own releases with the default
-  # GITHUB_TOKEN. No new secrets, no second repository.
   release-fork:
     if: ${{ always() && !cancelled() && needs.build-devices.result == 'success' && github.event_name != 'pull_request' }}
     name: Release
@@ -289,6 +224,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     permissions:
       contents: write
+      pull-requests: read
     steps:
       - uses: actions/checkout@v6
         with:
@@ -318,23 +254,19 @@ jobs:
 
       - name: Work out the tag
         id: tag
+        env:
+          OFFICIAL: ${{ needs.set-envs.outputs.OFFICIAL }}
         run: |
-          DATE="$(date +'%Y%m%d')"
-          # The run number keeps a second build on the same day from colliding
-          # with the first, which gh release create treats as a hard error.
-          if [ "${{ needs.set-envs.outputs.OFFICIAL }}" = "yes" ]; then
-            echo "tag=release-${DATE}-${{ github.run_number }}" >> "${GITHUB_OUTPUT}"
-            echo "prerelease=" >> "${GITHUB_OUTPUT}"
-          else
-            echo "tag=nightly-${DATE}-${{ github.run_number }}" >> "${GITHUB_OUTPUT}"
-            echo "prerelease=--prerelease" >> "${GITHUB_OUTPUT}"
-          fi
+          python3 .github/scripts/release-policy.py tag >> "$GITHUB_OUTPUT"
 
       - name: Publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.tag.outputs.tag }}
           PRERELEASE: ${{ steps.tag.outputs.prerelease }}
+          LATEST: ${{ steps.tag.outputs.latest }}
+          TITLE: ${{ steps.tag.outputs.title }}
+          OFFICIAL: ${{ needs.set-envs.outputs.OFFICIAL }}
         run: |
           # Collect by extension rather than by name prefix, so this keeps
           # working when the images stop being called PortareOS-*.
@@ -367,81 +299,40 @@ jobs:
             fi
           done
 
-          # The newest nightly or release already published here. The ccache
-          # releases go to distribution-cache, so they cannot win this, but the
-          # prefix filter keeps that true if that ever stops being the case.
-          # What "changes" are measured against. A nightly lists what is new
-          # since the build before it, of either kind. An official release
-          # lists what is new since the previous official release: someone
-          # on the release channel went from that one to this one, and the
-          # nightly from last night - which is what the newest tag of either
-          # kind usually is - would list a day of it. The first release has
-          # nothing to compare against and says so.
-          if [ "${{ needs.set-envs.outputs.OFFICIAL }}" = "yes" ]; then
-            PREV_PATTERN='^release-'
-          else
-            PREV_PATTERN='^(nightly|release)-'
-          fi
-          PREV="$(gh release list --repo "${GITHUB_REPOSITORY}" --limit 100 \
-            --json tagName,isDraft \
-            --jq "[.[] | select(.isDraft | not) | .tagName
-                   | select(test(\"${PREV_PATTERN}\"))] | first // \"\"")"
-
-          # fetch-depth: 0 brings the tags with it, but a tag pushed after this
-          # checkout started would not be here yet.
+          # Paginate: a busy month can contain more than 100 nightly builds.
+          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/releases?per_page=100" > releases.json
+          PREV="$(python3 .github/scripts/release-policy.py previous < releases.json)"
+          NOTES_START=()
           if [ -n "${PREV}" ]; then
-            git rev-parse -q --verify "refs/tags/${PREV}^{commit}" >/dev/null \
-              || git fetch origin "refs/tags/${PREV}:refs/tags/${PREV}" || true
+            NOTES_START=(--notes-start-tag "${PREV}")
+          fi
+          RELEASE_FLAGS=("${LATEST}")
+          if [ -n "${PRERELEASE}" ]; then
+            RELEASE_FLAGS+=("${PRERELEASE}")
           fi
 
           {
+            if [ "${OFFICIAL}" = "yes" ]; then
+              echo "Stable release for the Retroid Pocket Nova."
+            else
+              echo "Development build for the Retroid Pocket Nova."
+            fi
+            echo
+            echo "For a fresh installation, write the .img.gz to a microSD card."
+            echo "For an existing installation, use Settings > Update."
+            echo
+            echo "[Installation guide](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/${GITHUB_SHA}/documentation/INSTALLATION.md)"
+            echo
             echo "Built from \`${GITHUB_SHA}\` on \`${GITHUB_REF_NAME}\`."
             echo
-            echo "PortareOS - a minimalist distro for the Retroid Pocket Nova for"
-            echo "people who like their coffee without milk and sugar. Extras are"
-            echo "considered anti-features: no compositor, no EmulationStation, no"
-            echo "artwork, no PulseAudio."
-            echo
-            echo "Write the .img.gz to a microSD card or use the updater under"
-            echo "Settings once installed."
-            echo
-            echo "## Changes"
-            echo
-            if [ -z "${PREV}" ] && [ "${{ needs.set-envs.outputs.OFFICIAL }}" = "yes" ]; then
-              echo "The first official release, so there is no earlier one to compare against."
-            elif [ -z "${PREV}" ]; then
-              echo "First published build here, so there is nothing to compare against."
-            elif ! git rev-parse -q --verify "refs/tags/${PREV}^{commit}" >/dev/null; then
-              echo "\`${PREV}\` is not in this checkout, so no commit list could be built."
-            else
-              # Merges are dropped: every PR lands as one, and the commits it
-              # brought are listed anyway, so keeping them says everything twice.
-              COUNT="$(git rev-list --no-merges --count "${PREV}..${GITHUB_SHA}")"
-              if [ "${COUNT}" -eq 0 ]; then
-                echo "Nothing new since \`${PREV}\`. Rebuilt for other reasons."
-              else
-                git log --no-merges --pretty='- %s (\`%h\`)' "${PREV}..${GITHUB_SHA}" | head -100
-                if [ "${COUNT}" -gt 100 ]; then
-                  echo "- ...and $((COUNT - 100)) more"
-                fi
-                echo
-                echo "[Every change since ${PREV}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/${PREV}...${TAG})"
-              fi
-            fi
           } > release-notes.md
 
-          # --target, or gh tags the default branch's tip at the moment the
-          # release is created rather than the commit this was built from.
-          # A build takes an hour or two and next moves in the meantime, so
-          # every tag pointed at whatever landed while the build ran - the
-          # head the *next* build would use. Two things went wrong with that:
-          # the tag misidentified what is in the release, and the changelog
-          # below diffs PREV..GITHUB_SHA, where PREV was a tag already
-          # pointing at GITHUB_SHA, so the range came out empty and the notes
-          # said "Nothing new" for a build that carried a kernel change.
+          # Pin the release to the tree that produced the images, not the
+          # default branch's tip after the build has finished.
           gh release create "${TAG}" "${FILES[@]}" \
             --repo "${GITHUB_REPOSITORY}" \
             --target "${GITHUB_SHA}" \
-            --title "${TAG}" \
+            --title "${TITLE}" \
             --notes-file release-notes.md \
-            ${PRERELEASE}
+            --generate-notes "${NOTES_START[@]}" \
+            "${RELEASE_FLAGS[@]}"
