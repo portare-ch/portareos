@@ -626,7 +626,7 @@ case "$1" in
 	# Option-style API: --options lists the choices, a bare name selects one.
 	#
 	"--options")
-		echo "disabled network file_transfer"
+		echo "disabled network file_transfer usb_drive"
 		;;
 	"--start")
 		usb_init_clean_state
