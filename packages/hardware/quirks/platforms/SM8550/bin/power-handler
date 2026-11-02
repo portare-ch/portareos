@@ -8,6 +8,7 @@
 #   screen already blanked     -> unblank, whatever put it there
 #   external display attached  -> blank the internal panel, never suspend
 #   suspend switched off       -> blank the internal panel
+#   serving a USB drive        -> blank the internal panel
 #   otherwise                  -> real suspend
 #
 # "idle" is the launcher's request after its menu sat dark and untouched for
@@ -113,6 +114,11 @@ ssh_in_use() {
   return 1
 }
 
+# Suspend would disconnect the drive while the host may still need it.
+usb_drive_served() {
+  [ -n "$(cat /sys/kernel/config/usb_gadget/drive/UDC 2>/dev/null)" ]
+}
+
 # Dark screen with the blue LED, at request time: sleep.d does not light the
 # sleep indication until after the WiFi teardown, seconds later, so a press
 # looks dead and invites a second press that wakes the device. Safe on an
@@ -170,6 +176,12 @@ case "$1" in
       external_display blank
       exit 0
     fi
+    if usb_drive_served; then
+      ${DEBUG} && log $0 "Serving a USB drive, blanking instead of suspending."
+      touch "${BLANK_FLAG}"
+      external_display blank
+      exit 0
+    fi
 
     ${DEBUG} && log $0 "Suspending."
     suspend_now
@@ -186,7 +198,7 @@ case "$1" in
        socat -t1 - "UNIX-CONNECT:${PORTAMP_SOCK}" >/dev/null 2>&1; then
       exit 1
     fi
-    if external_display connected ||
+    if external_display connected || usb_drive_served ||
        [ "$(get_setting system.suspendmode)" = "off" ]; then
       exit 1
     fi

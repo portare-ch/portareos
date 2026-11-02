@@ -311,6 +311,52 @@ cleanup_usb_mtp() {
         ${g_mtp}
 }
 
+# Drive mode is temporary; keep USB_MODE for eject and the next boot.
+g_drive="/sys/kernel/config/usb_gadget/drive"
+DRIVEDIR=/storage/usbdrive
+
+prepare_usb_drive() {
+    lun=${g_drive}/functions/mass_storage.usb0/lun.0
+    name=$(basename "$1")
+
+    mkdir ${g_drive} || return 1
+    echo "0x0200" > ${g_drive}/bcdUSB || return 1
+    # g_mass_storage's IDs
+    echo "0x0525" > ${g_drive}/idVendor || return 1
+    echo "0xa4a5" > ${g_drive}/idProduct || return 1
+    echo "${devversion}" > ${g_drive}/bcdDevice || return 1
+    mkdir ${g_drive}/strings/0x409 || return 1
+    echo "${OS_NAME}" > ${g_drive}/strings/0x409/manufacturer || return 1
+    echo "${PRODUCT}" > ${g_drive}/strings/0x409/product || return 1
+    echo "${SERIAL}" > ${g_drive}/strings/0x409/serialnumber || return 1
+
+    mkdir ${g_drive}/configs/c.1 || return 1
+    echo "0xC0" > ${g_drive}/configs/c.1/bmAttributes || return 1
+    echo "0xfe" > ${g_drive}/configs/c.1/MaxPower || return 1
+    mkdir ${g_drive}/configs/c.1/strings/0x409 || return 1
+    echo drive > ${g_drive}/configs/c.1/strings/0x409/configuration || return 1
+
+    mkdir ${g_drive}/functions/mass_storage.usb0 || return 1
+    echo 1 > ${lun}/removable || return 1
+    # The kernel only accepts ro changes while no backing file is open.
+    echo 1 > ${lun}/ro || return 1
+    printf 'Linux   %-16.16s' "${name%.*}" > ${lun}/inquiry_string || return 1
+    echo "$1" > ${lun}/file || return 1
+    ln -s ${g_drive}/functions/mass_storage.usb0 ${g_drive}/configs/c.1
+}
+
+cleanup_usb_drive() {
+    [ -d ${g_drive} ] || return 0
+    [ -n "$(cat ${g_drive}/UDC)" ] && echo "" > ${g_drive}/UDC
+    rm -f ${g_drive}/configs/c.1/mass_storage.usb0
+    rmdir \
+        ${g_drive}/configs/c.1/strings/0x409 \
+        ${g_drive}/configs/c.1 \
+        ${g_drive}/functions/mass_storage.usb0 \
+        ${g_drive}/strings/0x409 \
+        ${g_drive} 2>/dev/null
+}
+
 typec_managed_role() {
 	# TCPM owns the role switch
 	for p in /sys/class/typec/port*/data_role; do
@@ -358,6 +404,27 @@ external_vbus_present() {
 	return 1
 }
 
+device_role() {
+	set_role device
+	for _ in 1 2 3 4 5 6 7 8 9 10; do
+		UDC_NAME=$(ls -1 /sys/class/udc 2>/dev/null | head -n1)
+		[ -n "${UDC_NAME}" ] && break
+		sleep 0.1
+	done
+	if [ -z "${UDC_NAME}" ]; then
+		echo "ERROR: no UDC available after role switch to device" >&2
+		exit 5
+	fi
+}
+
+bind_udc() {
+	echo "${UDC_NAME}" > /sys/kernel/config/usb_gadget/$1/UDC
+	if [ "$(cat /sys/kernel/config/usb_gadget/$1/UDC 2>/dev/null)" != "${UDC_NAME}" ]; then
+		echo "ERROR: failed to bind $1 to UDC ${UDC_NAME}" >&2
+		exit 4
+	fi
+}
+
 # USB_MODE is how the gadget was last configured (got from state file)
 # CURRENT_MODE is USB gadget subsystem state -- which gadget has UDC
 # $1 is desired mode, passed by caller
@@ -388,16 +455,7 @@ usb_start() {
 		set_role host
 		return
 	else
-		set_role device
-		for _ in 1 2 3 4 5 6 7 8 9 10; do
-			UDC_NAME=$(ls -1 /sys/class/udc 2>/dev/null | head -n1)
-			[ -n "${UDC_NAME}" ] && break
-			sleep 0.1
-		done
-		if [ -z "${UDC_NAME}" ]; then
-			echo "ERROR: no UDC available after role switch to device" >&2
-			exit 5
-		fi
+		device_role
 	fi
 
 	if [ "${USB_MODE}" = mtp ] ; then
@@ -420,12 +478,7 @@ usb_start() {
 		exit 0
 	fi
 
-	# Enable selected mode
-	echo "${UDC_NAME}" > /sys/kernel/config/usb_gadget/${USB_MODE}/UDC
-	if [ "$(cat /sys/kernel/config/usb_gadget/${USB_MODE}/UDC 2>/dev/null)" != "${UDC_NAME}" ]; then
-		echo "ERROR: failed to bind ${USB_MODE} to UDC ${UDC_NAME}" >&2
-		exit 4
-	fi
+	bind_udc "${USB_MODE}"
 	echo "USB_MODE=${USB_MODE}" > ${GADGETCONF}
 
 	[[ "${USB_MODE}" == "cdc" ]] && configure_iface
@@ -454,11 +507,47 @@ usb_stop() {
 		fi
 
 		usb_disable
+		cleanup_usb_drive
 
 		if [ -d /dev/ffs-umtp ] ; then
 			umtp_teardown
 		fi
 	) >/dev/null 2>&1
+}
+
+usb_drive_start() {
+	image=$(readlink -f "$1")
+	if [ ! -f "${image}" ] || [ ! -r "${image}" ]; then
+		echo "ERROR: no image at $1" >&2
+		exit 2
+	fi
+	STORED_MODE=${USB_MODE:-disabled}
+
+	[ "${CURRENT_MODE}" != "disabled" ] && usb_stop
+	# usb_stop records disabled; retain the selected mode even if setup fails.
+	echo "USB_MODE=${STORED_MODE}" > ${GADGETCONF}
+	cleanup_usb_drive
+	if ! (
+		device_role
+		prepare_usb_drive "${image}" || exit 4
+		bind_udc drive
+	); then
+		cleanup_usb_drive
+		echo "ERROR: cannot serve ${image}" >&2
+		CURRENT_MODE=disabled
+		set_usb_mode "${STORED_MODE}"
+		exit 4
+	fi
+}
+
+usb_drive_eject() {
+	if [ "${CURRENT_MODE}" != "drive" ]; then
+		cleanup_usb_drive
+		return
+	fi
+	usb_stop
+	CURRENT_MODE=disabled
+	set_usb_mode "${USB_MODE}"
 }
 
 set_usb_mode() {
@@ -541,6 +630,7 @@ case "$1" in
 		;;
 	"--start")
 		usb_init_clean_state
+		mkdir -p ${DRIVEDIR}
 		prepare_usb_network
 		prepare_usb_mtp
 		set_usb_mode "${USB_MODE}"
@@ -549,6 +639,7 @@ case "$1" in
 		case ${CURRENT_MODE} in
 			"cdc")  echo "network"; ;;
 			"mtp")  echo "file_transfer"; ;;
+			"drive") echo "usb_drive"; ;;
 			*)      echo "disabled"; ;;
 		esac
 		;;
@@ -565,6 +656,15 @@ case "$1" in
 		. ${GADGETNETCONF}
 		echo ${IP}
 		;;
+	"usb_drive")
+		usb_drive_start "$2"
+		;;
+	"eject")
+		usb_drive_eject
+		;;
+	"image")
+		[ "${CURRENT_MODE}" = "drive" ] && cat ${g_drive}/functions/mass_storage.usb0/lun.0/file
+		;;
 	*)
 		echo "Usage:"
 		echo "$0 --options                  List available modes"
@@ -573,6 +673,9 @@ case "$1" in
 		echo "$0 disabled                   Disable USB gadget"
 		echo "$0 <network|file_transfer>    Activate specified mode"
 		echo "$0 address                    Show network gadget IP address"
+		echo "$0 usb_drive IMAGE            Serve IMAGE as a USB stick (images in ${DRIVEDIR})"
+		echo "$0 eject                      Stop serving it, back to the stored mode"
+		echo "$0 image                      Show the image being served"
 
 		echo "Deprecated usage: usbgadget [prepare|start|trigger|stop|restart|cleanup|address]"
 		;;
