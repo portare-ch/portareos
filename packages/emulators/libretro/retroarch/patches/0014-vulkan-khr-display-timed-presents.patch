@@ -53,19 +53,18 @@ Measured on the Retroid Pocket Nova, Tekken 3, threaded video off:
 Nothing here is specific to one device.
 ---
 diff --git a/gfx/common/vulkan_common.c b/gfx/common/vulkan_common.c
-index e7cd7bd..d086725 100644
+index 1697b32815..b7ade3e030 100644
 --- a/gfx/common/vulkan_common.c
 +++ b/gfx/common/vulkan_common.c
-@@ -793,6 +793,20 @@ static VkDevice vulkan_context_create_device_wrapper(
-       return VK_NULL_HANDLE;
-    }
- 
+@@ -1343,6 +1343,18 @@ static VkDevice vulkan_context_create_device_wrapper(
+          device_extensions, info.enabledExtensionCount, device_extensions_cap);
+    vulkan_low_latency_note_exts(vk, device_extensions,
+          info.enabledExtensionCount);
 +   /* A device the core negotiates gets the optional extensions the same
 +    * way, and the frontend has to know which of them it got. */
 +   {
-+      gfx_ctx_vulkan_data_t *vk = (gfx_ctx_vulkan_data_t*)opaque;
 +      uint32_t i;
-+      for (i = 0; vk && i < info.enabledExtensionCount; i++)
++      for (i = 0; i < info.enabledExtensionCount; i++)
 +      {
 +         if (!strcmp(info.ppEnabledExtensionNames[i], "VK_GOOGLE_display_timing"))
 +            vk->display_timing_supported = true;
@@ -73,11 +72,10 @@ index e7cd7bd..d086725 100644
 +            vk->fse_supported = true;
 +      }
 +   }
-+
-    /* When we get around to using fancier features we can chain in PDF2 stuff. */
-    if ((res = vkCreateDevice(gpu, &info, NULL, &device)) != VK_SUCCESS)
+    /* Reserve video queues without sharing the core's graphics queue. */
+    if (info.queueCreateInfoCount == 1)
     {
-@@ -897,12 +911,44 @@ static bool vulkan_context_init_device(gfx_ctx_vulkan_data_t *vk)
+@@ -1634,7 +1646,13 @@ static bool vulkan_context_init_device(gfx_ctx_vulkan_data_t *vk)
        }
        else
        {
@@ -86,45 +84,49 @@ index e7cd7bd..d086725 100644
 +          * list when the GPU is known and has them. The core enables
 +          * them along with the required ones; there is no other way
 +          * for the frontend's needs to reach a device the core makes. */
-+         const char *wanted[ARRAY_SIZE(vulkan_device_extensions)
-+            + ARRAY_SIZE(vulkan_optional_device_extensions)];
-+         unsigned wanted_count = 0;
-+         unsigned i;
-+
+          const char *dev_exts[ARRAY_SIZE(vulkan_device_extensions)
++            + ARRAY_SIZE(vulkan_optional_device_extensions)
+             + VULKAN_UPSCALER_EXTS
+ #ifdef HAVE_OPENXR
+             + VULKAN_OPENXR_MAX_EXTS
+@@ -1645,14 +1663,34 @@ static bool vulkan_context_init_device(gfx_ctx_vulkan_data_t *vk)
+          vulkan_context_openxr_device_exts(vk, dev_exts, &num_dev_exts,
+                ARRAY_SIZE(dev_exts));
+ #else
+-         for (i = 0; i < ARRAY_SIZE(vulkan_device_extensions); i++)
+-            dev_exts[num_dev_exts++] = vulkan_device_extensions[i];
 +         if (vk->context.gpu != VK_NULL_HANDLE)
 +         {
-+            if (!vulkan_find_device_extensions(vk->context.gpu,
-+                     wanted, &wanted_count,
++            unsigned found = 0;
++            if (vulkan_find_device_extensions(vk->context.gpu,
++                     dev_exts, &found,
 +                     vulkan_device_extensions, ARRAY_SIZE(vulkan_device_extensions),
 +                     vulkan_optional_device_extensions,
-+                     ARRAY_SIZE(vulkan_optional_device_extensions)))
-+               wanted_count = 0;
++                     vulkan_optional_device_count(vk, false)))
++               num_dev_exts = found;
 +         }
-+         if (!wanted_count)
++         if (!num_dev_exts)
 +         {
 +            for (i = 0; i < ARRAY_SIZE(vulkan_device_extensions); i++)
-+               wanted[wanted_count++] = vulkan_device_extensions[i];
++               dev_exts[num_dev_exts++] = vulkan_device_extensions[i];
 +         }
-+         for (i = 0; i < wanted_count; i++)
+ #endif
+          /* A core making the device itself (v1) gets them as required:
+           * only those the GPU has are listed */
+          if (vk->context.gpu != VK_NULL_HANDLE)
+             num_dev_exts = vulkan_upscaler_device_exts(vk, vk->context.gpu,
+                   dev_exts, num_dev_exts, ARRAY_SIZE(dev_exts));
++         for (i = 0; i < num_dev_exts; i++)
 +         {
-+            if (!strcmp(wanted[i], "VK_GOOGLE_display_timing"))
++            if (!strcmp(dev_exts[i], "VK_GOOGLE_display_timing"))
 +               vk->display_timing_supported = true;
-+            else if (!strcmp(wanted[i], "VK_EXT_full_screen_exclusive"))
++            else if (!strcmp(dev_exts[i], "VK_EXT_full_screen_exclusive"))
 +               vk->fse_supported = true;
 +         }
-+
           ret = iface->create_device(&context, vk->context.instance,
                 vk->context.gpu,
                 vk->vk_surface,
-                vulkan_symbol_wrapper_instance_proc_addr(),
--               vulkan_device_extensions,
--               ARRAY_SIZE(vulkan_device_extensions),
-+               wanted,
-+               wanted_count,
-                NULL,
-                0,
-                &features);
-@@ -1134,12 +1180,37 @@ static bool vulkan_context_init_device(gfx_ctx_vulkan_data_t *vk)
+@@ -2084,12 +2122,37 @@ static bool vulkan_context_init_device(gfx_ctx_vulkan_data_t *vk)
        vk->fse_release = vkGetDeviceProcAddr(vk->context.device,
                 "vkReleaseFullScreenExclusiveModeEXT");
     }
@@ -163,9 +165,9 @@ index e7cd7bd..d086725 100644
 +         RARCH_LOG("[Vulkan] VK_GOOGLE_display_timing: presents are timed by the driver.\n");
 +   }
  
- #ifdef VULKAN_HDR_SWAPCHAIN
-    /* Now that the device exists, resolve vkSetHdrMetadataEXT if the
-@@ -2521,6 +2592,7 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
+    vulkan_low_latency_device_init(vk);
+ 
+@@ -4373,6 +4436,7 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
         * still takes effect: the driver reads it for frame duplication,
         * and the mailbox emulation below is keyed off it. */
        vk->context.swap_interval = swap_interval;
@@ -173,7 +175,7 @@ index e7cd7bd..d086725 100644
  #ifdef VULKAN_DEBUG
        RARCH_DBG("[Vulkan] Do not need to re-create swapchain.\n");
  #endif
-@@ -2575,6 +2647,11 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
+@@ -4435,6 +4499,11 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
     vulkan_emulated_mailbox_deinit(&vk->mailbox);
  
     vk->context.swap_interval = swap_interval;
@@ -185,7 +187,7 @@ index e7cd7bd..d086725 100644
  
     /* Present mode logging */
     if (vk->swapchain == VK_NULL_HANDLE)
-@@ -3518,28 +3595,106 @@ void vulkan_context_destroy(gfx_ctx_vulkan_data_t *vk,
+@@ -5698,28 +5767,106 @@ void vulkan_context_destroy(gfx_ctx_vulkan_data_t *vk,
  #endif
  }
  
@@ -303,8 +305,8 @@ index e7cd7bd..d086725 100644
 +      - vk->refresh_duration_ns / 2;
  }
  
- void vulkan_present(gfx_ctx_vulkan_data_t *vk, unsigned index)
-@@ -3569,6 +3715,8 @@ void vulkan_present(gfx_ctx_vulkan_data_t *vk, unsigned index)
+ /* Whether the device was made with VK_NV_low_latency2 and what it
+@@ -6542,6 +6689,8 @@ void vulkan_present(gfx_ctx_vulkan_data_t *vk, unsigned index)
        times.pTimes               = &ptime;
        ptime.presentID            = ++vk->present_id;
        ptime.desiredPresentTime   = 0;
@@ -314,23 +316,23 @@ index e7cd7bd..d086725 100644
     }
  
 diff --git a/gfx/common/vulkan_common.h b/gfx/common/vulkan_common.h
-index 3b47b3d..36c574d 100644
+index cf723ff107..2ad9657e10 100644
 --- a/gfx/common/vulkan_common.h
 +++ b/gfx/common/vulkan_common.h
-@@ -175,7 +175,11 @@ enum vulkan_context_flags
-    /* Whether HDR colorspaces are supported by the instance */
-    VK_CTX_FLAG_HDR_SUPPORT                  = (1 << 5),
-    /* scRGB mode: RGBA16F swapchain with extended linear sRGB colour space */
--   VK_CTX_FLAG_HDR_SCRGB                    = (1 << 6)
-+   VK_CTX_FLAG_HDR_SCRGB                    = (1 << 6),
+@@ -212,7 +212,11 @@ enum vulkan_context_flags
+     * to rebuild again. */
+    VK_CTX_FLAG_SUBOPTIMAL_REBUILT           = (1 << 8),
+    VK_CTX_FLAG_VIDEO_GENERAL                = (1 << 9),
+-   VK_CTX_FLAG_ANDROID_IMAGES               = (1 << 10)
++   VK_CTX_FLAG_ANDROID_IMAGES               = (1 << 10),
 +   /* A swap interval above 1 is kept by presenting each frame once,
 +    * timed to land interval refresh periods after the last one did,
 +    * rather than by presenting it interval times. */
-+   VK_CTX_FLAG_SWAP_INTERVAL_TIMED          = (1 << 7)
++   VK_CTX_FLAG_SWAP_INTERVAL_TIMED          = (1 << 11)
  };
  
- enum vulkan_emulated_mailbox_flags
-@@ -329,8 +333,22 @@ typedef struct gfx_ctx_vulkan_data
+ enum gfx_ctx_vulkan_data_flags
+@@ -551,8 +555,22 @@ typedef struct gfx_ctx_vulkan_data
      * carries a present ID and the driver reports when it actually
      * reached the display, on the platform's monotonic clock. */
     PFN_vkVoidFunction display_timing_query;
@@ -350,10 +352,10 @@ index 3b47b3d..36c574d 100644
 +   uint32_t last_present_id;
 +   /* The swapchain's refresh period, 0 until asked. */
 +   uint64_t refresh_duration_ns;
- #ifdef VULKAN_HDR_SWAPCHAIN
-    /* Loaded from VK_EXT_hdr_metadata when that optional device extension is
-     * present; NULL otherwise. Used to signal SMPTE-2086 mastering-display
-@@ -431,6 +449,8 @@ void vulkan_present(gfx_ctx_vulkan_data_t *vk, unsigned index);
+ #ifdef __APPLE__
+    /* Bound on the acquire fence wait, from the display's rate. */
+    int64_t acquire_timeout_us;
+@@ -698,6 +716,8 @@ void vulkan_present(gfx_ctx_vulkan_data_t *vk, unsigned index);
  
  retro_time_t vulkan_last_present_time(gfx_ctx_vulkan_data_t *vk);
  
@@ -363,22 +365,22 @@ index 3b47b3d..36c574d 100644
   * the swapchain beside it; every context embeds gfx_ctx_vulkan_data_t
   * that way, so the owner is recoverable from the pointer the driver
 diff --git a/gfx/drivers/vulkan.c b/gfx/drivers/vulkan.c
-index 6217ea5..e77c2f0 100644
+index 2713fb25d9..67f4bf02bb 100644
 --- a/gfx/drivers/vulkan.c
 +++ b/gfx/drivers/vulkan.c
-@@ -9150,6 +9150,7 @@ static bool vulkan_frame(void *data, const void *frame,
-    if (      (vk->context->swap_interval > 1)
-          &&  !(video_info->shader_subframes > 1)
-          &&  !black_frame_insertion
+@@ -13835,6 +13835,7 @@ static bool vulkan_frame(void *data, const void *frame,
+ #ifdef HAVE_OPENXR
+          &&  !(vk->flags & VK_FLAG_OPEN_XR)
+ #endif
 +         &&  (!(vk->context->flags & VK_CTX_FLAG_SWAP_INTERVAL_TIMED))
           &&  (!(vk->context->flags & VK_CTX_FLAG_SWAP_INTERVAL_EMULATION_LOCK)))
     {
        vk->context->flags |= VK_CTX_FLAG_SWAP_INTERVAL_EMULATION_LOCK;
 diff --git a/gfx/drivers_context/khr_display_ctx.c b/gfx/drivers_context/khr_display_ctx.c
-index f51142b..ded267d 100644
+index 3978e6516d..5f404d55dc 100644
 --- a/gfx/drivers_context/khr_display_ctx.c
 +++ b/gfx/drivers_context/khr_display_ctx.c
-@@ -76,6 +76,9 @@ static void *gfx_ctx_khr_display_init(void *video_driver)
+@@ -74,6 +74,9 @@ static void *gfx_ctx_khr_display_init(void *video_driver)
     if (!khr)
         return NULL;
  

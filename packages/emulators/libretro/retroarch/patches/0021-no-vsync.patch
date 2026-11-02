@@ -26,15 +26,16 @@ RetroArch quits.
 Signed-off-by: PortareOS <hello@portare.org>
 ---
 diff --git a/configuration.c b/configuration.c
+index ab9a1ba28d..f06e5995a2 100644
 --- a/configuration.c
 +++ b/configuration.c
-@@ -6040,8 +6040,43 @@
+@@ -6768,6 +6768,41 @@ void config_load(void)
  #ifdef HAVE_CONFIGFILE
-    config_parse_file(global);
+    config_parse_file();
  #endif
 +   config_no_vsync(config_st);
- }
- 
++}
++
 +/* PortareOS has no vsync. Frames are timed at the core's rate (Sync to
 + * Exact Content Framerate, 0018); on the variable refresh path the panel
 + * follows them and the display driver repeats them below its range, and
@@ -67,42 +68,41 @@ diff --git a/configuration.c b/configuration.c
 +   if (settings->uints.video_black_frame_insertion)
 +      RARCH_LOG("[Config] No black frame insertion.\n");
 +   settings->uints.video_black_frame_insertion = 0;
-+}
-+
+ }
+ 
  #ifdef HAVE_CONFIGFILE
- #if defined(HAVE_MENU) && defined(HAVE_RGUI)
- static bool check_menu_driver_compatibility(settings_t *settings)
-@@ -7463,6 +7498,7 @@
-    else
-       runloop_state_get_ptr()->flags &= ~RUNLOOP_FLAG_OVERRIDES_ACTIVE;
+@@ -8421,6 +8456,7 @@ bool config_load_override(void *data)
  
+    /* each port's deadzones, from the override's settings */
+    input_driver_deadzones_refresh();
 +   config_no_vsync(config_st);
     return true;
  }
  
-@@ -7506,6 +7542,7 @@
-    else
-       runloop_state_get_ptr()->flags &= ~RUNLOOP_FLAG_OVERRIDES_ACTIVE;
+@@ -8466,6 +8502,7 @@ bool config_load_override_file(const char *config_path)
  
+    /* each port's deadzones, from the override's settings */
+    input_driver_deadzones_refresh();
 +   config_no_vsync(config_st);
     return true;
  }
  
-@@ -7628,6 +7665,8 @@
-    if (!config_load_file(global_get_ptr(),
+@@ -8503,6 +8540,8 @@ bool config_unload_override(void)
              path_get(RARCH_PATH_CONFIG), config_st))
        return false;
-+
-+   config_no_vsync(config_st);
  
++   config_no_vsync(config_st);
++
     if (settings->bools.video_fullscreen != fullscreen_prev)
     {
+       /* This is for 'win32_common.c', so we don't save
 diff --git a/configuration.h b/configuration.h
+index 047f9a8f70..07e9638b33 100644
 --- a/configuration.h
 +++ b/configuration.h
-@@ -1543,6 +1543,11 @@
+@@ -1775,6 +1775,11 @@ void config_set_defaults(settings_t *target);
  
- void config_load(void *data);
+ void config_load(void);
  
 +/* Whether this launch runs on the variable refresh path, and vsync off
 + * with Sync to Exact Content Framerate on put back. See configuration.c. */
@@ -113,9 +113,10 @@ diff --git a/configuration.h b/configuration.h
  /* Salamander config file contains a single
   * entry (libretro_path), which is linked to
 diff --git a/menu/menu_displaylist.c b/menu/menu_displaylist.c
+index c5febc3d88..d9f2c2aba1 100644
 --- a/menu/menu_displaylist.c
 +++ b/menu/menu_displaylist.c
-@@ -11547,6 +11547,12 @@
+@@ -12325,6 +12325,12 @@ unsigned menu_displaylist_build_list(
              {
                 switch (build_list[i].enum_idx)
                 {
@@ -128,7 +129,7 @@ diff --git a/menu/menu_displaylist.c b/menu/menu_displaylist.c
                    case MENU_ENUM_LABEL_VIDEO_SWAP_INTERVAL:
                    case MENU_ENUM_LABEL_VIDEO_BLACK_FRAME_INSERTION:
                       build_list[i].checked = video_vsync;
-@@ -12139,10 +12145,7 @@
+@@ -13216,10 +13222,7 @@ unsigned menu_displaylist_build_list(
  #endif
              };
  
@@ -140,20 +141,32 @@ diff --git a/menu/menu_displaylist.c b/menu/menu_displaylist.c
  
              if (video_vsync)
              {
-@@ -13371,6 +13374,9 @@
-                   case MENU_ENUM_LABEL_MENU_THROTTLE_FRAMERATE:
-                      build_list[i].checked = settings->bools.vrr_runloop_enable;
-                      break;
+@@ -14482,6 +14485,20 @@ unsigned menu_displaylist_build_list(
+             }
+ #endif
+ 
++            for (i = 0; i < ARRAY_SIZE(build_list); i++)
++            {
++               switch (build_list[i].enum_idx)
++               {
 +                  case MENU_ENUM_LABEL_VRR_RUNLOOP_ENABLE:
++                     /* Sync to Exact Content Framerate always
++                      * (config_no_vsync). */
 +                     build_list[i].checked = false;
 +                     break;
-                   default:
-                      break;
-                }
++                  default:
++                     break;
++               }
++            }
++
+             for (i = 0; i < ARRAY_SIZE(build_list); i++)
+             {
+                if (!build_list[i].checked && !include_everything)
 diff --git a/retroarch.c b/retroarch.c
+index deea35a95f..8a61bffa6f 100644
 --- a/retroarch.c
 +++ b/retroarch.c
-@@ -1628,6 +1628,23 @@
+@@ -1785,6 +1785,23 @@ void drivers_init(
  
     DRIVER_FLAGS_NORMALIZE(flags);
  
@@ -177,16 +190,16 @@ diff --git a/retroarch.c b/retroarch.c
     /* Content av_info based automatic swap interval must be set early. */
     runloop_set_video_swap_interval(settings);
  
-@@ -5244,6 +5261,8 @@
- #endif
-       case CMD_EVENT_MENU_RESET_TO_DEFAULT_CONFIG:
-          config_set_defaults(global_get_ptr(), config_get_ptr());
+@@ -5708,6 +5725,8 @@ bool command_event(enum event_command cmd, void *data)
+           * when the joypad driver next starts */
+          input_config_forget_controllers();
+          input_driver_restart_with_next_video_restart();
 +         /* The defaults have vsync on and the exact-rate loop off. */
 +         config_no_vsync(config_get_ptr());
           break;
        case CMD_EVENT_MENU_SAVE_CURRENT_CONFIG:
           /* Same as at quit: the companion's live layout first. */
-@@ -6173,19 +6192,7 @@
+@@ -6619,19 +6638,7 @@ bool command_event(enum event_command cmd, void *data)
           }
           break;
        case CMD_EVENT_VRR_RUNLOOP_TOGGLE:
@@ -205,12 +218,13 @@ diff --git a/retroarch.c b/retroarch.c
 -         }
 +         /* Sync to Exact Content Framerate is always on (config_no_vsync). */
           break;
-       case CMD_EVENT_NONE:
-          return false;
+       case CMD_EVENT_HEADSET_RECENTER:
+ #ifdef HAVE_OPENXR
 diff --git a/runloop.c b/runloop.c
+index d90fc3535d..55d02d5d59 100644
 --- a/runloop.c
 +++ b/runloop.c
-@@ -5428,6 +5428,7 @@
+@@ -6691,6 +6691,7 @@ bool runloop_event_init_core(
     if (auto_overrides_enable)
        config_load_override(&runloop_st->system);
  #endif
@@ -218,10 +232,10 @@ diff --git a/runloop.c b/runloop.c
  
     /* Cannot access these settings-related parameters
      * until *after* config overrides have been loaded */
-@@ -8276,6 +8277,22 @@
-  * button input in order to wake up the loop,
-  * -1 if we forcibly quit out of the RetroArch iteration loop.
-  **/
+@@ -9712,6 +9713,22 @@ static void runloop_gpu_device_lost(runloop_state_t *runloop_st)
+    command_event(CMD_EVENT_REINIT, &reinit_flags);
+ }
+ 
 +/* Content refused by drivers_init (0021): the core never runs; the message
 + * shows for three seconds over a paused, empty frame, then RetroArch quits
 + * back to the launcher. */
@@ -241,9 +255,9 @@ diff --git a/runloop.c b/runloop.c
  int runloop_iterate(void)
  {
     retro_time_t pace_limit_min;
-@@ -8322,6 +8339,17 @@
- 
-    runloop_msg_queue_drain_deferred();
+@@ -9770,6 +9787,17 @@ int runloop_iterate(void)
+       return 1;
+    }
  
 +   if (runloop_refused_until)
 +   {
@@ -260,16 +274,17 @@ diff --git a/runloop.c b/runloop.c
      * reset elsewhere - sets this from whichever thread saw it, and
      * nothing it does on that device works from then on: every frame
 diff --git a/runloop.h b/runloop.h
+index 661d51d58c..ed58a1d5d1 100644
 --- a/runloop.h
 +++ b/runloop.h
-@@ -677,6 +677,10 @@
-  * RetroArch iteration loop.
+@@ -966,6 +966,10 @@ void runloop_set_current_core_type(
   **/
  int runloop_iterate(void);
-+
+ 
 +/* Refuses the loaded content: the core does not run, "This game is not
 + * supported" shows, and RetroArch quits after it (0021). */
 +void runloop_refuse_content(void);
- 
++
  void runloop_system_info_free(void);
  
+ /**

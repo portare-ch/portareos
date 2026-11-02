@@ -6,15 +6,27 @@ marker. A trace of vblanks, flips and Mesa's commit markers then gives
 read to first line per frame (documentation/LATENCY.md). Unset, it is
 one getenv and a branch per call. runemu sets it from portareos.ralat.
 
+diff --git a/gfx/video_driver.c b/gfx/video_driver.c
+index 342cb19c47..aa2f92ad41 100644
+--- a/gfx/video_driver.c
++++ b/gfx/video_driver.c
+@@ -9078,6 +9078,8 @@ VIDEO_NOINLINE static void video_driver_frame_statistics(
+ void video_driver_frame(const void *data, unsigned width,
+       unsigned height, size_t pitch)
+ {
++   { extern void ralat_mark(const char *s); ralat_mark("ralat video\n"); }
++
+    char status_text[256];
+    unsigned dims        = VIDEO_SCALE_PACK(width, height);
+    settings_t *settings = config_get_ptr();
+diff --git a/input/input_driver.c b/input/input_driver.c
+index 500ab1cbcc..5088b6884d 100644
 --- a/input/input_driver.c
 +++ b/input/input_driver.c
-@@ -7675,11 +7675,29 @@
-       for (i = 0; i < 9; i++)
-          memcpy(&dst[i / 3][i % 3], &v[i], sizeof(float));
-       return;
-+   }
-+}
-+
+@@ -15937,8 +15937,26 @@ static void input_player_lights(const input_device_driver_t *joypad,
+       joypad->set_player(u, player[u]);
+ }
+ 
 +/* ralat: one trace marker per frame at the input poll and at the video
 + * callback, when RALAT is set, so a kernel trace of flips and vblanks
 + * can be paired with the poll each frame was emulated from. Test only. */
@@ -29,23 +41,12 @@ one getenv and a branch per call. runemu sets it from portareos.ralat.
 +   {
 +      ssize_t n = write(fd, s, strlen(s));
 +      (void)n;
-    }
- }
- 
++   }
++}
++
  void input_driver_poll(void)
  {
 +   ralat_mark("ralat poll\n");
     size_t i, j;
     rarch_joypad_info_t joypad_info[MAX_USERS];
     input_driver_state_t *input_st = &input_driver_st;
---- a/gfx/video_driver.c
-+++ b/gfx/video_driver.c
-@@ -6027,6 +6027,8 @@
- void video_driver_frame(const void *data, unsigned width,
-       unsigned height, size_t pitch)
- {
-+   { extern void ralat_mark(const char *s); ralat_mark("ralat video\n"); }
-+
-    char status_text[256];
-    settings_t *settings = config_get_ptr();
-    static char video_driver_msg[256];

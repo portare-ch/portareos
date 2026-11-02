@@ -19,9 +19,10 @@ With the preset removed, crt-guest-advanced loads as before.
 Signed-off-by: PortareOS <hello@portare.org>
 ---
 diff --git a/gfx/video_shader_parse.c b/gfx/video_shader_parse.c
+index 1c8cd4bd17..32b90b15ff 100644
 --- a/gfx/video_shader_parse.c
 +++ b/gfx/video_shader_parse.c
-@@ -4163,27 +4163,24 @@ const char *video_shader_get_current_shader_preset(void)
+@@ -4360,27 +4360,24 @@ const char *video_shader_get_current_shader_preset(void)
  
        video_driver_modify_disp_flags(0, VIDEO_FLAG_SHADER_PRESETS_NEED_RELOAD);
  

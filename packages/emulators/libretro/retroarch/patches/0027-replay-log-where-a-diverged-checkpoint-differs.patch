@@ -9,9 +9,11 @@ ranges with both sides' bytes, and the total.
 
 Signed-off-by: PortareOS <hello@portare.org>
 ---
+diff --git a/input/bsv/bsvmovie.c b/input/bsv/bsvmovie.c
+index dea20f88d6..752a6a5574 100644
 --- a/input/bsv/bsvmovie.c
 +++ b/input/bsv/bsvmovie.c
-@@ -838,8 +838,27 @@
+@@ -969,8 +969,27 @@ bool bsv_movie_read_next_events(bsv_movie_t *handle,
           while (i < size && state[i] == handle->cur_save[i])
              i++;
           if (i < size)

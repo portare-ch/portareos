@@ -21,9 +21,10 @@ MangoHud's display intervals went from none to every frame.
 Signed-off-by: PortareOS <hello@portare.org>
 ---
 diff --git a/gfx/common/vulkan_common.c b/gfx/common/vulkan_common.c
+index 34f16cdeca..aebb330e05 100644
 --- a/gfx/common/vulkan_common.c
 +++ b/gfx/common/vulkan_common.c
-@@ -3792,6 +3792,13 @@
+@@ -6757,6 +6757,13 @@ void vulkan_present(gfx_ctx_vulkan_data_t *vk, unsigned index)
     /* An ID per present, so the timing query below can name it. */
     if (vk->display_timing_supported && vk->display_timing_query)
     {

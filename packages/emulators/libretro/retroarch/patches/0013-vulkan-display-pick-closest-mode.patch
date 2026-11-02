@@ -11,56 +11,76 @@ A request with no mode within 1 Hz still finds none, as before.
 
 Nothing here is specific to one device.
 ---
+diff --git a/gfx/common/vulkan_common.c b/gfx/common/vulkan_common.c
+index 0578558435..1697b32815 100644
 --- a/gfx/common/vulkan_common.c
 +++ b/gfx/common/vulkan_common.c
-@@ -1361,6 +1361,7 @@
+@@ -2423,6 +2423,7 @@ end:
+ 
  static bool vulkan_update_display_mode(
-       unsigned *width,
-       unsigned *height,
+       unsigned *dims,
 +      unsigned *rate,
        const VkDisplayModePropertiesKHR *mode,
        const struct vulkan_display_surface_info *info)
  {
-@@ -1387,14 +1388,24 @@
-       int old_delta_x       = (int)info->width  - (int)*width;
-       int old_delta_y       = (int)info->height - (int)*height;
-       int delta_rate        = abs((int)info->refresh_rate_x1000 - (int)visible_rate);
-+
-+      int old_delta_rate    = abs((int)info->refresh_rate_x1000 - (int)*rate);
- 
-       int dist              = delta_x     * delta_x     + delta_y     * delta_y;
-       int old_dist          = old_delta_x * old_delta_x + old_delta_y * old_delta_y;
- 
--      if (dist < old_dist && delta_rate < 1000)
+@@ -2440,17 +2441,28 @@ static bool vulkan_update_display_mode(
+    else
+    {
+       /* For particular resolutions, find the closest. */
+-      int dx     = want_w - (int)vis_w;
+-      int dy     = want_h - (int)vis_h;
+-      int old_dx = want_w - (int)VIDEO_SCALE_W(*dims);
+-      int old_dy = want_h - (int)VIDEO_SCALE_H(*dims);
+-      if (     dx * dx + dy * dy >= old_dx * old_dx + old_dy * old_dy
+-            || abs((int)info->refresh_rate_x1000
+-               - (int)mode->parameters.refreshRate) >= 1000)
++      int dx         = want_w - (int)vis_w;
++      int dy         = want_h - (int)vis_h;
++      int old_dx     = want_w - (int)VIDEO_SCALE_W(*dims);
++      int old_dy     = want_h - (int)VIDEO_SCALE_H(*dims);
++      int dist       = dx * dx + dy * dy;
++      int old_dist   = old_dx * old_dx + old_dy * old_dy;
++      int drate      = abs((int)info->refresh_rate_x1000
++            - (int)mode->parameters.refreshRate);
++      int old_drate  = abs((int)info->refresh_rate_x1000 - (int)*rate);
 +      /* Among modes of the same size, the one closest to the requested
 +       * rate, not the first within 1 Hz of it. A panel can carry two modes
 +       * a fraction of a hertz apart - 119.880 and 119.635, twice NTSC and
 +       * twice PlayStation 240p - and both are inside that window, so
 +       * taking the first made the second unreachable. */
-+      if (delta_rate < 1000
-+            && (dist < old_dist
-+               || (dist == old_dist && delta_rate < old_delta_rate)))
-       {
-          *width       = visible_width;
-          *height      = visible_height;
-+         *rate        = visible_rate;
-          return true;
-       }
++      if (     drate >= 1000
++            || dist > old_dist
++            || (dist == old_dist && drate >= old_drate))
+          return false;
     }
-@@ -1418,6 +1429,7 @@
+ 
+    *dims = VIDEO_SCALE_PACK(vis_w, vis_h);
++   *rate = mode->parameters.refreshRate;
+    return true;
+ }
+ 
+@@ -2470,6 +2482,7 @@ static bool vulkan_create_display_surface(gfx_ctx_vulkan_data_t *vk,
     uint32_t best_plane                       = UINT32_MAX;
     VkDisplayPlaneAlphaFlagBitsKHR alpha_mode = VK_DISPLAY_PLANE_ALPHA_OPAQUE_BIT_KHR;
     VkDisplayModeKHR best_mode                = VK_NULL_HANDLE;
 +   unsigned best_rate                        = 0;
     /* Monitor index starts on 1, 0 is auto. */
     unsigned monitor_index                    = info->monitor_index;
-    unsigned saved_width                      = *width;
-@@ -1488,7 +1500,7 @@
+    unsigned saved_dims                       = *dims;
+@@ -2539,7 +2552,7 @@ retry:
        for (i = 0; i < mode_count; i++)
        {
           const VkDisplayModePropertiesKHR *mode = &modes[i];
--         if (vulkan_update_display_mode(width, height, mode, info))
-+         if (vulkan_update_display_mode(width, height, &best_rate, mode, info))
+-         if (vulkan_update_display_mode(dims, mode, info))
++         if (vulkan_update_display_mode(dims, &best_rate, mode, info))
              best_mode = modes[i].displayMode;
        }
+ 
+@@ -2611,6 +2624,7 @@ out:
+       monitor_index = 0;
+       best_mode = VK_NULL_HANDLE;
+       *dims = saved_dims;
++      best_rate = 0;
+       goto retry;
+    }
  

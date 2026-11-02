@@ -23,17 +23,60 @@ in use instead: the stats overlay, the latency figures, the mixer, the
 refresh-rate ratio and RETRO_ENVIRONMENT_GET_TARGET_SAMPLE_RATE, which
 before the first init answers with the pick for the core's rate.
 ---
- audio/audio_driver.c | 106 +++++++++++++++++++++++++++++++++++++++++----------
- audio/audio_driver.h |   4 ++
- gfx/video_driver.c   |   6 +--
- retroarch.c          |   2 +-
- runloop.c            |   2 +-
- 5 files changed, 95 insertions(+), 25 deletions(-)
 diff --git a/audio/audio_driver.c b/audio/audio_driver.c
-index ef3bb93df9..3b4a480879 100644
+index f7da452429..4e5c9125f7 100644
 --- a/audio/audio_driver.c
 +++ b/audio/audio_driver.c
-@@ -1848,7 +1848,7 @@ void audio_driver_update_drc_threshold(audio_driver_state_t *audio_st)
+@@ -1165,6 +1165,19 @@ static struct
+    char     resampler[sizeof(((settings_t*)0)->arrays.audio_resampler)];
+ } audio_driver_opened;
+ 
++static unsigned audio_driver_pick_out_rate(double core_rate);
++
++/* The rate an init would open the device at now: the setting, or with
++ * the setting at 0 the pick for the core's rate. What a kept or carried
++ * device is compared against, since the setting alone stays 0. */
++static unsigned audio_driver_wanted_out_rate(const settings_t *settings)
++{
++   if (settings->uints.audio_output_sample_rate)
++      return settings->uints.audio_output_sample_rate;
++   return audio_driver_pick_out_rate(
++         video_state_get_ptr()->av_info.timing.sample_rate);
++}
++
+ void audio_driver_keep_device(bool keep)
+ {
+    audio_driver_kept.requested = keep;
+@@ -1206,7 +1219,9 @@ static bool audio_driver_set_aside(audio_driver_state_t *audio_st,
+    audio_driver_kept.driver                = audio;
+    audio_driver_kept.data                  = audio_st->context_audio_data;
+    audio_driver_kept.device_latency_frames = audio_st->device_latency_frames;
+-   audio_driver_kept.rate       = settings->uints.audio_output_sample_rate;
++   audio_driver_kept.rate       = settings->uints.audio_output_sample_rate
++         ? settings->uints.audio_output_sample_rate
++         : audio_st->out_rate;
+    audio_driver_kept.latency    = audio_driver_open_latency;
+    audio_driver_kept.wrapper    = audio_driver_open_wrapper;
+    audio_driver_kept.priority   = settings->bools.audio_thread_priority;
+@@ -1231,7 +1246,7 @@ static void audio_driver_drop_kept_unless(const settings_t *settings,
+       return;
+    if (     wrapper == audio_driver_kept.wrapper
+          && latency == audio_driver_kept.latency
+-         && settings->uints.audio_output_sample_rate == audio_driver_kept.rate
++         && audio_driver_wanted_out_rate(settings) == audio_driver_kept.rate
+          && string_is_equal(settings->arrays.audio_driver, audio_driver_kept.ident)
+          && string_is_equal(settings->arrays.audio_device, audio_driver_kept.device)
+          && (!wrapper
+@@ -1326,7 +1341,7 @@ bool audio_driver_session_carry_ok(void)
+          || settings->bools.audio_time_stretch_lowpass
+          /* What its override may have changed */
+          || latency != audio_driver_open_latency
+-         || settings->uints.audio_output_sample_rate
++         || audio_driver_wanted_out_rate(settings)
+                != audio_driver_opened.out_rate
+          || settings->uints.audio_resampler_quality
+                != audio_driver_opened.resampler_quality
+@@ -2297,7 +2312,7 @@ void audio_driver_update_drc_threshold(audio_driver_state_t *audio_st)
           : AUDIO_DRC_FALLBACK_FPS;
     double input_rate              = (audio_st->input > 0.0f)
           ? audio_st->input
@@ -42,7 +85,7 @@ index ef3bb93df9..3b4a480879 100644
     /* (samples per frame at the core's submission rate) * 2 channels.
      * Floor at AUDIO_DRC_MIN_THRESHOLD_INT16S so pathological inputs
      * don't push the threshold below ~10 ms worth of audio. */
-@@ -2162,7 +2162,7 @@ static void audio_driver_ff_callback_frame_end(audio_driver_state_t *audio_st)
+@@ -2614,7 +2629,7 @@ static void audio_driver_ff_callback_frame_end(audio_driver_state_t *audio_st)
              : AUDIO_DRC_FALLBACK_FPS;
        double input_rate = (audio_st->input > 0.0f)
              ? audio_st->input
@@ -51,10 +94,10 @@ index ef3bb93df9..3b4a480879 100644
        size_t frames     = (size_t)(input_rate / fps);
        if (frames < 1)
           frames         = 1;
-@@ -4000,10 +4000,68 @@ static bool audio_driver_inline_prepare(audio_driver_state_t *audio_st,
- 
- static bool audio_driver_transport_configure(const settings_t *settings);
- 
+@@ -4713,11 +4728,68 @@ static size_t audio_driver_pipe_ring_frames(double input, bool audio_sync,
+    return frames;
+ }
+ #endif
 +/* The rates the device's audio link carries without a resampling stage
 + * of its own (the Nova's DSP, codec and I2S clock: 32, 44.1 and 48 kHz).
 + * With audio_out_rate = 0 the output rate is picked from these by the
@@ -107,7 +150,7 @@ index ef3bb93df9..3b4a480879 100644
 +   return audio_driver_pick_out_rate(
 +         video_state_get_ptr()->av_info.timing.sample_rate);
 +}
-+
+ 
  bool audio_driver_init_internal(void *settings_data, bool audio_cb_inited)
  {
     unsigned new_rate              = 0;
@@ -120,9 +163,9 @@ index ef3bb93df9..3b4a480879 100644
     bool audio_enable              = settings->bools.audio_enable;
     bool audio_sync                = settings->bools.audio_sync;
     bool audio_rate_control        = settings->bools.audio_rate_control;
-@@ -4250,6 +4308,14 @@ bool audio_driver_init_internal(void *settings_data, bool audio_cb_inited)
-             audio_driver_st.pipe_float ? "float" : "int16");
+@@ -4971,6 +5043,14 @@ bool audio_driver_init_internal(void *settings_data, bool audio_cb_inited)
     }
+ #endif
  
 +   if (out_rate_auto)
 +   {
@@ -135,7 +178,16 @@ index ef3bb93df9..3b4a480879 100644
     /* Before the driver's init, which is where a driver that reports a
      * device stage sets it. */
     audio_driver_st.device_latency_frames = 0;
-@@ -4262,7 +4328,7 @@ bool audio_driver_init_internal(void *settings_data, bool audio_cb_inited)
+@@ -4978,7 +5058,7 @@ bool audio_driver_init_internal(void *settings_data, bool audio_cb_inited)
+    audio_driver_open_latency = audio_latency;
+    audio_driver_open_wrapper = audio_cb_inited
+       || (AUDIO_FLAGS_GET(&audio_driver_st) & AUDIO_FLAG_PIPELINE_THREADED);
+-   audio_driver_opened.out_rate          = settings->uints.audio_output_sample_rate;
++   audio_driver_opened.out_rate          = out_rate;
+    audio_driver_opened.resampler_quality = settings->uints.audio_resampler_quality;
+    audio_driver_opened.hq_oversampling   = settings->bools.audio_resampler_hq_oversampling;
+    audio_driver_opened.virtual_surround  = settings->bools.audio_headphone_virtual_surround;
+@@ -5005,7 +5085,7 @@ bool audio_driver_init_internal(void *settings_data, bool audio_cb_inited)
                 &audio_driver_st.context_audio_data,
                  *settings->arrays.audio_device
                 ? settings->arrays.audio_device : NULL,
@@ -144,7 +196,7 @@ index ef3bb93df9..3b4a480879 100644
                 audio_latency,
                 settings->bools.audio_thread_priority,
                 settings->bools.thread_prefer_fast_cores,
-@@ -4278,15 +4344,19 @@ bool audio_driver_init_internal(void *settings_data, bool audio_cb_inited)
+@@ -5021,15 +5101,19 @@ bool audio_driver_init_internal(void *settings_data, bool audio_cb_inited)
        audio_driver_st.context_audio_data =
           audio_driver_st.current_audio->init(*settings->arrays.audio_device
                 ? settings->arrays.audio_device : NULL,
@@ -167,7 +219,7 @@ index ef3bb93df9..3b4a480879 100644
  
     if (!audio_driver_st.context_audio_data)
     {
-@@ -4320,7 +4390,7 @@ bool audio_driver_init_internal(void *settings_data, bool audio_cb_inited)
+@@ -5068,7 +5152,7 @@ bool audio_driver_init_internal(void *settings_data, bool audio_cb_inited)
           audio_driver_st.upmix_i16 = (int16_t*)malloc(frames * ch * sizeof(int16_t));
           if (audio_driver_st.upmix_buf && audio_driver_st.upmix_i16
                 && audio_upmix_init(&audio_driver_st.upmix, layout,
@@ -176,7 +228,7 @@ index ef3bb93df9..3b4a480879 100644
           {
              audio_driver_st.out_layout   = layout;
              audio_driver_st.out_channels = ch;
-@@ -4358,9 +4428,9 @@ bool audio_driver_init_internal(void *settings_data, bool audio_cb_inited)
+@@ -5106,9 +5190,9 @@ bool audio_driver_init_internal(void *settings_data, bool audio_cb_inited)
        audio_driver_st.upmix_i16 = (int16_t*)malloc(frames * 6 * sizeof(int16_t));
        if (audio_driver_st.virt_buf && audio_driver_st.upmix_buf && audio_driver_st.upmix_i16
              && audio_upmix_init(&audio_driver_st.upmix, AUDIO_LAYOUT_5POINT1,
@@ -188,7 +240,7 @@ index ef3bb93df9..3b4a480879 100644
        {
           audio_driver_st.virtualize   = true;
           audio_driver_st.upmix_frames = frames;
-@@ -4391,15 +4461,15 @@ bool audio_driver_init_internal(void *settings_data, bool audio_cb_inited)
+@@ -5139,15 +5223,15 @@ bool audio_driver_init_internal(void *settings_data, bool audio_cb_inited)
        RARCH_WARN("[Audio] Input rate is invalid (%.3f Hz)."
              " Using output rate (%u Hz).\n",
              audio_driver_st.input,
@@ -208,7 +260,7 @@ index ef3bb93df9..3b4a480879 100644
  
     if (*settings->arrays.audio_resampler)
        strlcpy(audio_driver_st.resampler_ident,
-@@ -4508,8 +4578,6 @@ bool audio_driver_init_internal(void *settings_data, bool audio_cb_inited)
+@@ -5261,8 +5345,6 @@ bool audio_driver_init_internal(void *settings_data, bool audio_cb_inited)
            * steady state; a driver that reports only some of its
            * stages, or in the wrong unit, shows here as a size that
            * does not match the setting. */
@@ -217,16 +269,27 @@ index ef3bb93df9..3b4a480879 100644
           /* the device's frame: the layout's channels, not two - a 5.1
            * driver's buffer read three times its size here */
           size_t   frame_bytes  = audio_driver_dev_frame_bytes(&audio_driver_st);
-@@ -4600,7 +4668,7 @@ bool audio_driver_init_internal(void *settings_data, bool audio_cb_inited)
-    audio_driver_update_drc_threshold(&audio_driver_st);
+@@ -5343,7 +5425,7 @@ bool audio_driver_init_internal(void *settings_data, bool audio_cb_inited)
  
  #ifdef HAVE_AUDIOMIXER
--   audio_mixer_init(settings->uints.audio_output_sample_rate);
-+   audio_mixer_init(out_rate);
-    AUDIO_FLAGS_SET(&audio_driver_st, AUDIO_FLAG_MIXER_INITED);
+    if (     (AUDIO_FLAGS_GET(&audio_driver_st) & AUDIO_FLAG_MIXER_INITED)
+-         && audio_driver_mixer_init_rate != settings->uints.audio_output_sample_rate)
++         && audio_driver_mixer_init_rate != out_rate)
+       audio_driver_mixer_deinit();
+ #ifdef AUDIO_MIXER_TABLE_OWNERSHIP
+    /* Kept for the process, like the table: a mixer task can still
+@@ -5357,8 +5439,8 @@ bool audio_driver_init_internal(void *settings_data, bool audio_cb_inited)
+    if (!(AUDIO_FLAGS_GET(&audio_driver_st) & AUDIO_FLAG_MIXER_INITED))
  #endif
- 
-@@ -8286,8 +8354,7 @@ void audio_driver_set_device_latency(size_t frames)
+    {
+-      audio_mixer_init(settings->uints.audio_output_sample_rate);
+-      audio_driver_mixer_init_rate = settings->uints.audio_output_sample_rate;
++      audio_mixer_init(out_rate);
++      audio_driver_mixer_init_rate = out_rate;
+       AUDIO_FLAGS_SET(&audio_driver_st, AUDIO_FLAG_MIXER_INITED);
+    }
+ #endif
+@@ -10260,8 +10342,7 @@ void audio_driver_set_device_latency(size_t frames)
  double audio_driver_get_device_latency_ms(void)
  {
     audio_driver_state_t *audio_st = &audio_driver_st;
@@ -236,7 +299,7 @@ index ef3bb93df9..3b4a480879 100644
  
     if (!audio_st->current_audio || !audio_st->device_latency_frames || !rate)
        return 0.0;
-@@ -8297,8 +8364,7 @@ double audio_driver_get_device_latency_ms(void)
+@@ -10271,8 +10352,7 @@ double audio_driver_get_device_latency_ms(void)
  double audio_driver_get_buffer_latency_ms(void)
  {
     audio_driver_state_t *audio_st = &audio_driver_st;
@@ -247,10 +310,10 @@ index ef3bb93df9..3b4a480879 100644
  
     if (!audio_st->current_audio || !audio_st->buffer_size || !rate)
 diff --git a/audio/audio_driver.h b/audio/audio_driver.h
-index df3fa7d615..b1e2d78ed5 100644
+index ee86f8f2ce..5345f9d2d3 100644
 --- a/audio/audio_driver.h
 +++ b/audio/audio_driver.h
-@@ -1497,6 +1497,10 @@ double audio_driver_get_buffer_latency_ms(void);
+@@ -1766,6 +1766,10 @@ double audio_driver_get_buffer_latency_ms(void);
   * audio_driver_set_device_latency(); 0 when the driver reports none. */
  double audio_driver_get_device_latency_ms(void);
  
@@ -262,34 +325,34 @@ index df3fa7d615..b1e2d78ed5 100644
   * and the ratio bias applied for it; 0 when no driver reports
   * frames_consumed() or no window has completed yet. */
 diff --git a/gfx/video_driver.c b/gfx/video_driver.c
-index b2bfba1784..be61677644 100644
+index eb9365b393..c6262df94d 100644
 --- a/gfx/video_driver.c
 +++ b/gfx/video_driver.c
-@@ -6880,7 +6880,7 @@ void video_driver_frame(const void *data, unsigned width,
-                   ,
-                   audio_ident ? audio_ident : "n/a",
-                   (audio_st->stat_frontend_is_float) ? "FLOAT" : "INT16",
--                  settings->uints.audio_output_sample_rate,
-+                  audio_driver_out_rate(),
-                   (audio_st->src_ratio_orig == 1.0) ? "" : "R",
-                   layout_desc);
-             {
-@@ -6921,8 +6921,8 @@ void video_driver_frame(const void *data, unsigned width,
-                   double alt_ppm = audio_driver_get_sink_alt_ppm();
-                   __len += snprintf(video_st->stat_text + __len, sizeof(video_st->stat_text) - __len,
-                         " Sink/Src: %+.0f/%+.0f ppm (bias %+.0f)\n",
--                        (sink_hz / (double)settings->uints.audio_output_sample_rate - 1.0) * 1e6,
--                        (source_hz / (double)settings->uints.audio_output_sample_rate - 1.0) * 1e6,
-+                        (sink_hz / (double)audio_driver_out_rate() - 1.0) * 1e6,
-+                        (source_hz / (double)audio_driver_out_rate() - 1.0) * 1e6,
-                         (sink_bias - 1.0) * 1e6);
-                   if (alt_ppm != 0.0)
-                      __len += snprintf(video_st->stat_text + __len, sizeof(video_st->stat_text) - __len,
+@@ -8843,7 +8843,7 @@ VIDEO_NOINLINE static void video_driver_frame_statistics(
+                ,
+                audio_ident ? audio_ident : "n/a",
+                (audio_st->stat_frontend_is_float) ? "FLOAT" : "INT16",
+-               settings->uints.audio_output_sample_rate,
++               audio_driver_out_rate(),
+                (audio_st->src_ratio_orig == 1.0) ? "" : "R",
+                layout_desc);
+          {
+@@ -8887,8 +8887,8 @@ VIDEO_NOINLINE static void video_driver_frame_statistics(
+                      " Sink:      %+6.0f ppm\n"
+                      " -Src:      %+6.0f ppm\n"
+                      " -Bias:     %+6.0f ppm\n",
+-                     (sink_hz / (double)settings->uints.audio_output_sample_rate - 1.0) * 1e6,
+-                     (source_hz / (double)settings->uints.audio_output_sample_rate - 1.0) * 1e6,
++                     (sink_hz / (double)audio_driver_out_rate() - 1.0) * 1e6,
++                     (source_hz / (double)audio_driver_out_rate() - 1.0) * 1e6,
+                      (sink_bias - 1.0) * 1e6);
+                if (alt_ppm != 0.0)
+                   __len = video_driver_stat_appendf(video_st->stat_text, __len,
 diff --git a/retroarch.c b/retroarch.c
-index 3cd7494840..4c2fa29b15 100644
+index d0606c069d..f8d9461e35 100644
 --- a/retroarch.c
 +++ b/retroarch.c
-@@ -2118,7 +2118,7 @@ bool driver_ctl(enum driver_ctl_state state, void *data)
+@@ -2398,7 +2398,7 @@ bool driver_ctl(enum driver_ctl_state state, void *data)
              runloop_state_t *runloop_st   = runloop_state_get_ptr();
              video_driver_state_t*video_st = video_state_get_ptr();
              unsigned
@@ -299,10 +362,10 @@ index 3cd7494840..4c2fa29b15 100644
              video_monitor_set_refresh_rate(*hz);
  
 diff --git a/runloop.c b/runloop.c
-index fead010291..e8d4e7313a 100644
+index adf535f780..690c2627b8 100644
 --- a/runloop.c
 +++ b/runloop.c
-@@ -3588,7 +3588,7 @@ bool runloop_environment_cb(unsigned cmd, void *data)
+@@ -4200,7 +4200,7 @@ bool runloop_environment_cb(unsigned cmd, void *data)
           if (!settings)
              return false;
  
