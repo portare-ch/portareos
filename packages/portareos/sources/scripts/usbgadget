@@ -311,9 +311,7 @@ cleanup_usb_mtp() {
         ${g_mtp}
 }
 
-# Mass storage: an image on the device served to a PC as a USB stick it can
-# boot from. Never stored as USB_MODE, so eject and reboot return to the mode
-# chosen in settings.
+# Drive mode is temporary; keep USB_MODE for eject and the next boot.
 g_drive="/sys/kernel/config/usb_gadget/drive"
 DRIVEDIR=/storage/usbdrive
 
@@ -321,30 +319,28 @@ prepare_usb_drive() {
     lun=${g_drive}/functions/mass_storage.usb0/lun.0
     name=$(basename "$1")
 
-    mkdir ${g_drive}
-    echo "0x0200" > ${g_drive}/bcdUSB
+    mkdir ${g_drive} || return 1
+    echo "0x0200" > ${g_drive}/bcdUSB || return 1
     # g_mass_storage's IDs
-    echo "0x0525" > ${g_drive}/idVendor
-    echo "0xa4a5" > ${g_drive}/idProduct
-    echo "${devversion}" > ${g_drive}/bcdDevice
-    mkdir ${g_drive}/strings/0x409
-    echo "${OS_NAME}" > ${g_drive}/strings/0x409/manufacturer
-    echo "${PRODUCT}" > ${g_drive}/strings/0x409/product
-    echo "${SERIAL}" > ${g_drive}/strings/0x409/serialnumber
+    echo "0x0525" > ${g_drive}/idVendor || return 1
+    echo "0xa4a5" > ${g_drive}/idProduct || return 1
+    echo "${devversion}" > ${g_drive}/bcdDevice || return 1
+    mkdir ${g_drive}/strings/0x409 || return 1
+    echo "${OS_NAME}" > ${g_drive}/strings/0x409/manufacturer || return 1
+    echo "${PRODUCT}" > ${g_drive}/strings/0x409/product || return 1
+    echo "${SERIAL}" > ${g_drive}/strings/0x409/serialnumber || return 1
 
-    mkdir ${g_drive}/configs/c.1
-    echo "0xC0" > ${g_drive}/configs/c.1/bmAttributes
-    echo "0xfe" > ${g_drive}/configs/c.1/MaxPower
-    mkdir ${g_drive}/configs/c.1/strings/0x409
-    echo drive > ${g_drive}/configs/c.1/strings/0x409/configuration
+    mkdir ${g_drive}/configs/c.1 || return 1
+    echo "0xC0" > ${g_drive}/configs/c.1/bmAttributes || return 1
+    echo "0xfe" > ${g_drive}/configs/c.1/MaxPower || return 1
+    mkdir ${g_drive}/configs/c.1/strings/0x409 || return 1
+    echo drive > ${g_drive}/configs/c.1/strings/0x409/configuration || return 1
 
-    mkdir ${g_drive}/functions/mass_storage.usb0
-    # Read-only, so the image cannot change under a host that cached it;
-    # the kernel takes ro only before the file is opened. Removable, so boot
-    # menus list it as a USB stick, and the SCSI product names the image there.
-    echo 1 > ${lun}/removable
-    echo 1 > ${lun}/ro
-    printf 'Linux   %-16.16s' "${name%.*}" > ${lun}/inquiry_string
+    mkdir ${g_drive}/functions/mass_storage.usb0 || return 1
+    echo 1 > ${lun}/removable || return 1
+    # The kernel only accepts ro changes while no backing file is open.
+    echo 1 > ${lun}/ro || return 1
+    printf 'Linux   %-16.16s' "${name%.*}" > ${lun}/inquiry_string || return 1
     echo "$1" > ${lun}/file || return 1
     ln -s ${g_drive}/functions/mass_storage.usb0 ${g_drive}/configs/c.1
 }
@@ -528,16 +524,20 @@ usb_drive_start() {
 	STORED_MODE=${USB_MODE:-disabled}
 
 	[ "${CURRENT_MODE}" != "disabled" ] && usb_stop
+	# usb_stop records disabled; retain the selected mode even if setup fails.
+	echo "USB_MODE=${STORED_MODE}" > ${GADGETCONF}
 	cleanup_usb_drive
-	device_role
-	if ! prepare_usb_drive "${image}"; then
+	if ! (
+		device_role
+		prepare_usb_drive "${image}" || exit 4
+		bind_udc drive
+	); then
 		cleanup_usb_drive
 		echo "ERROR: cannot serve ${image}" >&2
+		CURRENT_MODE=disabled
+		set_usb_mode "${STORED_MODE}"
 		exit 4
 	fi
-	bind_udc drive
-	# usb_stop recorded disabled; eject restores the mode from settings.
-	echo "USB_MODE=${STORED_MODE}" > ${GADGETCONF}
 }
 
 usb_drive_eject() {

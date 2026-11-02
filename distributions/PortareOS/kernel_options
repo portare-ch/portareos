@@ -97,3 +97,5 @@ CONFIG_JOYSTICK_RSINPUT=y
 CONFIG_UHID=y
 CONFIG_QCOM_SMP2P=y
 CONFIG_VIDEO_QCOM_IRIS=m
+# usbgadget usb_drive needs the configfs mass-storage function.
+CONFIG_USB_CONFIGFS_MASS_STORAGE=y
