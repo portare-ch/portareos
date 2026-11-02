@@ -6,8 +6,10 @@ was reopened at it whatever the core produced: a 32040 Hz SNES or a
 22050 Hz N64 game went through the resampler to 48000. Per-core config
 files can name a rate, but the N64 has none to name: each game programs
 its own into the AI, and the core reports it through
-SET_SYSTEM_AV_INFO once the game has, which already reinitialises the
-audio driver.
+SET_SYSTEM_AV_INFO once the game has. A rate change there is taken by
+the running driver in place when it can be; with audio_out_rate = 0 it
+is refused when the new rate picks another output rate, and the
+reinit that follows reopens the device at it.
 
 With audio_out_rate = 0 the init picks the output rate from the rates
 the link carries natively (32000, 44100, 48000 on the Nova): the
@@ -24,7 +26,7 @@ refresh-rate ratio and RETRO_ENVIRONMENT_GET_TARGET_SAMPLE_RATE, which
 before the first init answers with the pick for the core's rate.
 ---
 diff --git a/audio/audio_driver.c b/audio/audio_driver.c
-index f7da452429..4e5c9125f7 100644
+index f7da452429..07d0d1f2df 100644
 --- a/audio/audio_driver.c
 +++ b/audio/audio_driver.c
 @@ -1165,6 +1165,19 @@ static struct
@@ -309,11 +311,35 @@ index f7da452429..4e5c9125f7 100644
     size_t      frame_bytes        = audio_driver_dev_frame_bytes(audio_st);
  
     if (!audio_st->current_audio || !audio_st->buffer_size || !rate)
+@@ -11048,7 +11128,12 @@ bool audio_driver_set_input_rate(double input)
+          || retro_atomic_load_acquire_int(&audio_st->dsp_caps)
+ #endif
+          || settings->bools.audio_time_stretch
+-         || settings->bools.audio_time_stretch_lowpass)
++         || settings->bools.audio_time_stretch_lowpass
++         /* With audio_out_rate = 0 the core's new rate may pick another
++          * output rate (0015), which only a reopen of the device gives:
++          * 32000 -> 44100 Hz kept at 32000 would resample it down. */
++         || audio_driver_wanted_out_rate(settings)
++               != audio_driver_opened.out_rate)
+       return false;
+ #ifdef HAVE_THREADS
+    if (audio_st->pipe_transport_mode != AUDIO_TRANSPORT_NONE)
 diff --git a/audio/audio_driver.h b/audio/audio_driver.h
-index ee86f8f2ce..5345f9d2d3 100644
+index ee86f8f2ce..90e2fe9824 100644
 --- a/audio/audio_driver.h
 +++ b/audio/audio_driver.h
-@@ -1766,6 +1766,10 @@ double audio_driver_get_buffer_latency_ms(void);
+@@ -1693,7 +1693,8 @@ void audio_driver_update_drc_threshold(audio_driver_state_t *audio_st);
+  *
+  * Returns: false when the configuration needs the full reinit instead
+  * (a DSP filter, time stretch, a core audio callback or discrete extra
+- * channels); nothing is changed then.
++ * channels, or with audio_out_rate = 0 a core rate that picks another
++ * output rate); nothing is changed then.
+  **/
+ bool audio_driver_set_input_rate(double input);
+ 
+@@ -1766,6 +1767,10 @@ double audio_driver_get_buffer_latency_ms(void);
   * audio_driver_set_device_latency(); 0 when the driver reports none. */
  double audio_driver_get_device_latency_ms(void);
  

@@ -44,6 +44,11 @@ its entry points resolved to NULL. The frontend then counts the
 extension as absent, and presents without timing structs, rather than
 trusting the list it passed.
 
+Presents are timed whenever the interval is at least 1, also when an
+interval change keeps the swapchain: on a FIFO-only surface
+fast-forward's interval 0 and the return to 1 keep it, and the timing
+has to follow them both ways.
+
 Measured on the Retroid Pocket Nova, Tekken 3, threaded video off:
 59.64 fps against 59.83 with 10 dropped frames in 2565, no gaps in a
 15 s capture of the audio output, against 55.65 fps and 5 to 8 ms gaps
@@ -53,7 +58,7 @@ Measured on the Retroid Pocket Nova, Tekken 3, threaded video off:
 Nothing here is specific to one device.
 ---
 diff --git a/gfx/common/vulkan_common.c b/gfx/common/vulkan_common.c
-index 1697b32815..b7ade3e030 100644
+index 1697b32815..c285497146 100644
 --- a/gfx/common/vulkan_common.c
 +++ b/gfx/common/vulkan_common.c
 @@ -1343,6 +1343,18 @@ static VkDevice vulkan_context_create_device_wrapper(
@@ -167,7 +172,18 @@ index 1697b32815..b7ade3e030 100644
  
     vulkan_low_latency_device_init(vk);
  
-@@ -4373,6 +4436,7 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
+@@ -4352,6 +4415,10 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
+                == (vk->mailbox.swapchain != VK_NULL_HANDLE))
+    {
+       vk->context.swap_interval = swap_interval;
++      /* The interval decides whether presents are timed, so a kept
++       * swapchain follows it too: fast-forward's 0 and back to 1 on a
++       * FIFO-only surface lands here, and would leave the timing off. */
++      vulkan_update_timed_presents(vk);
+       vk->flags &= ~VK_DATA_FLAG_CREATED_NEW_SWAPCHAIN;
+       return true;
+    }
+@@ -4373,6 +4440,7 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
         * still takes effect: the driver reads it for frame duplication,
         * and the mailbox emulation below is keyed off it. */
        vk->context.swap_interval = swap_interval;
@@ -175,7 +191,7 @@ index 1697b32815..b7ade3e030 100644
  #ifdef VULKAN_DEBUG
        RARCH_DBG("[Vulkan] Do not need to re-create swapchain.\n");
  #endif
-@@ -4435,6 +4499,11 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
+@@ -4435,6 +4503,11 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
     vulkan_emulated_mailbox_deinit(&vk->mailbox);
  
     vk->context.swap_interval = swap_interval;
@@ -187,7 +203,7 @@ index 1697b32815..b7ade3e030 100644
  
     /* Present mode logging */
     if (vk->swapchain == VK_NULL_HANDLE)
-@@ -5698,28 +5767,106 @@ void vulkan_context_destroy(gfx_ctx_vulkan_data_t *vk,
+@@ -5698,28 +5771,106 @@ void vulkan_context_destroy(gfx_ctx_vulkan_data_t *vk,
  #endif
  }
  
@@ -306,7 +322,7 @@ index 1697b32815..b7ade3e030 100644
  }
  
  /* Whether the device was made with VK_NV_low_latency2 and what it
-@@ -6542,6 +6689,8 @@ void vulkan_present(gfx_ctx_vulkan_data_t *vk, unsigned index)
+@@ -6542,6 +6693,8 @@ void vulkan_present(gfx_ctx_vulkan_data_t *vk, unsigned index)
        times.pTimes               = &ptime;
        ptime.presentID            = ++vk->present_id;
        ptime.desiredPresentTime   = 0;

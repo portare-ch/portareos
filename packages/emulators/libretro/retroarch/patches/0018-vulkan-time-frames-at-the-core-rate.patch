@@ -30,10 +30,10 @@ around 5.3 ms, 9 of 3588 frames late in 60 s of attract mode.
 Signed-off-by: PortareOS <hello@portare.org>
 ---
 diff --git a/gfx/common/vulkan_common.c b/gfx/common/vulkan_common.c
-index b7ade3e030..34f16cdeca 100644
+index c285497146..9b90f5561e 100644
 --- a/gfx/common/vulkan_common.c
 +++ b/gfx/common/vulkan_common.c
-@@ -5834,6 +5834,80 @@ void vulkan_update_timed_presents(gfx_ctx_vulkan_data_t *vk)
+@@ -5838,6 +5838,80 @@ void vulkan_update_timed_presents(gfx_ctx_vulkan_data_t *vk)
   * so a frame that came late moves the cadence by a refresh and the
   * next frame is placed from where the display actually is. 0, an
   * immediate present, before anything has been timed. */
@@ -114,7 +114,7 @@ index b7ade3e030..34f16cdeca 100644
  static uint64_t vulkan_timed_present_target(gfx_ctx_vulkan_data_t *vk,
        uint32_t present_id)
  {
-@@ -6690,7 +6764,11 @@ void vulkan_present(gfx_ctx_vulkan_data_t *vk, unsigned index)
+@@ -6694,7 +6768,11 @@ void vulkan_present(gfx_ctx_vulkan_data_t *vk, unsigned index)
        ptime.presentID            = ++vk->present_id;
        ptime.desiredPresentTime   = 0;
        if (vk->context.flags & VK_CTX_FLAG_SWAP_INTERVAL_TIMED)
