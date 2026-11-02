@@ -466,8 +466,14 @@ usb_start() {
 
 		mkdir -p /dev/ffs-umtp
 		mountpoint -q /dev/ffs-umtp || mount mtp -t functionfs /dev/ffs-umtp
-		/usr/sbin/umtprd &
-		sleep 1
+		# Not our stdout: a caller reading it to EOF (the launcher) would wait
+		# on umtprd, and umtprd dies of SIGPIPE once that reader gives up.
+		/usr/sbin/umtprd >/dev/null 2>&1 &
+		# Its endpoints appear once it has written the descriptors.
+		for _ in $(seq 40); do
+			[ -e /dev/ffs-umtp/ep1 ] && break
+			sleep 0.05
+		done
 
 	elif [ "${USB_MODE}" = cdc ] ; then
 		if [ ! -d "${g_cdc}" ]; then
