@@ -70,6 +70,10 @@ jobs:
         if: github.event_name == 'pull_request'
         run: python3 .github/scripts/test-retroarch-update.py
 
+      - name: Check release scheduling and publishing
+        if: github.event_name == 'pull_request'
+        run: python3 -B .github/scripts/test-releases.py
+
       - name: Validate pull request
         if: github.event_name == 'pull_request'
         run: |

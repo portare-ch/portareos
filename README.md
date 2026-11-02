@@ -30,6 +30,20 @@ prevents in-place updates from ROCKNIX. Later updates download from GitHub
 over Wi-Fi through the launcher, using the nightly or release channel, and
 install on restart.
 
+Stable releases are built automatically on the **3rd of each month** and
+marked **Latest** on [GitHub Releases](https://github.com/portare-ch/portareos/releases/latest).
+Versions use **YY.MM**: PortareOS **26.11** is November 2026, followed by
+**26.12** and **27.01**. Every stable release is a full rebuild, even when
+the preceding nightly already contains the same changes.
+
+Release notes list merged pull requests, contributors and a full changelog
+since the previous stable release. Nightlies remain prereleases and describe
+changes since the preceding published build. Release tags retain their build
+date and run number, for example `release-26.11-20261103-339`, so existing
+devices can still discover and order updates. The image filenames keep their
+build dates. The workflow's **Stable release** checkbox also allows a manual
+stable build.
+
 The image bundles **[Portare BIOS](https://github.com/portare-ch/BIOS)**,
 the Nova's bootloader. Hold **Volume Down** at power-on to open its menu;
 **Boot** starts PortareOS from internal storage or the SD card, or Android.
