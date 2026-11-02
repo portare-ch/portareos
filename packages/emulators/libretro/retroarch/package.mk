@@ -4,11 +4,11 @@
 
 PKG_NAME="retroarch"
 # bump-ignore: this tracks master, and the bumper follows /releases/latest.
-# Upstream's newest tag is still v1.22.2 from November 2025, which is 2009
+# Upstream's newest tag is still v1.22.2 from November 2025, which is 10242
 # commits behind the commit below, so the bumper would file a downgrade and
 # call it an update. Re-pin by hand.
-PKG_VERSION="9705e03a59145bc33aa79fe6b52a92005703f74e"
-PKG_SHA256="bd747f84a239e72195cb5c155d1b888739853c03feedfa2e83ac8924c5b539ab"
+PKG_VERSION="11e8931021eb6b7fa69c04f52dd5d385841fdbbe"
+PKG_SHA256="4eee87f220378f8215fd109d37ae2bcaf8a07869e14830ec8f2df4442fc29640"
 PKG_SITE="https://github.com/libretro/RetroArch"
 PKG_URL="${PKG_SITE}/archive/${PKG_VERSION}.tar.gz"
 PKG_LICENSE="GPL-3.0-or-later"

@@ -21,30 +21,30 @@ meant for a button no core reads (the Nova's M2), so a bare press
 opens the guide and the same press in sdl3text closes it.
 
 diff --git a/command.h b/command.h
-index c569d8b1e9..fdae86cd23 100644
+index 726ca96103..9480410838 100644
 --- a/command.h
 +++ b/command.h
-@@ -286,6 +286,7 @@ enum event_command
-    CMD_EVENT_PRESENCE_UPDATE,
+@@ -302,6 +302,7 @@ enum event_command
+    CMD_EVENT_CAMERA_ALLOW_APPLY,
     CMD_EVENT_OVERLAY_NEXT,
     CMD_EVENT_OSK_TOGGLE,
 +   CMD_EVENT_GAME_GUIDE,
     CMD_EVENT_RELOAD_CONFIG,
  #ifdef HAVE_MICROPHONE
     /* Stops all enabled microphones. */
-@@ -572,6 +573,7 @@ static const struct cmd_map map[] = {
+@@ -1389,6 +1390,7 @@ static const struct cmd_map map[] = {
  
-    { "OVERLAY_NEXT",           RARCH_OVERLAY_NEXT },
-    { "OSK",                    RARCH_OSK },
-+   { "GAME_GUIDE",             RARCH_GAME_GUIDE },
+    { "OVERLAY_NEXT", RARCH_OVERLAY_NEXT, "Switch to the next overlay.", CMD_INFO_NO_TOOL },
+    { "OSK", RARCH_OSK, "Show or hide the on-screen keyboard.", CMD_INFO_NO_TOOL },
++   { "GAME_GUIDE", RARCH_GAME_GUIDE, "Show the game guide (the content's .txt) while the core waits.", CMD_INFO_NO_TOOL },
  
  #if 0
     /* Deprecated */
 diff --git a/config.def.keybinds.h b/config.def.keybinds.h
-index 3cac9ecc08..f3cd9853b7 100644
+index 8355d38729..726f1f77a8 100644
 --- a/config.def.keybinds.h
 +++ b/config.def.keybinds.h
-@@ -504,6 +504,11 @@ static const struct retro_keybind retro_keybinds_1[] = {
+@@ -524,6 +524,11 @@ static const struct retro_keybind_def retro_keybinds_1[] = {
        RETRO_KEYBIND_PACK(MENU_ENUM_LABEL_VALUE_INPUT_META_OSK, RETROK_UNKNOWN, true),
        RARCH_OSK, NO_BTN, NO_BTN, 0
     },
@@ -56,7 +56,7 @@ index 3cac9ecc08..f3cd9853b7 100644
  #elif defined(DINGUX)
     { 
        AXIS_NONE, AXIS_NONE,
-@@ -986,6 +991,11 @@ static const struct retro_keybind retro_keybinds_1[] = {
+@@ -1026,6 +1031,11 @@ static const struct retro_keybind_def retro_keybinds_1[] = {
        RETRO_KEYBIND_PACK(MENU_ENUM_LABEL_VALUE_INPUT_META_OSK, RETROK_UNKNOWN, true),
        RARCH_OSK, NO_BTN, NO_BTN, 0
     },
@@ -68,7 +68,7 @@ index 3cac9ecc08..f3cd9853b7 100644
  #else
     { 
        AXIS_NONE, AXIS_NONE,
-@@ -1476,6 +1486,11 @@ static const struct retro_keybind retro_keybinds_1[] = {
+@@ -1536,6 +1546,11 @@ static const struct retro_keybind_def retro_keybinds_1[] = {
        RETRO_KEYBIND_PACK(MENU_ENUM_LABEL_VALUE_INPUT_META_OSK, RETROK_UNKNOWN, true),
        RARCH_OSK, NO_BTN, NO_BTN, 0
     },
@@ -80,7 +80,7 @@ index 3cac9ecc08..f3cd9853b7 100644
  #endif
  };
  
-@@ -1955,6 +1970,11 @@ static const struct retro_keybind retro_keybinds_rest[] = {
+@@ -2035,6 +2050,11 @@ static const struct retro_keybind_def retro_keybinds_rest[] = {
        RETRO_KEYBIND_PACK(MENU_ENUM_LABEL_VALUE_INPUT_META_OSK, RETROK_UNKNOWN, true),
        RARCH_OSK, NO_BTN, NO_BTN, 0
     },
@@ -93,10 +93,10 @@ index 3cac9ecc08..f3cd9853b7 100644
  
  #endif
 diff --git a/configuration.c b/configuration.c
-index fa3ea36808..a7aace233e 100644
+index 59730fd33b..ab9a1ba28d 100644
 --- a/configuration.c
 +++ b/configuration.c
-@@ -442,6 +442,7 @@ const struct input_bind_map input_config_bind_map[RARCH_BIND_LIST_END_NULL] = {
+@@ -471,6 +471,7 @@ const struct input_bind_map input_config_bind_map[RARCH_BIND_LIST_END_NULL] = {
     DECLARE_META_BIND(2, overlay_next,          RARCH_OVERLAY_NEXT,           MENU_ENUM_LABEL_VALUE_INPUT_META_OVERLAY_NEXT),
  
     DECLARE_META_BIND(2, osk_toggle,            RARCH_OSK,                    MENU_ENUM_LABEL_VALUE_INPUT_META_OSK),
@@ -105,11 +105,11 @@ index fa3ea36808..a7aace233e 100644
  
  #if defined(HAVE_METAL)
 diff --git a/gfx/video_driver.c b/gfx/video_driver.c
-index be61677644..921cc101be 100644
+index c6262df94d..4cfd888c34 100644
 --- a/gfx/video_driver.c
 +++ b/gfx/video_driver.c
-@@ -7210,7 +7210,8 @@ void video_driver_frame(const void *data, unsigned width,
-             video_info.refresh_rate, video_info.frame_time_target, runloop_st->core_run_time);
+@@ -9949,7 +9949,8 @@ if (!VIDEO_DRIVER_IS_THREADED_INTERNAL(video_st))
+             video_info.frame_time_target, runloop_st->core_run_time);
  }
  
 -static void video_driver_reinit_context(settings_t *settings, int flags)
@@ -118,7 +118,7 @@ index be61677644..921cc101be 100644
  {
     /* RARCH_DRIVER_CTL_UNINIT clears the callback struct so we
      * need to make sure to keep a copy */
-@@ -7224,6 +7225,9 @@ static void video_driver_reinit_context(settings_t *settings, int flags)
+@@ -9963,6 +9964,9 @@ static void video_driver_reinit_context(settings_t *settings, int flags)
  
     driver_uninit(flags, DRIVER_LIFETIME_RESET);
  
@@ -127,11 +127,11 @@ index be61677644..921cc101be 100644
 +
     memcpy(hwr, &hwr_copy, sizeof(*hwr));
     video_st->hw_render_context_negotiation = iface;
- 
-@@ -7242,12 +7246,29 @@ void video_driver_reinit(int flags)
-    else
+    /* And the published type with it. The uninit clears both the
+@@ -10001,12 +10005,29 @@ void video_driver_reinit(int flags)
        video_driver_modify_disp_flags(0, VIDEO_FLAG_CACHE_CONTEXT);
     video_driver_cache_context_ack_clear();
+ 
 -   video_driver_reinit_context(settings, flags);
 +   video_driver_reinit_context(settings, flags, NULL, NULL);
     video_driver_modify_disp_flags(0, VIDEO_FLAG_CACHE_CONTEXT);
@@ -160,10 +160,10 @@ index be61677644..921cc101be 100644
        runloop_state_t *runloop_st,
        float refresh_rate,
 diff --git a/gfx/video_driver.h b/gfx/video_driver.h
-index 3b9b29ec17..ecdd0d7ac9 100644
+index 4e25a26acb..12f46039d1 100644
 --- a/gfx/video_driver.h
 +++ b/gfx/video_driver.h
-@@ -1888,6 +1888,9 @@ void video_driver_cache_context_ack_clear(void);
+@@ -2750,6 +2750,9 @@ void video_driver_cache_context_ack_clear(void);
  
  void video_driver_reinit(int flags);
  
@@ -174,10 +174,10 @@ index 3b9b29ec17..ecdd0d7ac9 100644
  
  bool *video_driver_get_threaded(void);
 diff --git a/input/input_defines.h b/input/input_defines.h
-index c38a4a06c7..05939b16f2 100644
+index 9dc7f244c4..70b0cd4b35 100644
 --- a/input/input_defines.h
 +++ b/input/input_defines.h
-@@ -195,6 +195,7 @@ enum
+@@ -204,6 +204,7 @@ enum
  
     RARCH_OVERLAY_NEXT,
     RARCH_OSK,
@@ -186,26 +186,28 @@ index c38a4a06c7..05939b16f2 100644
     RARCH_BIND_LIST_END,
  
 diff --git a/input/input_driver.c b/input/input_driver.c
-index 091aff4957..513e6cb364 100644
+index fbebe74d78..fdfa989cc5 100644
 --- a/input/input_driver.c
 +++ b/input/input_driver.c
-@@ -7555,6 +7555,11 @@ static void input_keys_pressed(
-       block_hotkey[RARCH_GAME_FOCUS_TOGGLE] = false;
-    }
+@@ -12667,6 +12667,13 @@ static bool input_hotkey_blocked(input_hotkey_block_t *b, unsigned i)
+          && INPUT_HOT_BIT(input_hotkey_set.valid, RARCH_GAME_FOCUS_TOGGLE))
+       blocked = false;
  
 +   /* The game guide is bound to a button no core reads, so it
 +    * works without the hotkey enabler, like Game Focus. */
-+   if (!is_menu && RETRO_KEYBIND_VALID(&binds[port][RARCH_GAME_GUIDE]))
-+      block_hotkey[RARCH_GAME_GUIDE] = false;
++   if (     i == RARCH_GAME_GUIDE
++         && !b->is_menu
++         && INPUT_HOT_BIT(input_hotkey_set.valid, RARCH_GAME_GUIDE))
++      blocked = false;
 +
-    for (i = RARCH_FIRST_META_KEY; i < RARCH_BIND_LIST_END; i++)
-    {
-       bool other_pressed = input_keys_pressed_other_sources(input_st, i, p_new_state);
+    return blocked;
+ }
+ 
 diff --git a/intl/msg_hash_us.h b/intl/msg_hash_us.h
-index 5e219e3096..e7d15ee1ff 100644
+index 4a66492a66..ebc85f8a85 100644
 --- a/intl/msg_hash_us.h
 +++ b/intl/msg_hash_us.h
-@@ -12151,6 +12151,18 @@ MSG_HASH(
+@@ -12657,6 +12657,18 @@ MSG_HASH(
     MENU_ENUM_SUBLABEL_INPUT_META_OSK,
     "Switches keyboard overlay on/off."
     )
@@ -225,10 +227,10 @@ index 5e219e3096..e7d15ee1ff 100644
     MENU_ENUM_LABEL_VALUE_INPUT_META_OVERLAY_NEXT,
     "Next Overlay"
 diff --git a/menu/cbs/menu_cbs_sublabel.c b/menu/cbs/menu_cbs_sublabel.c
-index b0125492e4..9e233bcd36 100644
+index 618865afb2..e47ce0c3ff 100644
 --- a/menu/cbs/menu_cbs_sublabel.c
 +++ b/menu/cbs/menu_cbs_sublabel.c
-@@ -310,6 +310,7 @@ DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_input_meta_frameadvance,          ME
+@@ -314,6 +314,7 @@ DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_input_meta_frameadvance,          ME
  
  DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_input_meta_mute,                  MENU_ENUM_SUBLABEL_INPUT_META_MUTE)
  DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_input_meta_osk,                   MENU_ENUM_SUBLABEL_INPUT_META_OSK)
@@ -236,7 +238,7 @@ index b0125492e4..9e233bcd36 100644
  DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_input_meta_volume_up,             MENU_ENUM_SUBLABEL_INPUT_META_VOLUME_UP)
  DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_input_meta_volume_down,           MENU_ENUM_SUBLABEL_INPUT_META_VOLUME_DOWN)
  
-@@ -1765,6 +1766,9 @@ int menu_cbs_init_bind_sublabel(menu_file_list_cbs_t *cbs,
+@@ -1885,6 +1886,9 @@ int menu_cbs_init_bind_sublabel(menu_file_list_cbs_t *cbs,
              case RARCH_OSK:
                 BIND_ACTION_SUBLABEL(cbs, action_bind_sublabel_input_meta_osk);
                 return 0;
@@ -247,10 +249,10 @@ index b0125492e4..9e233bcd36 100644
                 break;
           }
 diff --git a/msg_hash.h b/msg_hash.h
-index 6df82861db..f649c07745 100644
+index 2dfe934703..18a5d3c3e5 100644
 --- a/msg_hash.h
 +++ b/msg_hash.h
-@@ -2652,6 +2652,7 @@ enum msg_hash_enums
+@@ -2784,6 +2784,7 @@ enum msg_hash_enums
  
     MENU_ENUM_LABEL_VALUE_INPUT_META_OVERLAY_NEXT, /* Hidden */
     MENU_ENUM_LABEL_VALUE_INPUT_META_OSK,
@@ -258,7 +260,7 @@ index 6df82861db..f649c07745 100644
  
     MENU_ENUM_LABEL_VALUE_INPUT_DEVICE_INDEX,
     MENU_ENUM_LABEL_VALUE_INPUT_DEVICE_TYPE,
-@@ -2756,6 +2757,8 @@ enum msg_hash_enums
+@@ -2912,6 +2913,8 @@ enum msg_hash_enums
  
     MENU_ENUM_SUBLABEL_INPUT_META_OVERLAY_NEXT, /* Hidden */
     MENU_ENUM_SUBLABEL_INPUT_META_OSK,
@@ -268,7 +270,7 @@ index 6df82861db..f649c07745 100644
     MENU_ENUM_LABEL_INPUT_DESCRIPTION,
     MENU_ENUM_LABEL_INPUT_DESCRIPTION_KBD,
 diff --git a/retroarch.c b/retroarch.c
-index 4c2fa29b15..2f1a903aa0 100644
+index f8d9461e35..945c72c0d1 100644
 --- a/retroarch.c
 +++ b/retroarch.c
 @@ -38,6 +38,14 @@
@@ -286,8 +288,8 @@ index 4c2fa29b15..2f1a903aa0 100644
  #if defined(_WIN32) && !defined(_XBOX) && !defined(__WINRT__)
  #include <objbase.h>
  #include <process.h>
-@@ -3354,6 +3362,66 @@ static void command_event_finish_content_deinit(void)
- 
+@@ -3856,6 +3864,66 @@ bool command_event_later(enum event_command cmd, const int *arg)
+    return true;
  }
  
 +#ifdef HAVE_GAME_GUIDE
@@ -353,7 +355,7 @@ index 4c2fa29b15..2f1a903aa0 100644
  bool command_event(enum event_command cmd, void *data)
  {
     struct rarch_state *p_rarch     = &rarch_st;
-@@ -5315,6 +5383,11 @@ bool command_event(enum event_command cmd, void *data)
+@@ -5778,6 +5846,11 @@ bool command_event(enum event_command cmd, void *data)
           runloop_st->flags      &= ~RUNLOOP_FLAG_PAUSED;
           runloop_pause_checks();
           break;
@@ -366,12 +368,12 @@ index 4c2fa29b15..2f1a903aa0 100644
           /* Allow pausing only when there is an active core. */
           if (!(runloop_st->flags & RUNLOOP_FLAG_CORE_RUNNING))
 diff --git a/runloop.c b/runloop.c
-index e8d4e7313a..e1533461f5 100644
+index 690c2627b8..d90fc3535d 100644
 --- a/runloop.c
 +++ b/runloop.c
-@@ -7446,6 +7446,9 @@ static enum runloop_state_enum runloop_check_state(
-    /* Check statistics hotkey */
-    HOTKEY_CHECK(RARCH_STATISTICS_TOGGLE, CMD_EVENT_STATISTICS_TOGGLE, true, NULL);
+@@ -8865,6 +8865,9 @@ static enum runloop_state_enum runloop_check_state(
+    /* Check headset edit hotkey: here, so it works in the menu too */
+    HOTKEY_CHECK(RARCH_HEADSET_EDIT_SCREENS, CMD_EVENT_HEADSET_EDIT_SCREENS, true, NULL);
  
 +   /* Check game guide hotkey */
 +   HOTKEY_CHECK(RARCH_GAME_GUIDE, CMD_EVENT_GAME_GUIDE, true, NULL);

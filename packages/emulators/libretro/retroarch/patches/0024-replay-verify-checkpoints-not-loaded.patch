@@ -18,32 +18,39 @@ it: noise to compare against, and to compress.
 Signed-off-by: PortareOS <hello@portare.org>
 ---
 diff --git a/input/bsv/bsvmovie.c b/input/bsv/bsvmovie.c
-index 85d2940..52f202f 100644
+index 8a529b29da..dea20f88d6 100644
 --- a/input/bsv/bsvmovie.c
 +++ b/input/bsv/bsvmovie.c
-@@ -650,6 +650,8 @@ bool bsv_movie_load_checkpoint(bsv_movie_t *handle, uint8_t compression,
-          ret = false;
-          goto exit;
-    }
+@@ -761,6 +761,8 @@ bool bsv_movie_load_checkpoint(bsv_movie_t *handle, uint8_t compression,
+     * it describes last_save, which loading does not touch and the
+     * recorder later swaps back in. */
+    handle->cur_save_size  = size;
 +   if (checkpoint_behavior == REPLAY_CPBEHAVIOR_VERIFY)
 +      handle->checkpoint_verify = true;
     if (checkpoint_behavior != REPLAY_CPBEHAVIOR_DESERIALIZE)
        goto exit;
     handle->checkpoint_ready = true;
-@@ -686,6 +688,9 @@ int64_t bsv_movie_write_checkpoint(bsv_movie_t *handle, uint8_t compression, uin
-       handle->cur_save_valid = false;
-    }
+@@ -803,8 +805,14 @@ static int64_t bsv_movie_write_checkpoint_from_state(bsv_movie_t *handle,
     serial_info.data = handle->cur_save;
-+   /* A core may serialize less than the size it reports; what it leaves
-+    * of the buffer would be whatever the last checkpoint left there. */
-+   memset(handle->cur_save, 0, serial_info.size);
-    core_serialize(&serial_info);
+    if (state)
+       memcpy(serial_info.data, state, size);
+-   else if (!core_serialize(&serial_info))
+-      goto exit;
++   else
++   {
++      /* A core may serialize less than the size it reports; what it leaves
++       * of the buffer would be whatever the last checkpoint left there. */
++      memset(handle->cur_save, 0, serial_info.size);
++      if (!core_serialize(&serial_info))
++         goto exit;
++   }
     switch (encoding)
     {
-@@ -800,6 +805,37 @@ bool bsv_movie_read_next_events(bsv_movie_t *handle,
+       case REPLAY_CHECKPOINT2_ENCODING_RAW:
+@@ -938,6 +946,37 @@ int64_t bsv_movie_write_checkpoint(bsv_movie_t *handle,
+ bool bsv_movie_read_next_events(bsv_movie_t *handle,
        replay_checkpoint_behavior checkpoint_behavior, bool end_movie)
  {
-    input_driver_state_t *input_st  = input_state_get_ptr();
 +   if (handle->checkpoint_verify)
 +   {
 +      /* Where a checkpoint would have been loaded, the core's state
@@ -78,7 +85,7 @@ index 85d2940..52f202f 100644
     if (handle->checkpoint_ready)
     {
        retro_ctx_serialize_info_t serial_info;
-@@ -1091,7 +1127,7 @@ void bsv_movie_next_frame(input_driver_state_t *input_st)
+@@ -1266,7 +1305,7 @@ static void bsv_movie_next_frame_internal(input_driver_state_t *input_st,
     }
     else /* either playback or seeking while recording */
     {
@@ -88,18 +95,18 @@ index 85d2940..52f202f 100644
        input_st->bsv_movie_state.flags &= ~BSV_FLAG_MOVIE_SEEKING;
     }
 diff --git a/input/input_driver.h b/input/input_driver.h
-index 63c4ae6..af6d9fa 100644
+index 78bd2e90df..6bd3ee52dc 100644
 --- a/input/input_driver.h
 +++ b/input/input_driver.h
-@@ -277,6 +277,7 @@ struct bsv_movie
+@@ -265,6 +265,7 @@ struct bsv_movie
     bool first_rewind;
     bool did_rewind;
     bool checkpoint_ready;
 +   bool checkpoint_verify;
  
- #ifdef HAVE_STATESTREAM
-    /* Block index and superblock index for incremental checkpoints */
-@@ -299,7 +300,10 @@ typedef struct bsv_movie bsv_movie_t;
+    /* Netplay stages frames until their inputs have been confirmed. */
+    const char *netplay_error;
+@@ -295,7 +296,10 @@ typedef struct bsv_movie bsv_movie_t;
  enum replay_checkpoint_behavior_ {
     REPLAY_CPBEHAVIOR_SKIP,
     REPLAY_CPBEHAVIOR_UPDATE,
