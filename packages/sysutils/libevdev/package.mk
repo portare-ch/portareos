@@ -4,8 +4,8 @@
 # Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="libevdev"
-PKG_VERSION="1.13.6"
-PKG_SHA256="73f215eccbd8233f414737ac06bca2687e67c44b97d2d7576091aa9718551110"
+PKG_VERSION="1.14.0"
+PKG_SHA256="5a0966c7110648665983848bad696c7acba614a2160d2865d535397101007332"
 PKG_LICENSE="MIT"
 PKG_SITE="http://www.freedesktop.org/wiki/Software/libevdev/"
 PKG_URL="http://www.freedesktop.org/software/libevdev/${PKG_NAME}-${PKG_VERSION}.tar.xz"

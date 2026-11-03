@@ -3,11 +3,11 @@
 # Copyright (C) 2019-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="cairo"
-PKG_VERSION="1.17.8"
-PKG_SHA256="5b10c8892d1b58d70d3f0ba5b47863a061262fa56b9dc7944161f8c8b783bc64"
+PKG_VERSION="1.18.6"
+PKG_SHA256="1c767308174337a74694da0f3ec069c271452163a1ef4540964c50c301f157d4"
 PKG_LICENSE="LGPL"
 PKG_SITE="https://cairographics.org/"
-PKG_URL="https://cairographics.org/snapshots/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_URL="https://cairographics.org/releases/${PKG_NAME}-${PKG_VERSION}.tar.xz"
 PKG_DEPENDS_TARGET="toolchain zlib freetype fontconfig glib libpng pixman"
 PKG_LONGDESC="Cairo is a vector graphics library with cross-device output support."
 
@@ -36,7 +36,6 @@ pre_configure_target() {
                          -Dquartz=disabled \
                          -Dtee=disabled \
                          -Dtests=disabled \
-                         -Dxml=disabled \
                          -Dzlib=enabled \
                          -Dgtk2-utils=disabled \
                          -Dglib=enabled \
