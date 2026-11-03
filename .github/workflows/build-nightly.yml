@@ -33,6 +33,11 @@ on:
         required: false
         default: false
         type: boolean
+      version:
+        description: 'Stable release version, YY.MM.N for a rebuild (empty: this month, YY.MM)'
+        required: false
+        default: ''
+        type: string
       SM8550:
         description: 'SM8550'
         required: false
@@ -55,6 +60,7 @@ jobs:
     outputs:
       NIGHTLY: ${{ steps.set-release-type.outputs.NIGHTLY }}
       OFFICIAL: ${{ steps.set-release-type.outputs.OFFICIAL }}
+      VERSION: ${{ steps.set-release-type.outputs.VERSION }}
       INCREMENTAL: ${{ steps.set-release-type.outputs.INCREMENTAL }}
       BUILD_NEEDED: ${{ steps.build-needed.outputs.NEEDED }}
       OWNER_LC: ${{ steps.set-envs.outputs.OWNER_OUTPUT }}
@@ -106,6 +112,7 @@ jobs:
           EVENT_SCHEDULE: ${{ github.event.schedule }}
           RELEASE_REQUESTED: ${{ inputs.release }}
           FULL_REQUESTED: ${{ inputs.full }}
+          VERSION_REQUESTED: ${{ inputs.version }}
         run: |
           python3 .github/scripts/release-policy.py plan >> "$GITHUB_OUTPUT"
 
@@ -256,6 +263,7 @@ jobs:
         id: tag
         env:
           OFFICIAL: ${{ needs.set-envs.outputs.OFFICIAL }}
+          VERSION_REQUESTED: ${{ needs.set-envs.outputs.VERSION }}
         run: |
           python3 .github/scripts/release-policy.py tag >> "$GITHUB_OUTPUT"
 
