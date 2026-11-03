@@ -8,10 +8,12 @@ Date:   Tue Oct 1 12:09:07 2013 +0300
 
 --- a/nss/getaddrinfo.c
 +++ b/nss/getaddrinfo.c
-@@ -730,6 +730,38 @@ gaih_inet (const char *name, const struc
-   if (res_ctx == NULL)
-     no_more = 1;
- 
+@@ -631,6 +631,38 @@
+ 	  goto out;
+ 	}
+       no_more = 1;
++    }
++
 +  /* AI_ADDRCONFIG determines whether or not we should suppress any
 +   * hostname lookups. If the local host has only IPv4 interfaces,
 +   * then suppress lookups for IPv6 addresses, and vice versa; if
@@ -42,12 +44,10 @@ Date:   Tue Oct 1 12:09:07 2013 +0300
 +	  suppress_af = AF_INET6;
 +      else if(seen_ipv6 && !seen_ipv4)
 +	  suppress_af = AF_INET;
-+    }
-+
+     }
+ 
    while (!no_more)
-     {
-       no_data = 0;
-@@ -737,7 +769,7 @@ gaih_inet (const char *name, const struc
+@@ -651,7 +683,7 @@
  
        /* gethostbyname4_r sends out parallel A and AAAA queries and
  	 is thus only suitable for PF_UNSPEC.  */
@@ -56,7 +56,7 @@ Date:   Tue Oct 1 12:09:07 2013 +0300
  	fct4 = __nss_lookup_function (nip, "gethostbyname4_r");
  
        if (fct4 != NULL)
-@@ -826,25 +858,27 @@ gaih_inet (const char *name, const struc
+@@ -753,8 +785,9 @@
  
  	  if (fct != NULL)
  	    {
@@ -68,10 +68,7 @@ Date:   Tue Oct 1 12:09:07 2013 +0300
  		{
  		  if ((result = gethosts (fct, AF_INET6, name, req, tmpbuf,
  					  res, &status, &no_data)) != 0)
- 		    {
- 		      __resolv_context_put (res_ctx);
- 		      goto out;
- 		    }
+@@ -765,13 +798,14 @@
  		  no_inet6_data = no_data;
  		  inet6_status = status;
  		}
@@ -95,13 +92,13 @@ Date:   Tue Oct 1 12:09:07 2013 +0300
  					  res, &status, &no_data)) != 0)
 --- a/sysdeps/unix/sysv/linux/check_pf.c
 +++ b/sysdeps/unix/sysv/linux/check_pf.c
-@@ -224,7 +224,8 @@ make_request (int fd, pid_t pid)
- 		    }
- 		  else
+@@ -212,7 +212,8 @@
  		    {
--		      if (!IN6_IS_ADDR_LOOPBACK (address))
-+		      if (!IN6_IS_ADDR_LOOPBACK (address) &&
-+			  !IN6_IS_ADDR_LINKLOCAL (address))
+ 		      struct in6_addr in6addr;
+ 		      memcpy (&in6addr, address, sizeof (in6addr));
+-		      if (!IN6_IS_ADDR_LOOPBACK (&in6addr))
++		      if (!IN6_IS_ADDR_LOOPBACK (&in6addr)
++			  && !IN6_IS_ADDR_LINKLOCAL (&in6addr))
  			seen_ipv6 = true;
  		    }
  		}
