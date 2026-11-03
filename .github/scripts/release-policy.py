@@ -10,6 +10,7 @@ import re
 import sys
 
 MONTHLY_CRON = '0 0 3 * *'
+VERSION = re.compile(r'^[0-9]{2}\.[0-9]{2}(\.[0-9]+)?$')
 
 
 def build_policy(event, schedule='', release='', full=''):
@@ -20,9 +21,20 @@ def build_policy(event, schedule='', release='', full=''):
             'INCREMENTAL': 'no' if official or full == 'true' else 'yes'}
 
 
-def release_tag(official, run, day):
+def check_version(version, official):
+    """A version names a stable release: YY.MM, or YY.MM.N for a rebuild."""
+    if not version:
+        return
+    if not official:
+        raise ValueError(f'version {version} given for a nightly; set release too')
+    if not VERSION.match(version):
+        raise ValueError(f'version {version} is not YY.MM or YY.MM.N')
+
+
+def release_tag(official, run, day, version=''):
+    check_version(version, official)
     date = day.strftime('%Y%m%d')
-    version = day.strftime('%y.%m')
+    version = version or day.strftime('%y.%m')
     # Installed updaters extract the build date and run from release-* tags.
     tag = (f'release-{version}-{date}-{run}' if official else f'nightly-{date}-{run}')
     return {'tag': tag,
@@ -51,10 +63,14 @@ def main():
                               os.environ.get('EVENT_SCHEDULE', ''),
                               os.environ.get('RELEASE_REQUESTED', ''),
                               os.environ.get('FULL_REQUESTED', ''))
+        # Checked here, so a bad version fails before the build, not after.
+        values['VERSION'] = os.environ.get('VERSION_REQUESTED', '')
+        check_version(values['VERSION'], values['OFFICIAL'] == 'yes')
     elif command == 'tag':
         values = release_tag(os.environ['OFFICIAL'] == 'yes',
                              os.environ['GITHUB_RUN_NUMBER'],
-                             datetime.datetime.now(datetime.timezone.utc).date())
+                             datetime.datetime.now(datetime.timezone.utc).date(),
+                             os.environ.get('VERSION_REQUESTED', ''))
     elif command == 'previous':
         print(previous_release(json.load(sys.stdin), os.environ['OFFICIAL'] == 'yes'))
         return

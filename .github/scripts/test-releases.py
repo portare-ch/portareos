@@ -81,6 +81,25 @@ class WorkflowTest(unittest.TestCase):
                     self.assertEqual((root / 'consulted').exists(), official == 'no')
 
 
+    def test_plan_checks_the_version_before_building(self):
+        for release, version, ok in [('true', '26.11.3', True), ('true', '', True),
+                                     ('true', '26.11-3', False), ('false', '26.11.3', False)]:
+            with self.subTest(release=release, version=version):
+                with tempfile.TemporaryDirectory() as name:
+                    output = Path(name) / 'output'
+                    env = os.environ | {'GITHUB_OUTPUT': str(output),
+                                        'GITHUB_EVENT_NAME': 'workflow_dispatch',
+                                        'EVENT_SCHEDULE': '', 'RELEASE_REQUESTED': release,
+                                        'FULL_REQUESTED': '', 'VERSION_REQUESTED': version}
+                    result = subprocess.run(['bash', '-eu', '-c', step('Determine release type')],
+                                            cwd=ROOT, env=env, capture_output=True, text=True)
+                    self.assertEqual(result.returncode == 0, ok, result.stderr)
+                    if ok:
+                        values = dict(line.split('=', 1)
+                                      for line in output.read_text().splitlines())
+                        self.assertEqual(values['VERSION'], version)
+
+
 class PolicyTest(unittest.TestCase):
     def test_build_modes(self):
         for args, expected in [
@@ -109,6 +128,20 @@ class PolicyTest(unittest.TestCase):
                 self.assertEqual(nightly['tag'], f'nightly-{d:%Y%m%d}-339')
                 self.assertEqual(nightly['latest'], '--latest=false')
                 self.assertEqual(nightly['prerelease'], '--prerelease')
+
+    def test_rebuild_version_names_the_release(self):
+        stable = policy.release_tag(True, '345', datetime.date(2026, 11, 4), '26.11.3')
+        self.assertEqual(stable['title'], 'PortareOS 26.11.3')
+        self.assertEqual(stable['tag'], 'release-26.11.3-20261104-345')
+        self.assertEqual(stable['latest'], '--latest')
+
+    def test_version_must_be_calendar_and_stable(self):
+        day = datetime.date(2026, 11, 4)
+        for official, version in [(True, '26.11-3'), (True, 'v26.11'), (True, '2026.11'),
+                                  (False, '26.11.3')]:
+            with self.subTest(official=official, version=version):
+                with self.assertRaises(ValueError):
+                    policy.release_tag(official, '345', day, version)
 
     def test_changelog_baseline_past_many_nightlies(self):
         old = {'tag_name': 'release-26.10-20261003-200', 'prerelease': False,
@@ -281,9 +314,14 @@ elif args[:2] != ['release', 'create']:
         self.assertNotIn('--notes-start-tag', args)
 
     def test_existing_updater_accepts_calendar_release_tag(self):
+        for tag in ['release-26.11-20261103-339', 'release-26.11.3-20261103-339']:
+            with self.subTest(tag=tag):
+                self.check_updater_accepts(tag)
+
+    def check_updater_accepts(self, tag):
         source = (ROOT / 'packages/portareos/sources/scripts/portareos-update').read_text()
         function = source[source.index('online_releases() {'):source.index('# Decides whether the newest release')]
-        release = {'tag_name': 'release-26.11-20261103-339', 'draft': False,
+        release = {'tag_name': tag, 'draft': False,
                    'body': 'Built from `' + 'a' * 40 + '` on `next`.',
                    'assets': [{'name': self.tar.name, 'size': 14,
                                'browser_download_url': 'https://example.com/update.tar'},
