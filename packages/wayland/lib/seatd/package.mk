@@ -2,8 +2,8 @@
 # Copyright (C) 2021-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="seatd"
-PKG_VERSION="0.9.0"
-PKG_SHA256="4276d1380c67e30a63c289b35f7bf955e126e6daf3596cd5aa6080670aa1214c"
+PKG_VERSION="0.9.3"
+PKG_SHA256="302564d54d8e28191fadfd734f2675ecb0c9e0615a58011b89ef15dfa4dbaa96"
 PKG_LICENSE="MIT"
 PKG_SITE="https://git.sr.ht/~kennylevinsen/seatd"
 PKG_URL="https://github.com/kennylevinsen/seatd/archive/refs/tags/${PKG_VERSION}.tar.gz"
