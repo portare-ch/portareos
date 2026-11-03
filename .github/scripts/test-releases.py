@@ -122,6 +122,52 @@ class PolicyTest(unittest.TestCase):
         self.assertEqual(policy.previous_release([nightlies], True), nightlies[-1]['tag_name'])
         self.assertEqual(policy.previous_release([[]], True), '')
 
+    def test_stable_requires_a_release_tag_and_non_prerelease_status(self):
+        stable = {'tag_name': 'release-20261020-295', 'prerelease': False,
+                  'published_at': '2026-10-20T15:06:09Z'}
+        newer = [
+            dict(stable, tag_name='nightly-20261102-340',
+                 published_at='2026-11-02T11:33:21Z'),
+            dict(stable, tag_name='nightly-20261102-338',
+                 published_at='2026-11-02T02:39:05Z'),
+            dict(stable, tag_name='release-26.11-20261101-337', prerelease=True,
+                 published_at='2026-11-01T20:16:19Z'),
+            dict(stable, tag_name='release-26.11-20261103-342', draft=True,
+                 published_at='2026-11-03T06:00:00Z'),
+            dict(stable, tag_name='cache-20261103',
+                 published_at='2026-11-03T07:00:00Z'),
+        ]
+        self.assertEqual(policy.previous_release([newer, [stable]], True), stable['tag_name'])
+
+    def test_first_stable_uses_oldest_published_build_despite_nightly_status(self):
+        oldest = {'tag_name': 'nightly-20260904-31', 'prerelease': True,
+                  'published_at': '2026-09-04T13:21:02Z'}
+        newer = dict(oldest, tag_name='nightly-20261102-340', prerelease=False,
+                     published_at='2026-11-02T11:33:21Z')
+        ignored = [dict(oldest, tag_name='nightly-draft', draft=True,
+                        published_at='2026-09-01T00:00:00Z'),
+                   dict(oldest, tag_name='cache-20260901', prerelease=False,
+                        published_at='2026-09-01T00:00:00Z')]
+        self.assertEqual(policy.previous_release([[newer], ignored + [oldest]], True),
+                         oldest['tag_name'])
+
+    def test_subsequent_months_use_the_most_recent_stable_release(self):
+        history = [{'tag_name': 'release-20261020-295', 'prerelease': False,
+                    'published_at': '2026-10-20T15:06:09Z'}]
+        for version, day, run in [('26.11', '20261103', '342'),
+                                  ('26.12', '20261203', '400'),
+                                  ('27.01', '20270103', '450')]:
+            with self.subTest(version=version):
+                date = datetime.datetime.strptime(day, '%Y%m%d').date().isoformat()
+                stable = {'tag_name': f'release-{version}-{day}-{run}',
+                          'prerelease': False, 'published_at': f'{date}T06:00:00Z'}
+                nightly = dict(stable, tag_name=f'nightly-{day}-{int(run) + 1}',
+                               published_at=f'{date}T07:00:00Z')
+                history.insert(0, stable)
+                pages = [[nightly], list(reversed(history))]
+                self.assertEqual(policy.previous_release(pages, True), stable['tag_name'])
+                self.assertEqual(policy.previous_release(pages, False), nightly['tag_name'])
+
 
 class PublishTest(unittest.TestCase):
     def setUp(self):
@@ -168,6 +214,10 @@ elif args[:2] != ['release', 'create']:
                               cwd=self.root, env=env, capture_output=True, text=True)
 
     def test_stable_publication(self):
+        releases = json.loads(self.env['TEST_RELEASES'])
+        releases.insert(0, [{'tag_name': 'nightly-20261102-340', 'prerelease': False,
+                             'published_at': '2026-11-02T11:33:21Z'}])
+        self.env['TEST_RELEASES'] = json.dumps(releases)
         result = self.publish()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         calls = [json.loads(line) for line in (self.root / 'calls.jsonl').read_text().splitlines()]
@@ -180,6 +230,18 @@ elif args[:2] != ['release', 'create']:
         self.assertIn('--generate-notes', args)
         self.assertEqual(args[args.index('--notes-start-tag') + 1], 'release-20261003-200')
         self.assertIn('Built from `' + 'a' * 40 + '`', (self.root / 'release-notes.md').read_text())
+
+    def test_first_stable_passes_historical_baseline_to_github(self):
+        self.env['TEST_RELEASES'] = json.dumps([
+            [{'tag_name': 'nightly-20261102-340', 'prerelease': False,
+              'published_at': '2026-11-02T11:33:21Z'}],
+            [{'tag_name': 'nightly-20260904-31', 'prerelease': True,
+              'published_at': '2026-09-04T13:21:02Z'}],
+        ])
+        result = self.publish()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        args = json.loads((self.root / 'calls.jsonl').read_text().splitlines()[-1])
+        self.assertEqual(args[args.index('--notes-start-tag') + 1], 'nightly-20260904-31')
 
     def test_nightly_cannot_take_latest(self):
         result = self.publish(False)

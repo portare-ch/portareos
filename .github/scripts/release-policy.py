@@ -35,7 +35,8 @@ def previous_release(pages, official):
     releases = [r for page in pages for r in page
                 if not r.get('draft') and re.match(r'^(nightly|release)-', r['tag_name'])]
     releases.sort(key=lambda r: r['published_at'], reverse=True)
-    candidates = [r for r in releases if not official or not r.get('prerelease')]
+    candidates = [r for r in releases if not official or
+                  (r['tag_name'].startswith('release-') and not r.get('prerelease'))]
     if candidates:
         return candidates[0]['tag_name']
     # The first stable release covers the published history, rather than
