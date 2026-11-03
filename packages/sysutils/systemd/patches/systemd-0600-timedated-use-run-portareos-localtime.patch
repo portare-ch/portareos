@@ -1,6 +1,8 @@
+diff --git a/src/timedate/timedated.c b/src/timedate/timedated.c
+index e9c0c56..2ccb949 100644
 --- a/src/timedate/timedated.c
 +++ b/src/timedate/timedated.c
-@@ -290,34 +290,47 @@
+@@ -284,6 +284,7 @@ static int context_read_data(Context *c) {
  static int context_write_data_timezone(Context *c) {
          _cleanup_free_ char *p = NULL;
          const char *source;
@@ -8,35 +10,22 @@
  
          assert(c);
  
--        /* No timezone is very similar to UTC. Hence in either of these cases link the UTC file in. Except if
--         * it isn't installed, in which case we remove the symlink altogether. Since glibc defaults to an
--         * internal version of UTC in that case behaviour is mostly equivalent. We still prefer creating the
--         * symlink though, since things are more self explanatory then. */
- 
-         if (isempty(c->zone) || streq(c->zone, "UTC")) {
+@@ -296,7 +297,7 @@ static int context_write_data_timezone(Context *c) {
  
                  if (access("/usr/share/zoneinfo/UTC", F_OK) < 0) {
  
--                        if (unlink("/etc/localtime") < 0 && errno != ENOENT)
+-                        if (unlink(etc_localtime()) < 0 && errno != ENOENT)
 +                        if (unlink("/var/run/localtime") < 0 && errno != ENOENT)
                                  return -errno;
  
                          return 0;
-                 }
- 
--                source = "../usr/share/zoneinfo/UTC";
-+                source = "/usr/share/zoneinfo/UTC";
-         } else {
--                p = path_join("../usr/share/zoneinfo", c->zone);
-+                p = path_join("/usr/share/zoneinfo", c->zone);
-                 if (!p)
-                         return -ENOMEM;
- 
+@@ -311,8 +312,23 @@ static int context_write_data_timezone(Context *c) {
                  source = p;
          }
  
--        return symlink_atomic(source, "/etc/localtime");
-+        r = symlink_atomic(source, "/var/run/localtime");
+-        return symlinkat_atomic_full(source, AT_FDCWD, etc_localtime(),
+-                                     !secure_getenv("SYSTEMD_ETC_LOCALTIME") ? SYMLINK_MAKE_RELATIVE : 0);
++        r = symlinkat_atomic_full(source, AT_FDCWD, "/var/run/localtime", 0);
 +        if (r < 0)
 +                return r;
 +
@@ -55,4 +44,4 @@
 +        return 0;
  }
  
- static int context_write_data_local_rtc(Context *c) {
+ static const char* etc_adjtime(void) {
