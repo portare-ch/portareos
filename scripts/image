@@ -163,6 +163,18 @@ HW_CPU="${HW_CPU}"
 EOF
 fi
 
+# OS_CHANNEL: what kind of build this is - "release" (a monthly stable one),
+# "nightly", or "devel" (built outside CI). OS_BUILD cannot tell: nightlies
+# and releases are both official. CI hands the build OFFICIAL and NIGHTLY.
+if [ "${OFFICIAL}" = "yes" ]; then
+  OS_CHANNEL="release"
+elif [ "${NIGHTLY}" = "yes" ]; then
+  OS_CHANNEL="nightly"
+else
+  OS_CHANNEL="devel"
+fi
+echo "OS_CHANNEL=\"${OS_CHANNEL}\"" >>${INSTALL}/etc/os-release
+
 [ -n "${DEVICE}" ] && echo "DISTRO_DEVICE=\"${DEVICE}\"" >>${INSTALL}/etc/os-release
 [ -n "${BUILDER_NAME}" ] && echo "BUILDER_NAME=\"${BUILDER_NAME}\"" >>${INSTALL}/etc/os-release
 [ -n "${BUILDER_VERSION}" ] && echo "BUILDER_VERSION=\"${BUILDER_VERSION}\"" >>${INSTALL}/etc/os-release

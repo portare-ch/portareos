@@ -396,11 +396,22 @@ case ${EMULATOR} in
       done
     fi
 
-    ### Enable RetroArch Network Control for this session on dual-screen devices
-    ### so the bottom-screen UI can forward save-state / load-state / resume commands.
-    if [ "${DEVICE_HAS_DUAL_SCREEN}" = "true" ]; then
+    ### RetroArch Network Control (UDP 55355) for this session: in nightly and
+    ### devel builds, so a running game can be driven and captured from
+    ### another machine (SCREENSHOT, PAUSE_TOGGLE, ...) while testing, and on
+    ### dual-screen devices, whose bottom-screen UI forwards save-state /
+    ### load-state / resume commands through it. Releases keep it off
+    ### otherwise: anyone on the network could send those commands.
+    case "${OS_CHANNEL}" in
+      nightly|devel) RA_NETWORK_CMD=true ;;
+      *)             RA_NETWORK_CMD="${DEVICE_HAS_DUAL_SCREEN}" ;;
+    esac
+    if [ "${RA_NETWORK_CMD}" = "true" ]; then
       echo 'network_cmd_enable = "true"' >> "${RETROARCH_APPEND_CONFIG}"
       echo 'network_cmd_port = "55355"'  >> "${RETROARCH_APPEND_CONFIG}"
+    fi
+
+    if [ "${DEVICE_HAS_DUAL_SCREEN}" = "true" ]; then
       echo 'savestate_thumbnail_enable = "true"' >> "${RETROARCH_APPEND_CONFIG}"
       echo 'cheevos_custom_host = "http://127.0.0.1:4874"' >> "${RETROARCH_APPEND_CONFIG}"
 
