@@ -155,7 +155,7 @@ case "$1" in
     # connection and the key suspends as it always has.
     if [ -S "${PORTAMP_SOCK}" ] &&
        echo '{"command":["script-message","power-button"]}' |
-       socat -t1 - "UNIX-CONNECT:${PORTAMP_SOCK}" >/dev/null 2>&1; then
+       nc -w1 "local:${PORTAMP_SOCK}" >/dev/null 2>&1; then
       ${DEBUG} && log $0 "PORTAMP playing, switching its screen instead of suspending."
       exit 0
     fi
@@ -195,7 +195,7 @@ case "$1" in
     fi
     if [ -S "${PORTAMP_SOCK}" ] &&
        echo '{"command":["get_property","pid"]}' |
-       socat -t1 - "UNIX-CONNECT:${PORTAMP_SOCK}" >/dev/null 2>&1; then
+       nc -w1 "local:${PORTAMP_SOCK}" >/dev/null 2>&1; then
       exit 1
     fi
     if external_display connected || usb_drive_served ||
