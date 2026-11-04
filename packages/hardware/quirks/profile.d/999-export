@@ -7,6 +7,7 @@
 
 export  OS_VERSION \
 	OS_BUILD \
+	OS_CHANNEL \
 	SLOW_CORES \
 	FAST_CORES \
 	CPU_FREQ \
