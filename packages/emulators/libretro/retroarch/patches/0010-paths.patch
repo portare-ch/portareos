@@ -1,19 +1,16 @@
-
-
 diff --git a/frontend/drivers/platform_unix.c b/frontend/drivers/platform_unix.c
-index 0923c71055..6411b2244d 100644
 --- a/frontend/drivers/platform_unix.c
 +++ b/frontend/drivers/platform_unix.c
-@@ -3584,7 +3584,7 @@ static void frontend_unix_get_env(int *argc,
-       ;
- #endif
+@@ -3063,7 +3063,7 @@
+             "/usr/share/games/retroarch",
+             "assets", sizeof(g_defaults.dirs[DEFAULT_DIR_ASSETS]));
     else
 -      fill_pathname_join(g_defaults.dirs[DEFAULT_DIR_ASSETS], base_path,
 +      fill_pathname_join(g_defaults.dirs[DEFAULT_DIR_ASSETS], "/tmp/",
              "assets", sizeof(g_defaults.dirs[DEFAULT_DIR_ASSETS]));
  
  #if defined(DINGUX)
-@@ -3657,7 +3657,7 @@ static void frontend_unix_get_env(int *argc,
+@@ -3136,7 +3136,7 @@
     fill_pathname_join(g_defaults.dirs[DEFAULT_DIR_REMAP],
           g_defaults.dirs[DEFAULT_DIR_MENU_CONFIG],
           "remaps", sizeof(g_defaults.dirs[DEFAULT_DIR_REMAP]));
@@ -22,7 +19,7 @@ index 0923c71055..6411b2244d 100644
           "playlists", sizeof(g_defaults.dirs[DEFAULT_DIR_PLAYLIST]));
     fill_pathname_join(g_defaults.dirs[DEFAULT_DIR_RECORD_CONFIG], base_path,
           "records_config", sizeof(g_defaults.dirs[DEFAULT_DIR_RECORD_CONFIG]));
-@@ -3668,7 +3668,7 @@ static void frontend_unix_get_env(int *argc,
+@@ -3147,14 +3147,14 @@
  	       libretro_database_directory,
  	       sizeof(g_defaults.dirs[DEFAULT_DIR_DATABASE]));
     else
@@ -31,16 +28,15 @@ index 0923c71055..6411b2244d 100644
               "database/rdb", sizeof(g_defaults.dirs[DEFAULT_DIR_DATABASE]));
     if (libretro_video_shader_directory && *libretro_video_shader_directory)
         strlcpy(g_defaults.dirs[DEFAULT_DIR_SHADER],
-@@ -3680,7 +3680,7 @@ static void frontend_unix_get_env(int *argc,
-       ;
- #endif
+ 	       libretro_video_shader_directory,
+ 	       sizeof(g_defaults.dirs[DEFAULT_DIR_SHADER]));
     else
 -       fill_pathname_join(g_defaults.dirs[DEFAULT_DIR_SHADER], base_path,
 +       fill_pathname_join(g_defaults.dirs[DEFAULT_DIR_SHADER], "/tmp/",
               "shaders", sizeof(g_defaults.dirs[DEFAULT_DIR_SHADER]));
     if (libretro_cheats_directory && *libretro_cheats_directory)
         strlcpy(g_defaults.dirs[DEFAULT_DIR_CHEATS],
-@@ -3689,9 +3689,9 @@ static void frontend_unix_get_env(int *argc,
+@@ -3163,9 +3163,9 @@
     else
         fill_pathname_join(g_defaults.dirs[DEFAULT_DIR_CHEATS], base_path,
               "cheats", sizeof(g_defaults.dirs[DEFAULT_DIR_CHEATS]));

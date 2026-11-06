@@ -12,12 +12,11 @@ switched on per game.
 Signed-off-by: PortareOS <hello@portare.org>
 ---
 diff --git a/command.c b/command.c
-index 24c627d3cc..fd2d38ceb2 100644
 --- a/command.c
 +++ b/command.c
-@@ -598,7 +598,7 @@ command_t* command_emscripten_new(void)
+@@ -571,7 +571,7 @@
+    return true;
  }
- #endif
  
 -#if defined(HAVE_LAKKA)
 +#if defined(HAVE_LAKKA) || defined(__linux__)
@@ -25,10 +24,9 @@ index 24c627d3cc..fd2d38ceb2 100644
  #define MAX_USER_CONNECTIONS  4
  typedef struct
 diff --git a/command.h b/command.h
-index 9480410838..5973326ece 100644
 --- a/command.h
 +++ b/command.h
-@@ -432,7 +432,7 @@ bool command_network_send(const char *cmd_);
+@@ -361,7 +361,7 @@
  #ifdef HAVE_STDIN_CMD
  command_t* command_stdin_new(void);
  #endif
@@ -38,15 +36,14 @@ index 9480410838..5973326ece 100644
  #endif
  #ifdef __EMSCRIPTEN__
 diff --git a/input/input_driver.c b/input/input_driver.c
-index fdfa989cc5..500ab1cbcc 100644
 --- a/input/input_driver.c
 +++ b/input/input_driver.c
-@@ -11567,7 +11567,7 @@ void input_driver_init_command(input_driver_state_t *input_st,
+@@ -6498,7 +6498,7 @@
     }
  #endif
  
 -#if defined(HAVE_LAKKA)
 +#if defined(HAVE_LAKKA) || defined(__linux__)
     if (!(input_st->command[2] = command_uds_new()))
-    {
        RARCH_ERR("Failed to initialize the UDS command interface.\n");
+ #elif defined(__EMSCRIPTEN__)
