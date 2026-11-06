@@ -6,7 +6,7 @@ PKG_VERSION=""
 PKG_LICENSE="GPLv2"
 PKG_SITE=""
 PKG_URL=""
-PKG_DEPENDS_TARGET="toolchain autostart"
+PKG_DEPENDS_TARGET="toolchain autostart f2fs-tools gptfdisk"
 PKG_LONGDESC="PortareOS Meta Package"
 PKG_TOOLCHAIN="make"
 
