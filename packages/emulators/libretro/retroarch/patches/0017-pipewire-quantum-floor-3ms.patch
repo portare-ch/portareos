@@ -1,17 +1,7 @@
-From: portare-ch <hello@portare.org>
-Subject: [PATCH] pipewire: floor the requested quantum at 3 ms, not 128 frames
-
-128 frames is 4 ms at 32 kHz and 2.67 ms at 48, and the device's sink
-stops at 2 ms at either rate. A sweep with clock.force-quantum found
-3 ms the lowest clean at both rates with RetroArch in the graph, ten
-minutes of play without an xrun. It takes the PCM's mean delay from
-6.5 to 4.9 ms at 32 kHz. documentation/AUDIO_LATENCY.md has the tables.
----
 diff --git a/audio/drivers/pipewire.c b/audio/drivers/pipewire.c
-index 0487124cfc..be75a367a0 100644
 --- a/audio/drivers/pipewire.c
 +++ b/audio/drivers/pipewire.c
-@@ -862,15 +862,23 @@ static void *pwire_init(const char *device, unsigned rate,
+@@ -842,15 +842,23 @@
      * measures and holds half full, and the graph's own lead of a
      * quantum or more behind it, which the process callback pulls a
      * quantum of from the ring each cycle. The quantum asked for is a

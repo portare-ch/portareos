@@ -17,51 +17,36 @@ vsync off, 3606 refreshes for 1803 frames in 30 s, none longer than
 Signed-off-by: PortareOS <hello@portare.org>
 ---
 diff --git a/gfx/video_driver.c b/gfx/video_driver.c
-index 4cfd888c34..342cb19c47 100644
 --- a/gfx/video_driver.c
 +++ b/gfx/video_driver.c
-@@ -8237,8 +8237,15 @@ bool video_driver_init_internal(bool *video_is_threaded, bool verbosity_enabled)
-    video.dims                        = VIDEO_SCALE_PACK(width, height);
+@@ -5680,7 +5680,14 @@
+    video.height                      = height;
     video.fullscreen                  = settings->bools.video_fullscreen
           || ((uint32_t)retro_atomic_load_relaxed_int(&video_st->flags) & VIDEO_FLAG_FORCE_FULLSCREEN);
+-   video.vsync                       = settings->bools.video_vsync
 +   /* With Sync to Exact Content Framerate the runloop's timer paces
 +    * every frame, and a context that times its presents shows each at
 +    * its own time: vsync off has nothing left to switch off. Presenting
 +    * without blocking would only show a frame whenever it happened to be
 +    * ready, which on a variable refresh display is a refresh that long.
 +    * Fast-forward still presents without blocking. */
-    video.vsync                       = runloop_vsync_blocks(
--         settings->bools.video_vsync,
-+         settings->bools.video_vsync
-+            || settings->bools.vrr_runloop_enable,
-          settings->bools.video_scanline_sync,
-          (runloop_st->flags & RUNLOOP_FLAG_FORCE_NONBLOCK) != 0,
-          false);
++   video.vsync                       = (settings->bools.video_vsync
++            || settings->bools.vrr_runloop_enable)
+          && !settings->bools.video_scanline_sync
+          && (!(runloop_st->flags & RUNLOOP_FLAG_FORCE_NONBLOCK));
+    video.force_aspect                = settings->bools.video_force_aspect;
 diff --git a/retroarch.c b/retroarch.c
-index 945c72c0d1..deea35a95f 100644
 --- a/retroarch.c
 +++ b/retroarch.c
-@@ -1734,9 +1734,12 @@ void driver_set_nonblock_state(void)
- 
-    if (video_driver_active && video_st->data)
-    {
-+      /* Not with Sync to Exact Content Framerate: see video.vsync in
-+       * video_driver_init_internal(). */
+@@ -1578,7 +1578,10 @@
        if (video_st->current_video->set_nonblock_state)
+       {
+          bool video_nonblock        = enable;
+-         if (!video_vsync || runloop_force_nonblock)
++         /* Not with Sync to Exact Content Framerate: see video.vsync in
++          * video_driver_init_internal(). */
++         if (     (!video_vsync && !settings->bools.vrr_runloop_enable)
++               || runloop_force_nonblock)
+             video_nonblock = true;
           video_st->current_video->set_nonblock_state(video_st->data,
--               !runloop_vsync_blocks(video_vsync,
-+               !runloop_vsync_blocks(
-+                  video_vsync || settings->bools.vrr_runloop_enable,
-                   settings->bools.video_scanline_sync,
-                   runloop_force_nonblock, enable),
-                video_driver_test_all_flags(GFX_CTX_FLAGS_ADAPTIVE_VSYNC)
-@@ -5380,7 +5383,8 @@ bool command_event(enum event_command cmd, void *data)
-                   && video_st->current_video->set_nonblock_state)
-                video_st->current_video->set_nonblock_state(
-                      video_st->data,
--                     !runloop_vsync_blocks(settings->bools.video_vsync,
-+                     !runloop_vsync_blocks(settings->bools.video_vsync
-+                           || settings->bools.vrr_runloop_enable,
-                         settings->bools.video_scanline_sync,
-                         (runloop_st->flags & RUNLOOP_FLAG_FORCE_NONBLOCK) != 0,
-                         (input_st->flags & INP_FLAG_NONBLOCKING) != 0),
+                video_nonblock,

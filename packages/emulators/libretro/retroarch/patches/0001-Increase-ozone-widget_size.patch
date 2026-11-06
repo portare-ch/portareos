@@ -7,17 +7,15 @@ below is now shared by every driver that is not XMB. The multiplier has to be
 gated on the driver, and there is no per-driver widget scale setting upstream.
 
 diff --git a/gfx/gfx_widgets.c b/gfx/gfx_widgets.c
-index dfd8f2bfc7..0595672da5 100644
 --- a/gfx/gfx_widgets.c
 +++ b/gfx/gfx_widgets.c
-@@ -1333,6 +1333,10 @@ float gfx_widgets_scale_factor(void *data_disp, void *settings_data,
+@@ -1224,6 +1224,9 @@
        scale_factor                  = gfx_display_get_dpi_scale(
              p_disp,
-             settings, dims, fullscreen, true);
+             settings, width, height, fullscreen, true);
 +
 +   if (p_disp->menu_driver_id == MENU_DRIVER_ID_OZONE)
 +      scale_factor                  = scale_factor * 1.500f;
-+
-    return scale_factor;
- }
  
+    /* Check whether screen dimensions, menu scale factor or the
+     * notification font have changed. The font is watched here rather

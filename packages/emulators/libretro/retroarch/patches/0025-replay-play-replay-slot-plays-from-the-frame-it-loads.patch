@@ -1,0 +1,15 @@
+diff --git a/command.c b/command.c
+--- a/command.c
++++ b/command.c
+@@ -940,6 +940,11 @@
+             snprintf(reply, sizeof(reply) - 1, "PLAY_REPLAY_SLOT %lld", (long long)(input_st->bsv_movie_state_next_handle->identifier));
+          else
+             snprintf(reply, sizeof(reply) - 1, "PLAY_REPLAY_SLOT 0");
++         /* The replay's state is in now, before this iteration runs the
++          * core, but a new replay only takes over at the start of the
++          * next one: this frame would run on the loaded state without
++          * the replay's input, and every frame after it one late. */
++         bsv_movie_dequeue_next(input_st);
+          command_post_state_loaded();
+       }
+    }

@@ -1,19 +1,7 @@
-From: PortareOS <hello@portare.org>
-Subject: [PATCH] replay: log where a diverged checkpoint differs
-
-"Diverged by frame N from byte M" names one byte. Which fields differ,
-and how many, is what tells a host pointer in the state (two bytes at
-an 8-byte stride) from an emulation divergence (RAM all over) from a
-timing leak (a sound chip's counters). Log the first eight differing
-ranges with both sides' bytes, and the total.
-
-Signed-off-by: PortareOS <hello@portare.org>
----
 diff --git a/input/bsv/bsvmovie.c b/input/bsv/bsvmovie.c
-index dea20f88d6..752a6a5574 100644
 --- a/input/bsv/bsvmovie.c
 +++ b/input/bsv/bsvmovie.c
-@@ -969,8 +969,27 @@ bool bsv_movie_read_next_events(bsv_movie_t *handle,
+@@ -828,8 +828,27 @@
           while (i < size && state[i] == handle->cur_save[i])
              i++;
           if (i < size)
