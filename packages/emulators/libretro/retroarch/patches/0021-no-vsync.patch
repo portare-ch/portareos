@@ -19,21 +19,18 @@ presents off. The hotkey does nothing.
 
 On the variable refresh path, content that does not fit twice into the
 panel's rate, a few arcade boards at 60.1 to 63 Hz against 120.198, is
-refused. drivers_init finds it from the content's rate, and
-SET_SYSTEM_AV_INFO from a rate the core changes while running, since
-its in-place update skips drivers_init. Either way the core is paused,
-"This game is not supported" shows for three seconds, and RetroArch
-quits.
+refused. drivers_init finds it from the content's rate; the core never
+runs, "This game is not supported" shows for three seconds, and
+RetroArch quits.
 
 Signed-off-by: PortareOS <hello@portare.org>
 ---
 diff --git a/configuration.c b/configuration.c
-index ab9a1ba28d..f06e5995a2 100644
 --- a/configuration.c
 +++ b/configuration.c
-@@ -6768,6 +6768,41 @@ void config_load(void)
+@@ -6040,6 +6040,41 @@
  #ifdef HAVE_CONFIGFILE
-    config_parse_file();
+    config_parse_file(global);
  #endif
 +   config_no_vsync(config_st);
 +}
@@ -73,38 +70,37 @@ index ab9a1ba28d..f06e5995a2 100644
  }
  
  #ifdef HAVE_CONFIGFILE
-@@ -8421,6 +8456,7 @@ bool config_load_override(void *data)
+@@ -7463,6 +7498,7 @@
+    else
+       runloop_state_get_ptr()->flags &= ~RUNLOOP_FLAG_OVERRIDES_ACTIVE;
  
-    /* each port's deadzones, from the override's settings */
-    input_driver_deadzones_refresh();
 +   config_no_vsync(config_st);
     return true;
  }
  
-@@ -8466,6 +8502,7 @@ bool config_load_override_file(const char *config_path)
+@@ -7506,6 +7542,7 @@
+    else
+       runloop_state_get_ptr()->flags &= ~RUNLOOP_FLAG_OVERRIDES_ACTIVE;
  
-    /* each port's deadzones, from the override's settings */
-    input_driver_deadzones_refresh();
 +   config_no_vsync(config_st);
     return true;
  }
  
-@@ -8503,6 +8540,8 @@ bool config_unload_override(void)
+@@ -7628,6 +7665,8 @@
+    if (!config_load_file(global_get_ptr(),
              path_get(RARCH_PATH_CONFIG), config_st))
        return false;
- 
-+   config_no_vsync(config_st);
 +
++   config_no_vsync(config_st);
+ 
     if (settings->bools.video_fullscreen != fullscreen_prev)
     {
-       /* This is for 'win32_common.c', so we don't save
 diff --git a/configuration.h b/configuration.h
-index 047f9a8f70..07e9638b33 100644
 --- a/configuration.h
 +++ b/configuration.h
-@@ -1775,6 +1775,11 @@ void config_set_defaults(settings_t *target);
+@@ -1543,6 +1543,11 @@
  
- void config_load(void);
+ void config_load(void *data);
  
 +/* Whether this launch runs on the variable refresh path, and vsync off
 + * with Sync to Exact Content Framerate on put back. See configuration.c. */
@@ -115,10 +111,9 @@ index 047f9a8f70..07e9638b33 100644
  /* Salamander config file contains a single
   * entry (libretro_path), which is linked to
 diff --git a/menu/menu_displaylist.c b/menu/menu_displaylist.c
-index c5febc3d88..d9f2c2aba1 100644
 --- a/menu/menu_displaylist.c
 +++ b/menu/menu_displaylist.c
-@@ -12325,6 +12325,12 @@ unsigned menu_displaylist_build_list(
+@@ -11547,6 +11547,12 @@
              {
                 switch (build_list[i].enum_idx)
                 {
@@ -131,7 +126,7 @@ index c5febc3d88..d9f2c2aba1 100644
                    case MENU_ENUM_LABEL_VIDEO_SWAP_INTERVAL:
                    case MENU_ENUM_LABEL_VIDEO_BLACK_FRAME_INSERTION:
                       build_list[i].checked = video_vsync;
-@@ -13216,10 +13222,7 @@ unsigned menu_displaylist_build_list(
+@@ -12139,10 +12145,7 @@
  #endif
              };
  
@@ -143,52 +138,53 @@ index c5febc3d88..d9f2c2aba1 100644
  
              if (video_vsync)
              {
-@@ -14482,6 +14485,20 @@ unsigned menu_displaylist_build_list(
-             }
- #endif
- 
-+            for (i = 0; i < ARRAY_SIZE(build_list); i++)
-+            {
-+               switch (build_list[i].enum_idx)
-+               {
+@@ -13370,6 +13373,9 @@
+                {
+                   case MENU_ENUM_LABEL_MENU_THROTTLE_FRAMERATE:
+                      build_list[i].checked = settings->bools.vrr_runloop_enable;
++                     break;
 +                  case MENU_ENUM_LABEL_VRR_RUNLOOP_ENABLE:
-+                     /* Sync to Exact Content Framerate always
-+                      * (config_no_vsync). */
 +                     build_list[i].checked = false;
-+                     break;
-+                  default:
-+                     break;
-+               }
-+            }
-+
-             for (i = 0; i < ARRAY_SIZE(build_list); i++)
-             {
-                if (!build_list[i].checked && !include_everything)
+                      break;
+                   default:
+                      break;
 diff --git a/retroarch.c b/retroarch.c
-index deea35a95f..09aafe7d40 100644
 --- a/retroarch.c
 +++ b/retroarch.c
-@@ -1785,6 +1785,10 @@ void drivers_init(
+@@ -1627,6 +1627,23 @@
+ #endif
  
     DRIVER_FLAGS_NORMALIZE(flags);
- 
-+   /* Content too fast for the variable refresh path is refused (0021). */
-+   runloop_refuse_unfit_content(video_st->av_info.timing.fps,
-+         settings->floats.video_refresh_rate);
 +
++   /* On the variable refresh path a frame is shown for a whole number of
++    * refreshes, each no shorter than the panel's fastest: twice for 45 to
++    * 60 Hz content on a 120 Hz panel. Content that does not fit twice -
++    * a few arcade boards at 60.1 to 63 Hz against 120.198 - has no
++    * multiple in range, and locking it to the display would take vsync.
++    * It is refused instead. */
++   if (     config_vrr_path()
++         && video_st->av_info.timing.fps > 0.0
++         && settings->floats.video_refresh_rate > 0.0f
++         && video_st->av_info.timing.fps * 2.0
++            > (double)settings->floats.video_refresh_rate * 1.0001)
++   {
++      RARCH_LOG("[Video] %.3f fps does not fit twice into %.3f Hz, refused.\n",
++            video_st->av_info.timing.fps, settings->floats.video_refresh_rate);
++      runloop_refuse_content();
++   }
+ 
     /* Content av_info based automatic swap interval must be set early. */
     runloop_set_video_swap_interval(settings);
- 
-@@ -5708,6 +5712,8 @@ bool command_event(enum event_command cmd, void *data)
-           * when the joypad driver next starts */
-          input_config_forget_controllers();
-          input_driver_restart_with_next_video_restart();
+@@ -5244,6 +5261,8 @@
+ #endif
+       case CMD_EVENT_MENU_RESET_TO_DEFAULT_CONFIG:
+          config_set_defaults(global_get_ptr(), config_get_ptr());
 +         /* The defaults have vsync on and the exact-rate loop off. */
 +         config_no_vsync(config_get_ptr());
           break;
        case CMD_EVENT_MENU_SAVE_CURRENT_CONFIG:
           /* Same as at quit: the companion's live layout first. */
-@@ -6619,19 +6625,7 @@ bool command_event(enum event_command cmd, void *data)
+@@ -6173,19 +6192,7 @@
           }
           break;
        case CMD_EVENT_VRR_RUNLOOP_TOGGLE:
@@ -207,25 +203,12 @@ index deea35a95f..09aafe7d40 100644
 -         }
 +         /* Sync to Exact Content Framerate is always on (config_no_vsync). */
           break;
-       case CMD_EVENT_HEADSET_RECENTER:
- #ifdef HAVE_OPENXR
+       case CMD_EVENT_NONE:
+          return false;
 diff --git a/runloop.c b/runloop.c
-index d90fc3535d..350c399d38 100644
 --- a/runloop.c
 +++ b/runloop.c
-@@ -3519,6 +3519,11 @@ bool runloop_environment_cb(unsigned cmd, void *data)
-             fps_changed = (*info)->timing.fps != av_info->timing.fps;
-             memcpy(av_info, *info, sizeof(*av_info));
- 
-+            /* drivers_init asks this too, but the in-place update below
-+             * skips it. */
-+            runloop_refuse_unfit_content(av_info->timing.fps,
-+                  settings->floats.video_refresh_rate);
-+
-             /* With video kept, only audio has anything to follow - the
-              * rate, and the timing the frame rate sets - and the
-              * running driver takes both in place; nothing starts over. */
-@@ -6691,6 +6696,7 @@ bool runloop_event_init_core(
+@@ -5428,6 +5428,7 @@
     if (auto_overrides_enable)
        config_load_override(&runloop_st->system);
  #endif
@@ -233,10 +216,10 @@ index d90fc3535d..350c399d38 100644
  
     /* Cannot access these settings-related parameters
      * until *after* config overrides have been loaded */
-@@ -9712,6 +9718,43 @@ static void runloop_gpu_device_lost(runloop_state_t *runloop_st)
-    command_event(CMD_EVENT_REINIT, &reinit_flags);
- }
- 
+@@ -8276,6 +8277,22 @@
+  * button input in order to wake up the loop,
+  * -1 if we forcibly quit out of the RetroArch iteration loop.
+  **/
 +/* Content refused by drivers_init (0021): the core never runs; the message
 + * shows for three seconds over a paused, empty frame, then RetroArch quits
 + * back to the launcher. */
@@ -253,34 +236,14 @@ index d90fc3535d..350c399d38 100644
 +         MESSAGE_QUEUE_ICON_DEFAULT, MESSAGE_QUEUE_CATEGORY_ERROR);
 +}
 +
-+/* On the variable refresh path a frame is shown for a whole number of
-+ * refreshes, each no shorter than the panel's fastest: twice for 45 to
-+ * 60 Hz content on a 120 Hz panel. Content that does not fit twice -
-+ * a few arcade boards at 60.1 to 63 Hz against 120.198 - has no
-+ * multiple in range, and locking it to the display would take vsync.
-+ * It is refused instead. Asked wherever the content's rate is set:
-+ * drivers_init, and SET_SYSTEM_AV_INFO, whose in-place update changes
-+ * the rate without a reinit. */
-+void runloop_refuse_unfit_content(double fps, float refresh_rate)
-+{
-+   if (     runloop_refused_until
-+         || !config_vrr_path()
-+         || !(fps > 0.0)
-+         || !(refresh_rate > 0.0f)
-+         || fps * 2.0 <= (double)refresh_rate * 1.0001)
-+      return;
-+   RARCH_LOG("[Video] %.3f fps does not fit twice into %.3f Hz, refused.\n",
-+         fps, refresh_rate);
-+   runloop_refuse_content();
-+}
-+
  int runloop_iterate(void)
  {
     retro_time_t pace_limit_min;
-@@ -9770,6 +9813,17 @@ int runloop_iterate(void)
-       return 1;
-    }
+@@ -8321,6 +8338,17 @@
+ #endif
  
+    runloop_msg_queue_drain_deferred();
++
 +   if (runloop_refused_until)
 +   {
 +      runloop_st->flags |= RUNLOOP_FLAG_PAUSED;
@@ -291,25 +254,19 @@ index d90fc3535d..350c399d38 100644
 +         command_event(CMD_EVENT_QUIT, NULL);
 +      }
 +   }
-+
+ 
     /* A video driver that lost its GPU device - a TDR on Windows, a GPU
      * reset elsewhere - sets this from whichever thread saw it, and
-     * nothing it does on that device works from then on: every frame
 diff --git a/runloop.h b/runloop.h
-index 661d51d58c..e8799b636e 100644
 --- a/runloop.h
 +++ b/runloop.h
-@@ -966,6 +966,14 @@ void runloop_set_current_core_type(
+@@ -678,6 +678,10 @@
   **/
  int runloop_iterate(void);
  
 +/* Refuses the loaded content: the core does not run, "This game is not
 + * supported" shows, and RetroArch quits after it (0021). */
 +void runloop_refuse_content(void);
-+
-+/* Refuses content whose frame rate does not fit twice into the panel's
-+ * on the variable refresh path (0021). */
-+void runloop_refuse_unfit_content(double fps, float refresh_rate);
 +
  void runloop_system_info_free(void);
  

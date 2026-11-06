@@ -1,10 +1,7 @@
-
-
 diff --git a/gfx/drivers/vulkan.c b/gfx/drivers/vulkan.c
-index 3958877e6a..2713fb25d9 100644
 --- a/gfx/drivers/vulkan.c
 +++ b/gfx/drivers/vulkan.c
-@@ -14276,14 +14276,14 @@ static uintptr_t vulkan_load_texture_internal(vk_t *vk, void *data,
+@@ -9434,14 +9434,14 @@
     {
        /* Create a dummy texture instead. */
        static const uint32_t checkerboard[] = {
