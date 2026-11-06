@@ -2,8 +2,8 @@
 # Copyright (C) 2025 ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="portareos-abl"
-PKG_VERSION="1.4.3"
-PKG_SHA256="e7a061b1cdb0de2d886ceed1ced8e37eee9cb087e60997b89eb02c187eb3cfe7"
+PKG_VERSION="1.4.4"
+PKG_SHA256="f1b1ca6a067a1c40128cbe4f8c4af7c1f01869682ab9455e3135ae715ff83e56"
 PKG_ARCH="aarch64"
 PKG_LICENSE="GPL-3.0-or-later"
 PKG_SITE="https://github.com/portare-ch/BIOS"
