@@ -1,0 +1,232 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
+#
+# SD games storage for Settings > SD card.
+#
+#   sdcard status        print state=, bytes=, name= and id= (CID)
+#   sdcard format <id>   erase the matching card and mount it as F2FS storage
+#   sdcard restore       remount games storage once format workers have stopped
+#
+# States: none, ready (usable F2FS), format (needs formatting), system, small.
+# Failures print error=none|changed|system|small|busy|failed and exit 1.
+
+. /etc/profile
+
+LABEL=PORTAREOS_GAMES
+LOCK=/run/sdcard-format.lock
+MIN_KB=8388608                 # automount requires more than 8 GiB
+MARGIN_KB=8192                 # room for alignment and GPT metadata
+
+# Ignore eMMC and SDIO devices.
+card() {
+  local b
+  for b in /sys/block/mmcblk*; do
+    if [ "$(cat ${b}/device/type 2>/dev/null)" = "SD" ]; then
+      echo ${b##*/}
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Resolve a partition to its disk; leave a whole-disk name unchanged.
+disk_of() {
+  local n=${1##*/}
+  if [ -e /sys/class/block/${n}/partition ]; then
+    basename "$(readlink -f /sys/class/block/${n}/..)"
+  else
+    echo ${n}
+  fi
+}
+
+holds_system() {
+  local dev
+  for dev in $(awk '$2 == "/flash" || $2 == "/storage" {print $1}' /proc/mounts); do
+    [ -b "${dev}" ] && [ "$(disk_of ${dev})" = "${1}" ] && return 0
+  done
+  return 1
+}
+
+cid() {
+  cat /sys/block/${1}/device/cid 2>/dev/null
+}
+
+# Workers inherit fd 9 and keep the lock if the helper is killed.
+lock() {
+  exec 9>>${LOCK} && /usr/bin/busybox flock -n 9
+}
+
+unlock() {
+  exec 9>&-
+}
+
+running() {
+  ! /usr/bin/busybox flock -n ${LOCK} true 2>/dev/null
+}
+
+too_small() {
+  (( $(cat /sys/block/${1}/size) / 2 - MARGIN_KB <= MIN_KB ))
+}
+
+# Unmount deepest paths first; decode /proc/mounts escapes.
+card_mounts() {
+  local mp
+  for mp in $(awk -v d="/dev/${1}" '$1 == d || index($1, d "p") == 1 {print $2}' /proc/mounts | sort -r); do
+    printf '%b\n' "${mp}"
+  done
+}
+
+status() {
+  local disk state=format p
+  if ! disk=$(card); then
+    echo state=none
+    return
+  fi
+  if holds_system ${disk}; then
+    state=system
+  elif too_small ${disk}; then
+    state=small
+  else
+    # Match automount's filesystem and size rules for disks and partitions.
+    for p in /sys/block/${disk} /sys/block/${disk}/${disk}p*; do
+      [ -e "${p}" ] || continue
+      (( $(cat ${p}/size) / 2 > MIN_KB )) || continue
+      [ "$(blkid -p -o value -s TYPE /dev/${p##*/})" = "f2fs" ] && state=ready
+    done
+  fi
+  echo state=${state}
+  echo bytes=$(( $(cat /sys/block/${disk}/size) * 512 ))
+  echo name=$(cat /sys/block/${disk}/device/name 2>/dev/null)
+  echo id=$(cid ${disk})
+}
+
+fail() {
+  log $0 "SD card operation failed: ${1}."
+  echo error=${1}
+  exit 1
+}
+
+# Release the device and lock before restarting automount.
+remount() {
+  exec 8<&-
+  unlock
+  systemctl restart portareos-automount
+}
+
+format() {
+  local want=${1} disk part mp diskdev partdev geometry nodes=/dev/.sdcard-format
+  lock || fail busy
+  disk=$(card) || fail none
+  [ "$(cid ${disk})" = "${want}" ] || fail changed
+  holds_system ${disk} && fail system
+  too_small ${disk} && fail small
+  part=${disk}p1
+
+  # Recheck the confirmed CID before each write.
+  same_card() {
+    [ "$(cid ${disk})" = "${want}" ] || { remount; fail changed; }
+  }
+
+  # Holding the disk open reserves its device numbers until the last close.
+  # Private nodes bind writes to those numbers if the card is swapped.
+  # Read them after opening the disk, then check the CID again.
+  exec 8</dev/${disk} || fail failed
+  diskdev=$(cat /sys/block/${disk}/dev)
+  same_card
+  rm -rf ${nodes}
+  mkdir -m 700 ${nodes} || fail failed
+  trap 'rm -rf ${nodes}' EXIT
+  mknod ${nodes}/disk b ${diskdev%:*} ${diskdev#*:} || fail failed
+
+  log $0 "Formatting /dev/${disk} as F2FS games storage."
+
+  # /storage/roms may be a bind mount or an overlay using the card.
+  if [ -n "$(card_mounts ${disk})" ]; then
+    if grep -q " /storage/roms " /proc/mounts && ! umount /storage/roms; then
+      fail busy
+    fi
+    while read -r mp; do
+      if ! umount "${mp}"; then
+        remount
+        fail busy
+      fi
+    done < <(card_mounts ${disk})
+  fi
+
+  # One partition, aligned to 4 MiB.
+  same_card
+  sgdisk --zap-all ${nodes}/disk >/dev/null 2>&1
+  same_card
+  if ! sgdisk -a 8192 -n 1:0:0 -t 1:8300 -c 1:${LABEL} ${nodes}/disk >/dev/null; then
+    remount
+    fail failed
+  fi
+  # A failed reread would leave the old partition mapped.
+  if ! partprobe ${nodes}/disk 2>/dev/null && ! blockdev --rereadpt ${nodes}/disk 2>/dev/null; then
+    remount
+    fail failed
+  fi
+  udevadm settle --timeout=10
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    [ -e /sys/class/block/${part}/dev ] && break
+    sleep 1
+  done
+  [ -e /sys/class/block/${part}/dev ] || { remount; fail failed; }
+  # Verify the partition's parent and geometry before writing through it.
+  partdev=$(cat /sys/class/block/${part}/dev)
+  [ "$(cat /sys/class/block/${part}/../dev)" = "${diskdev}" ] || { remount; fail changed; }
+  geometry="$(cat /sys/class/block/${part}/start) $(cat /sys/class/block/${part}/size)"
+  if [ "$(sgdisk -i 1 ${nodes}/disk | awk '/^First sector:/ {f = $3} /^Last sector:/ {l = $3} END {print f, l - f + 1}')" != "${geometry}" ]; then
+    remount
+    fail failed
+  fi
+  mknod ${nodes}/part b ${partdev%:*} ${partdev#*:} || { remount; fail failed; }
+
+  # Clear old signatures at both ends; conflicting signatures confuse blkid.
+  same_card
+  dd if=/dev/zero of=${nodes}/part bs=1M count=16 conv=fsync 2>/dev/null
+  same_card
+  dd if=/dev/zero of=${nodes}/part bs=512 count=2048 seek=$(( ${geometry#* } - 2048 )) conv=fsync 2>/dev/null
+  # Skip discard to avoid slow controller erase operations.
+  same_card
+  if ! mkfs.f2fs -f -t 0 -l ${LABEL} ${nodes}/part >/dev/null; then
+    remount
+    fail failed
+  fi
+
+  # Use the card as the merged storage upper layer. Isolate set_setting's
+  # EXIT trap so it cannot replace cleanup or mask a later failure.
+  (
+    set_setting system.automount 1
+    set_setting system.gamesdevice default
+    set_setting system.merged.storage 1
+    set_setting system.merged.device external
+  )
+  remount
+  grep -q "^/dev/${part} /storage/games-external " /proc/mounts || fail failed
+  log $0 "Formatted /dev/${part} and mounted it as games storage."
+  echo state=ready
+}
+
+case "${1}" in
+  status) status ;;
+  format)
+    if [ -z "${2}" ]; then
+      echo "usage: ${0##*/} format <id from sdcard status>" >&2
+      exit 2
+    fi
+    format "${2}"
+    ;;
+  restore)
+    if running; then
+      echo error=busy
+      exit 1
+    fi
+    remount
+    ;;
+  *)
+    echo "usage: ${0##*/} status|format <id>|restore" >&2
+    exit 2
+    ;;
+esac
