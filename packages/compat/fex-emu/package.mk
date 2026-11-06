@@ -102,6 +102,24 @@ make_target() {
   # arising again.
   export NIX_PATH="nixpkgs=https://github.com/NixOS/nixpkgs/archive/b6018f87da91d19d0ab4cf979885689b469cdd41.tar.gz"
 
+  # thunkgen parses every thunk interface twice with one include list: for
+  # the host, and as the x86 guest (i686 for the 32-bit thunks) against the
+  # nix dev rootfs. That list is searched before the guest's own libc, so
+  # the sysroot's /usr/include must not be in it. Since glibc 2.42 the
+  # aarch64 headers hardwire __WORDSIZE to 64, and an i686 parse through
+  # them makes int64_t and uint64_t 4 bytes. On glibc 2.44 the 32-bit
+  # Vulkan and GL host thunks stopped compiling,
+  #
+  #   error: no matching constructor for initialization of
+  #   'host_layout<unsigned long *>'
+  #
+  # and the 32-bit guest thunks, built against the same headers, compiled
+  # with the wrong sizes. Patches 0003 and 0006 keep the directory out of
+  # that list (pkg-config hands it out with the sysroot prefixed, which FEX's
+  # /usr/include filter misses). This puts it back after each pass's own
+  # libc, where thunkgen still finds the target's library headers.
+  export THUNKGEN_EXTRA_FLAGS="-idirafter ${SYSROOT_PREFIX}/usr/include"
+
   mkdir -p "${PKG_BUILD}/.${TARGET_NAME}"
   cd "${PKG_BUILD}/.${TARGET_NAME}"
 

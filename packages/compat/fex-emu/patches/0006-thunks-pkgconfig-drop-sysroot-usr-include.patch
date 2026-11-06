@@ -1,0 +1,26 @@
+diff --git a/ThunkLibs/GuestLibs/CMakeLists.txt b/ThunkLibs/GuestLibs/CMakeLists.txt
+index bf666d9ca..011385cce 100644
+--- a/ThunkLibs/GuestLibs/CMakeLists.txt
++++ b/ThunkLibs/GuestLibs/CMakeLists.txt
+@@ -12,7 +12,7 @@ find_package(PkgConfig REQUIRED)
+ function(target_include_directories_from_pkgconfig target pkg)
+   pkg_check_modules(PKG QUIET ${pkg})
+   if (PKG_FOUND)
+-    list(REMOVE_ITEM PKG_INCLUDE_DIRS /usr/include)
++    list(REMOVE_ITEM PKG_INCLUDE_DIRS /usr/include $ENV{PKG_CONFIG_SYSROOT_DIR}/usr/include)
+     target_include_directories(${target} INTERFACE ${PKG_INCLUDE_DIRS})
+   elseif (ARGN)
+     target_include_directories(${target} INTERFACE ${ARGN})
+diff --git a/ThunkLibs/HostLibs/CMakeLists.txt b/ThunkLibs/HostLibs/CMakeLists.txt
+index 5e58ad553..e2149c1c1 100644
+--- a/ThunkLibs/HostLibs/CMakeLists.txt
++++ b/ThunkLibs/HostLibs/CMakeLists.txt
+@@ -13,7 +13,7 @@ find_package(PkgConfig REQUIRED)
+ function(target_include_directories_from_pkgconfig target pkg)
+   pkg_check_modules(PKG QUIET ${pkg})
+   if (PKG_FOUND)
+-    list(REMOVE_ITEM PKG_INCLUDE_DIRS /usr/include)
++    list(REMOVE_ITEM PKG_INCLUDE_DIRS /usr/include $ENV{PKG_CONFIG_SYSROOT_DIR}/usr/include)
+     target_include_directories(${target} INTERFACE ${PKG_INCLUDE_DIRS})
+   elseif (ARGN)
+     target_include_directories(${target} INTERFACE ${ARGN})
