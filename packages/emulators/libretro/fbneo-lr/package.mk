@@ -2,8 +2,8 @@
 # Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="fbneo-lr"
-PKG_VERSION="72af9e23b766b6ad6d2a30042fc8d83eadd25b61"
-PKG_SHA256="7aefa19a6cfed1d18b1228d17f8a27a7faf124c410c32ade612d215f6f9cada7"
+PKG_VERSION="d15071abf14191eebb4a5d7c7147398edcf237c8"
+PKG_SHA256="7b7213ba4733e9b185116a34bd66a218f9332f6e1f4e26e574338883fac89feb"
 PKG_LICENSE="Non-commercial"
 PKG_SITE="https://github.com/libretro/FBNeo"
 PKG_URL="${PKG_SITE}/archive/${PKG_VERSION}.tar.gz"
