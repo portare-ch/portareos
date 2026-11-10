@@ -1,0 +1,22 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] libretro: fall back to the image's game patch archive
+
+A real resources directory under RetroArch's system directory can hide
+the link to the image's resources. Try the shipped archive when opening
+the system directory's archive fails.
+---
+diff --git a/pcsx2/Patch.cpp b/pcsx2/Patch.cpp
+index 2c2cef5..abc86a3 100644
+--- a/pcsx2/Patch.cpp
++++ b/pcsx2/Patch.cpp
+@@ -326,6 +326,10 @@ bool Patch::OpenPatchesZip()
+ #endif
+ 	}
+ 
++	// A resources directory on writable storage can shadow the image's symlink.
++	if (!s_patches_zip)
++		s_patches_zip = zip_open("/usr/share/armsx2/resources/patches.zip", ZIP_RDONLY, nullptr);
++
+ 	if (!s_patches_zip)
+ 	{
+ 		static bool warning_shown = false;
