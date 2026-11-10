@@ -1,30 +1,32 @@
 From: PortareOS <hello@portare.org>
-Subject: [PATCH] 32 kHz output, and the rate RetroArch is told is the one played
+Subject: [PATCH] Default to 32 kHz audio output
 
-retro_get_system_av_info reported 44100 Hz whatever the sample rate
-option said, while the mixer resampled to the option's value. At any
-other setting RetroArch played the stream at the wrong rate: 48000 came
-out 8.8% slow and flat.
-
-The reported rate is now the mixer's. 32000 is added to the options and
-made the default: it is the rate this device's audio path is measured
-at (documentation/AUDIO_LATENCY.md), with a period step of exactly 10 ms. The
-NES has no sample rate of its own - the APU's channels are mixed as
-analog signals - and the resampler lowpasses before it decimates.
-
-
+PortareOS measures its audio path at 32 kHz, where the period step is
+exactly 10 ms. Add 32 kHz to the core option and its validator, and use it
+when the core initializes. Upstream now reports the selected sample
+rate to RetroArch.
 --- a/Libretro/libretro.cpp
 +++ b/Libretro/libretro.cpp
-@@ -80,7 +80,7 @@ static bool _hdPacksEnabled = false;
+@@ -80,7 +80,8 @@
  static string _mesenVersion = "";
  static int32_t _saveStateSize = -1;
  static bool _shiftButtonsClockwise = false;
 -static int32_t _audioSampleRate = 44100;
-+static int32_t _audioSampleRate = 32000;
++static constexpr int32_t DefaultAudioSampleRate = 32000;
++static int32_t _audioSampleRate = DefaultAudioSampleRate;
  
  //Include game database as a byte array (representing the MesenDB.txt file)
  #include "MesenDB.inc"
-@@ -741,8 +741,8 @@ uint32_t wavebeamPalette[0x40] { 0xFF6B6B6B, 0xFF001B88, 0xFF21009A, 0xFF40008C,
+@@ -532,7 +533,7 @@
+ 
+ 	RETRO_API void retro_init()
+ 	{
+-		_audioSampleRate = 44100;
++		_audioSampleRate = DefaultAudioSampleRate;
+ 
+ 		struct retro_log_callback log;
+ 		if(env_cb(RETRO_ENVIRONMENT_GET_LOG_INTERFACE, &log)) {
+@@ -723,8 +724,8 @@
  				{{ "disabled", "Off" }, { "enabled", "On" }, { NULL, NULL }},
  				"disabled" },
  			{ MesenAudioSampleRate, "Audio - Sample Rate", "Sample Rate", "Audio output sample rate", NULL, "audio",
@@ -35,14 +37,13 @@ analog signals - and the resampler lowpasses before it decimates.
  
  			// SNES options
  			{ MesenSnesColorCorrection, "Video - SNES Color Correction", "Color Correction", "Select SNES color correction mode", NULL, "video",
-@@ -2902,7 +2902,9 @@ void libretro_probe_inputs(const char* tag)
- 			fps = _console->GetFps();
- 		}
- 		info->timing.fps = fps;
--		info->timing.sample_rate = 44100.0;
-+		// The rate the mixer resamples to, not a constant: RetroArch
-+		// plays what it is told, so a stale number is a pitch error.
-+		info->timing.sample_rate = _emu ? _emu->GetSettings()->GetAudioConfig().SampleRate : _audioSampleRate;
- 	}
- 
- 	RETRO_API void *retro_get_memory_data(unsigned id)
+@@ -1600,7 +1601,7 @@
+ 		audioCfg.SampleRate = _audioSampleRate;
+ 		if(readVariable(MesenAudioSampleRate, var)) {
+ 			int requestedRate = atoi(var.value);
+-			if(requestedRate == 11025 || requestedRate == 22050 || requestedRate == 44100 ||
+-				requestedRate == 48000 || requestedRate == 96000) {
++			if(requestedRate == 11025 || requestedRate == 22050 || requestedRate == DefaultAudioSampleRate ||
++				requestedRate == 44100 || requestedRate == 48000 || requestedRate == 96000) {
+ 				audioCfg.SampleRate = requestedRate;
+ 			}
