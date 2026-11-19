@@ -52,7 +52,7 @@ for setup and examples.
 |Nintendo|Game Boy Advance (gba)|2001|`gba`|.gba .zip|**retroarch:** mgba (default)<br>|
 |Nintendo|Game Boy Color (gbc)|1998|`gbc`|.gb .gbc .zip|**retroarch:** gambatte (default)<br>|
 |Nintendo|GameCube (gamecube)|2001|`gamecube`|.rvz .dol .m3u|**retroarch:** dolphin (default)<br>|
-|Nintendo|Nintendo 64 (n64)|1996|`n64`|.z64 .n64 .v64 .ndd .zip|**retroarch:** parallel_n64 (default)<br>|
+|Nintendo|Nintendo 64 (n64)|1996|`n64`|.z64 .n64 .v64 .ndd .zip|**retroarch:** armn64 (default)<br>|
 |Nintendo|Nintendo Entertainment System (nes)|1985|`nes`|.nes .unif .unf .fds .zip|**retroarch:** mesen2 (default)<br>|
 |Nintendo|Super Nintendo (snes)|1991|`snes`|.smc .fig .sfc .swc .bs .bsx .zip|**retroarch:** snes9x (default)<br>|
 |Nintendo|Wii (wii)|2006|`wii`|.rvz .dol .wad .m3u|**retroarch:** dolphin (default)<br>|

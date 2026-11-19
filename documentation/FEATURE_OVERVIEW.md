@@ -43,7 +43,7 @@ Details: [CPU isolation](CPU_ISOLATION.md), [power measurements](POWER.md).
 * CRT shaders configured for console games, including exact SNES scanline scaling.
 * LCD shaders configured for Game Boy, Game Boy Color and GBA.
 * Game Boy Color hardware mode and color correction.
-* Hardware-accurate N64 graphics through ParaLLEl-RDP.
+* armN64 for N64, with Vulkan rendering, VI-derived timing and native DAC audio.
 
 Details: [variable refresh](VARIABLE_REFRESH.md), [console timing](CONSOLE_CLOCKS.md),
 [fixed-refresh modes](PER_DEVICE_DOCUMENTATION/SM8550/REFRESH_RATES.md),

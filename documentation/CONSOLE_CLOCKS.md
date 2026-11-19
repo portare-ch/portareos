@@ -31,7 +31,7 @@ The SNES and the Sega consoles also derive their clocks from the subcarrier, but
 | Master System, Game Gear, Mega Drive, Mega CD, 32X | 53.693175 MHz (15 × subcarrier) | same | 3420 | 262 | 59.9227 | 59.9227 (Genesis Plus GX); 60 (PicoDrive) |
 | PlayStation | 33.8688 MHz (768 × 44100) | 53.693175 MHz (× 715909/451584) | 3412.5 | 263 (240p), 262.5 (480i) | 59.826, 59.940 | 59.826 for both (SwanStation with PortareOS's patch; upstream 59.8173) |
 | Saturn | 28.636364 MHz (8 × subcarrier), or × 61/65 = 26.874126 MHz in the 320-wide modes | same | 1820 dots, or 1708 (both the broadcast line) | 263 (240p), 262.5 (480i) | 59.826, 59.940 | 59.8261 (Ymir with PortareOS's patch; upstream wrapper reported 59.82) |
-| Nintendo 64 | 14.318182 MHz (4 × subcarrier) | 48.681818 MHz (× 17/5) | 3094 | 263 (240p), 262.5 (480i) | 59.826, 59.940 | 59.826 / 59.94 (ParaLLEl N64 with our patch) |
+| Nintendo 64 | 14.318182 MHz (4 × subcarrier) | 48.681818 MHz (× 17/5) | 3094 | 263 (240p), 262.5 (480i) | 59.826, 59.940 | 59.826 / 59.94 (armN64 with our patch) |
 | Neo Geo MVS | 24.000 MHz | 6.000 MHz (÷ 4) | 384 pixels | 264 | 59.1856 | 59.18 (FBNeo keeps hundredths) |
 | Neo Geo AES, Neo Geo CD | 24.167829 MHz | 6.041957 MHz (÷ 4) | 384 pixels | 264 | 59.599 | 59.5999 (NeoCD); FBNeo runs cartridges at the MVS rate |
 | Dreamcast, NAOMI, Atomiswave | 27 MHz video clock | 13.5 MHz (÷ 2), 27 MHz for VGA | 858 | 263 (240p), 525 half-lines (480i) | 59.826, 59.940 | 59.827 / 59.9453 (Flycast) |
@@ -124,7 +124,7 @@ The VI registers give the line and the frame. `VI_H_SYNC` holds the line length 
 - 480i: 48681818 / (3094 × 262.5) = **59.940 Hz**
 - PAL: 0xC69 → 3178 VCLKs, 0x271 → 313 lines: 49.920 Hz progressive, 50.000 Hz interlaced
 
-mupen64plus rounds VCLK to 48681812, which changes nothing at this precision. ParaLLEl N64 originally derived the frame period from a nominal 60 Hz and the game's line count; our patch `003-vi-frame-period-from-h-sync.patch` computes it from `VI_H_SYNC` and `VI_V_SYNC` as above, and the 119.6522 Hz panel mode is 2 × 59.826.
+armN64 uses the same rounded VCLK values as mupen64plus (48681812 for NTSC), which changes nothing at this precision. Its upstream field period and libretro rate were nominal 60/50 Hz. PortareOS's `001-native-video-and-audio-timing.patch` computes the emulated period and reported rate from `VI_H_SYNC` and `VI_V_SYNC`, retaining the console-derived timing previously patched into ParaLLEl N64. The 119.6522 Hz panel mode is 2 × 59.826.
 
 Audio: the AI's sample rate is VCLK / (`AI_DACRATE` + 1), so it is whatever divisor the game picks, e.g. 48681818 / 2209 = 22037.9 Hz, never a round number.
 
@@ -133,7 +133,7 @@ Audio: the AI's sample rate is VCLK / (`AI_DACRATE` + 1), so it is whatever divi
 - N64brew wiki, *Audio Interface* — the DAC rate register: https://n64brew.dev/wiki/Audio_Interface
 - awe444 in *Nintendo 64 De-blur*, videogameperfection.com forums, page 2 — the crystal is 4 × subcarrier, the MX8350 divides it, and 4500/286 kHz only holds for 525i: https://www.videogameperfection.com/forums/topic/nintendo-64-de-blur/page/2/
 - mupen64plus-core, `src/device/rcp/vi/vi_controller.c`: `vi_clock_from_tv_standard` returns 49656530 (PAL), 48628316 (MPAL), 48681812 (NTSC)
-- PortareOS, `packages/emulators/libretro/parallel-n64-lr/patches/003-vi-frame-period-from-h-sync.patch`
+- PortareOS, `packages/emulators/libretro/armn64-lr/patches/001-native-video-and-audio-timing.patch`
 
 ### Neo Geo
 

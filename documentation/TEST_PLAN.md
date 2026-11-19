@@ -137,7 +137,7 @@ editor. The launcher has no screenshot tool.
 | SNES | 1024×896 (4× of 256×224), crt-guest-advanced visible |
 | NES | 4× of 256×240, 32-pixel bars top and bottom accepted |
 | PSX | 4× internal, 240-line CRT shader, no half-pixel smear |
-| N64 | 2× on ParaLLEl-RDP, no blur |
+| N64 | 2× on armN64 Vulkan; check against the old ParaLLEl-RDP baseline |
 
 Fail if any edge shows a non-integer step (a row of pixels wider or
 narrower than its neighbours).
@@ -424,7 +424,7 @@ a second means patch 002 or the clocks are not in effect.
 ### E4 Game guide on M2 (human)
 
 Put `game.txt` beside `game.<ext>` for one game in each of: SNES
-(snes9x), N64 (parallel_n64), Dreamcast (flycast). Start the game, press
+(snes9x), N64 (armn64), Dreamcast (flycast). Start the game, press
 M2: the text appears within a second, D-pad scrolls, M2 or B returns to
 the game at the same frame with audio continuing. Repeat five times per
 core. Fail on a black screen, a RetroArch restart, or a Vulkan error in

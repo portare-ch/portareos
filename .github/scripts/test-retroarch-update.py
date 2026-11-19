@@ -68,7 +68,7 @@ class RetroArchUpdateTest(unittest.TestCase):
         saved = {
             "config/Flycast/Flycast.cfg": '# Custom core override\naudio_out_rate = "48000"\n',
             "config/Gambatte/gbc.opt": 'gambatte_mix_frames = "disabled"\n',
-            "config/ParaLLEl N64/ParaLLEl N64.opt": 'parallel-n64-gfxplugin = "angrylion"\n',
+            "config/armN64/armN64.opt": 'armn64_renderer = "cpu"\n',
             "config/Flycast/dreamcast.cfg": 'video_scale_integer = "false"\n',
             "config/Flycast/Game Name.cfg": 'video_shader_enable = "false"\n',
             "config/Custom Core/Custom Core.cfg": 'video_smooth = "true"\n',
@@ -142,6 +142,28 @@ class RetroArchUpdateTest(unittest.TestCase):
         once = core_options.read_bytes()
         self.update()
         self.assertEqual(core_options.read_bytes(), once)
+
+    def test_n64_core_selections_follow_the_replacement(self):
+        cfg = self.root / "system.cfg"
+        cfg.write_text(
+            "n64.core=parallel_n64\n"
+            "n64.Super Mario 64.z64.core=parallel_n64\n"
+            "n64.Other.z64.core=armn64\n"
+            "psx.core=swanstation\n"
+            "n64.parallel_n64_upscaling=4x\n"
+        )
+        text = POST_UPDATE.read_text()
+        start = text.index("migrate_n64_armn64() {")
+        end = text.index("\n}\n", start) + 3
+        migration = text[start:end].replace(
+            "/storage/.config/system/configs/system.cfg", str(cfg)
+        )
+        script = self.root / "n64-migration.sh"
+        script.write_text(migration + "\nmigrate_n64_armn64\n")
+        expected = cfg.read_text().replace(".core=parallel_n64", ".core=armn64")
+        for _ in range(2):
+            subprocess.run(["bash", str(script)], check=True)
+            self.assertEqual(cfg.read_text(), expected)
 
 
 if __name__ == "__main__":

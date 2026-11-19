@@ -64,7 +64,7 @@ RetroAchievements because the core exposes no memory to RetroArch. See
 ### Guides and preemptive frames
 
 M2 guide handover worked on a 2D core; returning from a guide still needs
-explicit tests on Vulkan cores such as ParaLLEl N64 and Flycast. Check
+explicit tests on Vulkan cores such as armN64 and Flycast. Check
 graphics-context recovery, audio and the first seconds of resumed play.
 
 Neo Geo CD now enables one preemptive frame by default, with Metal Slug and

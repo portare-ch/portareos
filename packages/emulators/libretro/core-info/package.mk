@@ -14,7 +14,7 @@ PKG_TOOLCHAIN="manual"
 # Only the cores the image ships (virtual/emulators, LIBRETRO_CORES); the
 # other three hundred files described cores that are not there.
 PKG_CORE_INFO="dolphin fbneo flycast gambatte genesis_plus_gx mesen2 mgba \
-               neocd parallel_n64 picodrive ppsspp scummvm snes9x \
+               neocd picodrive ppsspp scummvm snes9x \
                swanstation ymir"
 
 makeinstall_target() {
@@ -54,7 +54,7 @@ makeinstall_target() {
     ${INSTALL}/usr/lib/libretro/ppsspp_libretro.info
   grep -q '^supported_extensions = "chd|pbp"$' \
     ${INSTALL}/usr/lib/libretro/ppsspp_libretro.info
-  # ARMSX2's info file ships with the core (armsx2-lr does the same there).
+  # ARMSX2 and armN64 ship their info files with their cores.
   # Flycast also runs Naomi and Atomiswave from .zip and .lst, so its list
   # cannot be CHD only; dreamcast.conf is.
   # Genesis Plus GX's likewise: it runs the cartridge systems too, and
