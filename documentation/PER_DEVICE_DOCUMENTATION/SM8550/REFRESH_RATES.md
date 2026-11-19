@@ -32,7 +32,7 @@ refresh. The modes are defined in the panel driver,
 | 119.88031 Hz | 155772 kHz | +1.6 ppm | preferred fixed mode; mpv and unmatched fixed-refresh cores |
 | 119.45473 Hz | 155219 kHz | -2.2 ppm | `gambatte`, `mgba` |
 | 120.198154 Hz | 156185 kHz | +4.4 ppm, rounded up | `snes9x`, `mesen2`; variable refresh runs on it |
-| 119.65252 Hz | 155476 kHz | +2.6 ppm | `parallel_n64`, `swanstation`, `ymir` |
+| 119.65252 Hz | 155476 kHz | +2.6 ppm | `armn64`, `swanstation`, `ymir` |
 | 119.84568 Hz | 155727 kHz | +1.7 ppm | `genesis_plus_gx` |
 | 118.36038 Hz | 153797 kHz | +3.2 ppm | `fbneo`, for `neogeo` only |
 | 119.20000 Hz | 154888 kHz | +1.7 ppm | `neocd` |
@@ -215,9 +215,9 @@ To see it working: the log has `Timed presents: swap interval 2, one present a f
 
 The rates are the original NTSC hardware's frame rate, or for handhelds the hardware's own rate.
 
-Where an emulator runs at a different rate from the hardware, the table says so. On the N64, the hardware rate follows from the video chip's 48.681812 MHz clock: a 3094-clock line and a 263-line frame in 240p, or 262.5 lines in 480i. ParaLLEl N64 as shipped upstream does not emulate the line length: it derives the frame period from a nominal 60 Hz and the frame height the game sets, so it runs at about 60.02 Hz. PortareOS patches it (`003-vi-frame-period-from-h-sync.patch`) to take the period from the `V_SYNC` and `H_SYNC` registers, which gives the console's 59.826 Hz, and matches a panel mode to it.
+Where an emulator runs at a different rate from the hardware, the table says so. On the N64, the hardware rate follows from the video chip's 48.681812 MHz clock: a 3094-clock line and a 263-line frame in 240p, or 262.5 lines in 480i. armN64 upstream runs nominal 60/50 Hz fields. PortareOS patches both its emulated period and its reported rate (`001-native-video-and-audio-timing.patch`) to follow the `V_SYNC` and `H_SYNC` registers, retaining the console's 59.826 Hz and the existing panel mode.
 
-The PlayStation's line is 3412.5 GPU clocks, the broadcast line. SwanStation rounds it to 3413 and so runs at 59.8173 Hz; PortareOS patches it (`001-ntsc-line-is-3412-5-ticks.patch`) to alternate 3413 and 3412 like the console, which gives 59.826 Hz, the same as the N64, so the two share a mode. SwanStation keeps 263 lines in 480i as well, where the console has 262.5, so a 480i game runs at 59.826 rather than the console's 59.94: 0.19 % slow. ParaLLEl N64 instead reports 59.94 for interlaced output; the fixed panel mode does not change the rate of RetroArch's content timer.
+The PlayStation's line is 3412.5 GPU clocks, the broadcast line. SwanStation rounds it to 3413 and so runs at 59.8173 Hz; PortareOS patches it (`001-ntsc-line-is-3412-5-ticks.patch`) to alternate 3413 and 3412 like the console, which gives 59.826 Hz, the same as the N64, so the two share a mode. SwanStation keeps 263 lines in 480i as well, where the console has 262.5, so a 480i game runs at 59.826 rather than the console's 59.94: 0.19 % slow. Patched armN64 reports 59.94 for interlaced output; the fixed panel mode does not change the rate of RetroArch's content timer.
 
 | Systems (default emulator) | Native rate (Hz) | Panel mode (Hz) |
 |---|---|---|
@@ -231,7 +231,7 @@ The PlayStation's line is 3412.5 GPU clocks, the broadcast line. SwanStation rou
 | genesis (Genesis Plus GX) | 59.9227 | 119.846 |
 | segacd (Genesis Plus GX) | 59.9227 | 119.846 |
 | sega32x (PicoDrive) | 59.9227 (the emulator reports 60) | 119.880 |
-| n64 (ParaLLEl N64) | 59.826 in 240p, 59.94 in 480i | 119.652 |
+| n64 (armN64) | 59.826 in 240p, 59.94 in 480i | 119.652 |
 | neogeo (FBNeo) | 59.1856 (the emulator keeps hundredths: 59.18) | 118.360 |
 | neocd (NeoCD) | 59.5999 (the CD's 24.168 MHz crystal) | 119.200 |
 | arcade (FBNeo) | depends on the game's board (about 54–61) | 119.880 |
@@ -249,7 +249,7 @@ The PlayStation's line is 3412.5 GPU clocks, the broadcast line. SwanStation rou
 
 The Nova's speaker and headphone link runs at **48 kHz, 44.1 kHz or 32 kHz**. Three things had to allow that: the AudioReach topology blob, which caps the playback PCMs at 48 kHz until `extra-firmware`'s `tplg-playback-rates.py` widens it; kernel patches 1052–1055, which open the DSP ports and the machine driver's fixup to 44.1 and 32 kHz; and the I2S bit clock, which follows the stream (1054). PipeWire allows all three rates (`default.clock.allowed-rates = [ 48000 44100 32000 ]`). [AUDIO_SAMPLE_RATES.md](AUDIO_SAMPLE_RATES.md) describes the whole procedure, for carrying it to another distribution. No rate is a resampling stage in itself: the link switches to the rate of the stream that opens it.
 
-**RetroArch picks the link rate from the core's** (`audio_out_rate = "0"`, RetroArch patch 0015): the smallest of 32, 44.1 and 48 kHz that the core's rate divides into within 0.5 % (32,040 → 32,000; 22,050 → 44,100; 44,100 → 44,100), else the smallest above it so nothing is cut (32,768 → 44,100), else 48 kHz (65,536 → 48,000). The pick is made every time the audio driver initialises, so a core that changes its rate through `SET_SYSTEM_AV_INFO`, as ParaLLEl N64 does once the game has programmed its DAC, reopens the device at the new game's rate. A non-zero `audio_out_rate` in a per-core config (`config/<core>/<core>.cfg`) still overrides the pick; the shipped ones for SwanStation, Flycast, PPSSPP, NeoCD, Genesis Plus GX, PicoDrive and Ymir (all 44.1 kHz) name the rate the pick would make anyway. Snes9x uses automatic selection: 32 kHz normally, 44.1 kHz for an MSU-1 game with enhanced audio. RetroArch resamples each core's audio to that rate with its sinc resampler, and dynamic rate control keeps the stream in step with the display. So every core is resampled at least a little, even one whose rate matches the output, because rate control adjusts the ratio by up to 0.5 %. mpv plays a file at its own rate.
+**RetroArch picks the link rate from the core's** (`audio_out_rate = "0"`, RetroArch patch 0015): the smallest of 32, 44.1 and 48 kHz that the core's rate divides into within 0.5 % (32,040 → 32,000; 22,050 → 44,100; 44,100 → 44,100), else the smallest above it so nothing is cut (32,768 → 44,100), else 48 kHz (65,536 → 48,000). The pick is made every time the audio driver initialises, so a core that changes its rate through `SET_SYSTEM_AV_INFO`, as patched armN64 does once the game has programmed its DAC, reopens the device at the new game's rate. A non-zero `audio_out_rate` in a per-core config (`config/<core>/<core>.cfg`) still overrides the pick; the shipped ones for SwanStation, Flycast, PPSSPP, NeoCD, Genesis Plus GX, PicoDrive and Ymir (all 44.1 kHz) name the rate the pick would make anyway. Snes9x uses automatic selection: 32 kHz normally, 44.1 kHz for an MSU-1 game with enhanced audio. RetroArch resamples each core's audio to that rate with its sinc resampler, and dynamic rate control keeps the stream in step with the display. So every core is resampled at least a little, even one whose rate matches the output, because rate control adjusts the ratio by up to 0.5 %. mpv plays a file at its own rate.
 
 The first rate column is the console's own: the rate its sound hardware produces samples at, or "analog" where the chip's channels are mixed as analog signals and there is no sample rate to speak of. The second is what the emulator hands RetroArch, taken from its source code at the pinned commit with PortareOS's options.
 
@@ -266,7 +266,7 @@ The first rate column is the console's own: the rate its sound hardware produces
 | genesis (Genesis Plus GX) | 53,267 (YM2612), plus the SN76489 | 44,100 | 44,100 |
 | segacd (Genesis Plus GX) | as the Mega Drive, plus 32,552 (RF5C164 PCM) and 44,100 (CD audio) | 44,100 | 44,100 |
 | sega32x (PicoDrive) | as the Mega Drive, plus the 32X's PWM at a rate the game sets | 44,100 (`native` would give 53,267) | 44,100 |
-| n64 (ParaLLEl N64) | set by the game (commonly 22,050 to 44,100) | the game's rate, exactly, e.g. 22,037.94; 32,040 until the game sets one | the link rate picked for the game's: 32,000 for ~32 kHz games, 44,100 for ~22 kHz and 44.1 kHz ones |
+| n64 (armN64) | set by the game (commonly 22,050 to 44,100) | the game's rate, exactly, e.g. 22,037.94; 32,040 until the game sets one | the link rate picked for the game's: 32,000 for ~32 kHz games, 44,100 for ~22 kHz and 44.1 kHz ones |
 | neogeo (FBNeo) | 55,555 (YM2610) | about 48,000 (47,990 at 59.18 fps) | 48,000 |
 | neocd (NeoCD) | 55,555 (YM2610), plus 44,100 (CD audio) | 44,100 | 44,100 |
 | arcade (FBNeo) | depends on the board | about 48,000, depending on the game's frame rate | 48,000 |

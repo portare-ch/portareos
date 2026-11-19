@@ -418,12 +418,11 @@ migrate_ps2_cpu_layout() {
   [ -n "$(get_setting ps2.cpugovernor)" ] || set_setting ps2.cpugovernor performance
 }
 
-# glide64 was the shipped N64 renderer until ParaLLEl-RDP replaced it. It
-# needs OpenGL, which here is zink, and RetroArch crashed within seconds of
-# every N64 launch on a device still carrying it. Only glide64 is moved.
-migrate_n64_parallel_rdp() {
-  [ "$(get_setting n64.parallel_n64_video_core)" = "glide64" ] || return 0
-  set_setting n64.parallel_n64_video_core parallel
+# A saved system or game core selection must follow the core shipped in the image.
+migrate_n64_armn64() {
+  local cfg=/storage/.config/system/configs/system.cfg
+  [ -f "${cfg}" ] || return 0
+  sed -i -E 's/^(n64(\.[^=]+)?\.core=)parallel_n64$/\1armn64/' "${cfg}"
 }
 
 # Integer scaling became the default system by system as the Nova's display
@@ -518,7 +517,7 @@ migrate audiolatency-8 migrate_audiolatency_8
 migrate es-fpslimit migrate_es_fpslimit
 migrate ssh-default-on migrate_ssh_on
 migrate colorprofile-stock migrate_colorprofile_stock
-migrate n64-parallel-rdp migrate_n64_parallel_rdp
+migrate n64-armn64 migrate_n64_armn64
 migrate integerscale-on migrate_integerscale_on
 migrate ps2-cpu-layout migrate_ps2_cpu_layout
 migrate music-little-cores migrate_music_little_cores

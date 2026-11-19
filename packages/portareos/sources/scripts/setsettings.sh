@@ -816,7 +816,7 @@ function set_ra_refresh_rate() {
                 snes9x)          WANT=120.1976; WHY="2 x 60.0988" ;;
                 mesen2)          WANT=120.1976; WHY="2 x 60.0988" ;;
                 ymir)            WANT=119.6522; WHY="2 x 59.8261" ;;
-                parallel_n64)    WANT=119.6522; WHY="2 x 59.8261" ;;
+                armn64)          WANT=119.6522; WHY="2 x 59.8261" ;;
                 genesis_plus_gx) WANT=119.8455; WHY="2 x 59.9227" ;;
                 neocd)           WANT=119.1998; WHY="2 x 59.5999" ;;
                 fbneo)
@@ -1110,19 +1110,12 @@ function set_tatemode() {
 
 function set_n64opts() {
     log "Set up N64..."
-    if [ "${CORE}" = "parallel_n64" ]
+    if [ "${CORE}" = "armn64" ]
     then
-        set_core_option parallel-n64-gfxplugin "$(game_setting parallel_n64_video_core)"
-        set_core_option parallel-n64-screensize "$(game_setting parallel_n64_internal_resolution)"
-        set_core_option parallel-n64-framerate "$(game_setting parallel_n64_gamespeed)"
-        set_core_option parallel-n64-gfxplugin-accuracy "$(game_setting parallel_n64_gfx_accuracy)"
-        # 2x: a 640x480 game renders at the panel's 1280x960, and a
-        # 320x240 one at 640x480, scaled 2x to the panel. 4x would suit
-        # the low-res games and cost the hi-res ones 2560x1920. 2x also
-        # when the setting is missing, as on an install from before it.
-        local UPSCALING="$(game_setting parallel_n64_upscaling)"
-        set_core_option parallel-n64-upscaling "${UPSCALING:-2x}"
-        set_core_option parallel-n64-pak1 "$(game_setting parallel_n64_controller_pak)"
+        set_core_option armn64_renderer "$(game_setting armn64_renderer)"
+        set_core_option armn64_resolution "$(game_setting armn64_resolution)"
+        set_core_option armn64_accuracy "$(game_setting armn64_accuracy)"
+        set_core_option armn64_pak1 "$(game_setting armn64_controller_pak)"
     fi
 }
 

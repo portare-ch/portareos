@@ -1,0 +1,42 @@
+name: Test armN64 integration
+
+on:
+  pull_request:
+    branches: [next]
+    paths:
+      - .github/workflows/test-armn64.yml
+      - packages/emulators/libretro/armn64-lr/**
+
+permissions:
+  contents: read
+
+jobs:
+  native-av:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y build-essential cmake ninja-build zlib1g-dev
+      - name: Fetch and patch the pinned source
+        shell: bash
+        run: |
+          pkg_dir=packages/emulators/libretro/armn64-lr
+          source "${pkg_dir}/package.mk"
+          curl -fL --retry 3 "${PKG_URL}" -o "${RUNNER_TEMP}/armn64.tar.gz"
+          printf '%s  %s\n' "${PKG_SHA256}" "${RUNNER_TEMP}/armn64.tar.gz" | sha256sum -c -
+          mkdir "${RUNNER_TEMP}/armn64-src"
+          tar -xzf "${RUNNER_TEMP}/armn64.tar.gz" --strip-components=1 -C "${RUNNER_TEMP}/armn64-src"
+          for patch in "${pkg_dir}"/patches/*.patch; do
+            patch -d "${RUNNER_TEMP}/armn64-src" -p1 < "${patch}"
+          done
+      - name: Build the Vulkan core and test native AV
+        run: |
+          cmake -S "${RUNNER_TEMP}/armn64-src" -B "${RUNNER_TEMP}/armn64-build" -G Ninja \
+            -DARMN64_TUNE=OFF -DARMN64_APP=OFF -DARMN64_VULKAN=ON
+          cmake --build "${RUNNER_TEMP}/armn64-build" --target armn64_libretro --parallel 4
+          cmake -S packages/emulators/libretro/armn64-lr/tests -B "${RUNNER_TEMP}/armn64-tests" -G Ninja \
+            -DARMN64_SOURCE="${RUNNER_TEMP}/armn64-src" -DARMN64_BUILD="${RUNNER_TEMP}/armn64-build"
+          cmake --build "${RUNNER_TEMP}/armn64-tests" --parallel 4
+          ctest --test-dir "${RUNNER_TEMP}/armn64-tests" --output-on-failure

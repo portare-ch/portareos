@@ -90,7 +90,7 @@ ZIP is the supported ROM archive format.
 | Game Boy Advance | mGBA | `.gba` `.zip` | — |
 | NES, Famicom, Famicom Disk System | MesenCE | `.nes` `.unif` `.unf` `.fds` `.zip` | — |
 | Super Nintendo | Snes9x | `.smc` `.fig` `.sfc` `.swc` `.bs` `.bsx` `.zip` | ✅ Tested; bsnes was too costly |
-| Nintendo 64 | ParaLLEl N64 with ParaLLEl-RDP on Vulkan | `.z64` `.n64` `.v64` `.ndd` `.zip` | — |
+| Nintendo 64 | [armN64](documentation/emulators/armN64.md), Vulkan at 2× | `.z64` `.n64` `.v64` `.ndd` `.zip` | Device testing pending |
 | GameCube | Dolphin (libretro) | `.rvz` `.dol` `.m3u` | ❌ Hangs, no sound ([#463](https://github.com/portare-ch/portareos/issues/463)) |
 | Wii | Dolphin (libretro) | `.rvz` `.dol` `.wad` `.m3u` | — |
 | SG-1000 | [Genesis Plus GX](documentation/emulators/Genesis.md) | `.bin` `.sg` `.zip` | — |
@@ -251,9 +251,9 @@ Kernel and DSP changes let the audio link follow the core's output at 48,
 | 32 kHz | Super Nintendo, NES/Famicom; N64 games at 32 kHz |
 | 48 kHz | PS2, Xbox, GameCube, Wii, GBA, Neo Geo and most other systems |
 
-N64 rates vary by game; the core reports the programmed rate and the device
-reopens at the matching link rate. Resampling is avoided where hardware
-supports the rate; the SNES's exact 32040 Hz is unavailable. See
+N64 rates vary by game; armN64 passes native audio to RetroArch and reports
+the programmed DAC rate. RetroArch reopens at the matching link rate and
+resamples to it; the SNES's exact 32040 Hz is also unavailable. See
 [audio sample rates](documentation/PER_DEVICE_DOCUMENTATION/SM8550/AUDIO_SAMPLE_RATES.md)
 for hardware limits and emulator output rates.
 
@@ -274,7 +274,7 @@ improvement, though audio latency remains somewhat higher than Android.
 ### Configured for this panel
 
 * Integer scaling to fit the 960-line panel: Game Boy at 960×864, GBA at 5×,
-  N64 at 2× on ParaLLEl-RDP, and PlayStation at 4×. Game Boy, GBC and GBA
+  N64 at 2× on armN64's Vulkan renderer, and PlayStation at 4×. Game Boy, GBC and GBA
   use LCD shaders; PlayStation uses our CRT shader. SNES uses
   crt-guest-advanced at exact 4×, keeping 32-pixel bars around 224 lines to
   preserve even scanlines.

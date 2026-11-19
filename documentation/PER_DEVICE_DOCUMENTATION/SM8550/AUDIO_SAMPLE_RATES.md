@@ -87,7 +87,7 @@ RetroArch picks the output rate from the core's when `audio_out_rate` is
 `"0"` (patch `0015-audio-out-rate-from-the-core.patch`): the smallest of
 32000, 44100 and 48000 the core's rate divides into within 0.5 %, else the
 smallest above it, else 48000, re-picked at every audio init so a core that
-changes rate mid-session (ParaLLEl N64, per game) reopens the device to
+changes rate mid-session (armN64 with the native-audio patch, per game) reopens the device to
 match. A non-zero `audio_out_rate` in a per-core config
 (`config/<core>/<core>.cfg`) overrides the pick. mpv plays at the
 file's rate, for films and for PORTAMP alike. [REFRESH_RATES.md](REFRESH_RATES.md) has the table.

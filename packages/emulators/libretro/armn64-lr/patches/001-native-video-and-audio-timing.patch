@@ -1,0 +1,281 @@
+From: PortareOS <hello@portare.org>
+Subject: [PATCH] Report VI timing and pass native AI audio to the frontend
+
+Keep PortareOS's VI-derived frame rate when replacing ParaLLEl N64.
+Use H_SYNC, V_SYNC and the region clock for the emulated field period,
+independent of CPU overclocking. Report timing changes to RetroArch.
+
+Pass the AI samples through at the programmed DAC rate instead of first
+resampling them to 44.1 kHz. RetroArch then selects the matching device
+link rate and performs the only resampling step.
+
+diff --git a/libretro/libretro.c b/libretro/libretro.c
+index 74f7a20..07e443e 100644
+--- a/libretro/libretro.c
++++ b/libretro/libretro.c
+@@ -30,7 +30,7 @@
+ #include <unistd.h>
+ 
+ enum {
+-	OUT_RATE = 44100,
++	DEFAULT_RATE = 32040,
+ 	// The save file as mupen64plus-next lays it out, so saves go between the two: the EEPROM, the four
+ 	// Controller Paks, the SRAM, then the flash (these two in little-endian words).
+ 	FILE_PAKS = 0x800,
+@@ -66,9 +66,7 @@ static float pictureAspect = 4.0f / 3.0f;
+ static unsigned maxScale = 1;
+ static int16_t captured[CAPTURE_SAMPLES];
+ static int16_t played[OUT_FRAMES * 2];
+-// Where resampling is between the last frame kept from the run before and the next.
+-static double audioPhase;
+-static int16_t audioLast[2];
++static double reportedFps, reportedAudioRate;
+ static uint8_t saveMemory[SAVE_SIZE];
+ // A cheat cartridge loaded (a GameShark or Action Replay, by its file's name): its ROM; its flash, which
+ // the frontend keeps as the cartridge's save; the games beside it for Game on Top; and the game on top's
+@@ -554,11 +552,17 @@ void retro_get_system_info(struct retro_system_info* info) {
+ 	*info = (struct retro_system_info) { "armN64", "1.4", "n64|z64|v64|ndd", false, false };
+ }
+ 
++static double nativeAudioRate(void) {
++	return machine && machine->ai.dacrate ? (double) n64ViClock(machine) / (machine->ai.dacrate + 1u) : DEFAULT_RATE;
++}
++
+ void retro_get_system_av_info(struct retro_system_av_info* info) {
+ 	// The GL renderer's pictures are up to its scale times the largest.
+ 	maxScale = (unsigned) glScale();
+ 	info->geometry = (struct retro_game_geometry) { (unsigned) pictureWidth, (unsigned) pictureHeight, 640 * maxScale, 480 * maxScale, pictureAspect };
+-	info->timing = (struct retro_system_timing) { pal ? 50.0 : 60.0, OUT_RATE };
++	reportedFps = machine ? n64FieldRate(machine) : 48681812.0 / 813722.0;
++	reportedAudioRate = nativeAudioRate();
++	info->timing = (struct retro_system_timing) { reportedFps, reportedAudioRate };
+ }
+ 
+ void retro_init(void) {
+@@ -1350,7 +1354,7 @@ bool retro_load_game(const struct retro_game_info* info) {
+ 		logMessage(RETRO_LOG_ERROR, "this game can't be loaded");
+ 		return false;
+ 	}
+-	pal = machine->fieldCycles == hwCycles(machine, CPU_HZ / 50);
++	pal = machine->tvType == 0;
+ 	rememberSettings(true);
+ 	saveExport();
+ 	saveGiven = false;
+@@ -1358,8 +1362,6 @@ bool retro_load_game(const struct retro_game_info* info) {
+ 	struct retro_rumble_interface rumble;
+ 	setRumble = environment(RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE, &rumble) ? rumble.set_rumble_state : NULL;
+ 	memset(rumbling, 0, sizeof(rumbling));
+-	audioPhase = 0;
+-	memset(audioLast, 0, sizeof(audioLast));
+ 	describeInput();
+ 	struct retro_audio_buffer_status_callback bufferStatus = { audioBufferStatus };
+ 	audioBehind = latencySet = false;
+@@ -1639,40 +1641,34 @@ static void readPorts(void) {
+ 	}
+ }
+ 
+-// The field's samples, from the AI's rate to 44.1 kHz by straight lines between them.
++static void submitAudio(const int16_t* samples, size_t frames) {
++	for (size_t done = 0; done < frames;) {
++		size_t accepted = audioBatch(samples + done * 2, frames - done);
++		if (!accepted) break;
++		done += accepted;
++	}
++}
++
++static void silenceAudio(void) {
++	size_t frames = (size_t) (nativeAudioRate() / n64FieldRate(machine) + 0.5);
++	if (frames > OUT_FRAMES) frames = OUT_FRAMES;
++	memset(played, 0, frames * 2 * sizeof(*played));
++	submitAudio(played, frames);
++}
++
++// Pass native AI samples through; RetroArch resamples once to the device's link rate.
+ static void playAudio(void) {
+ 	size_t frames = machine->audioCount / 2;
+ 	machine->audioCount = 0;
+ 	if (!frames && !machine->ai.queued) {
+ 		// The AI is idle: a field of silence.
+-		size_t silence = OUT_RATE / (pal ? 50 : 60);
+-		memset(played, 0, silence * 4);
+-		for (size_t done = 0; done < silence;) {
+-			done += audioBatch(played + done * 2, silence - done);
+-		}
++		silenceAudio();
+ 		return;
+ 	}
+ 	if (!frames || !machine->audioRate) {
+ 		return;
+ 	}
+-	double step = (double) machine->audioRate / OUT_RATE;
+-	size_t out = 0;
+-	// Frame -1 is the last one before this field's.
+-	while (audioPhase < (double) frames - 1 && out < OUT_FRAMES) {
+-		long i = (long) (audioPhase + 1) - 1;
+-		double f = audioPhase - (double) i;
+-		const int16_t* a = i < 0 ? audioLast : &captured[i * 2];
+-		const int16_t* b = &captured[(i + 1) * 2];
+-		played[out * 2] = (int16_t) (a[0] + (b[0] - a[0]) * f);
+-		played[out * 2 + 1] = (int16_t) (a[1] + (b[1] - a[1]) * f);
+-		++out;
+-		audioPhase += step;
+-	}
+-	audioPhase -= (double) frames;
+-	memcpy(audioLast, &captured[(frames - 1) * 2], sizeof(audioLast));
+-	for (size_t done = 0; done < out;) {
+-		done += audioBatch(played + done * 2, out - done);
+-	}
++	submitAudio(captured, frames);
+ }
+ 
+ // The picture's size and shape to the frontend when either changes.
+@@ -1739,11 +1735,7 @@ static bool pakManager(bool shared) {
+ 		return false;
+ 	}
+ 	showPicture(width, height, shared);
+-	size_t const silence = OUT_RATE / (pal ? 50 : 60);
+-	memset(played, 0, silence * 4);
+-	for (size_t done = 0; done < silence;) {
+-		done += audioBatch(played + done * 2, silence - done);
+-	}
++	silenceAudio();
+ 	return true;
+ }
+ 
+@@ -1917,6 +1909,11 @@ void retro_run(void) {
+ 	                     (!optionIs(environment, "armn64_vi_filters", "off") && machine->accuracy != ACCURACY_HLE && !machine->rdpGl);
+ 	cheatsApply(machine, &cheats);
+ 	n64RunField(machine);
++	if (n64FieldRate(machine) != reportedFps || nativeAudioRate() != reportedAudioRate) {
++		struct retro_system_av_info info;
++		retro_get_system_av_info(&info);
++		environment(RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO, &info);
++	}
+ 	int width = 0, height = 0;
+ 	// The GPU RDP's picture goes from its buffer to the frontend's framebuffer without the CPU, and so
+ 	// does the GL renderer's.
+diff --git a/src/bus.c b/src/bus.c
+index f0d43f0..714e5f9 100644
+--- a/src/bus.c
++++ b/src/bus.c
+@@ -191,13 +191,12 @@ static void spWriteStatus(struct N64* n, uint32_t v) {
+ // The VI clock the AI counts: a PAL console's is 49.65653 MHz, an MPAL one's 48.628316 MHz, an NTSC
+ // one's 48.681812 MHz.
+ static uint64_t viClock(struct N64* n) {
+-	return n->tvType == 0 ? 49656530ull : n->tvType == 2 ? 48628316ull : 48681812ull;
++	return n64ViClock(n);
+ }
+ 
+ // Playing time of a buffer: four bytes per stereo sample at the VI clock over (dacrate + 1).
+ static uint64_t aiDuration(struct N64* n, uint32_t len) {
+-	uint64_t rate = viClock(n) / (n->ai.dacrate + 1);
+-	return rate ? hwCycles(n, (uint64_t) (len / 4) * CPU_HZ / rate) : 0;
++	return hwCycles(n, (uint64_t) (len / 4) * CPU_HZ * (n->ai.dacrate + 1u) / viClock(n));
+ }
+ 
+ // What the AI has played of the buffer, for a frontend as it was in RDRAM then (games fill the buffer
+diff --git a/src/n64.c b/src/n64.c
+index 48d7971..7fcf07c 100644
+--- a/src/n64.c
++++ b/src/n64.c
+@@ -123,6 +123,23 @@ static const char* setting(struct N64* n, const char* name) {
+ 	return n->settings ? n->settings(name) : getenv(name);
+ }
+ 
++uint32_t n64ViClock(const struct N64* n) {
++	return n->tvType == 0 ? 49656530u : n->tvType == 2 ? 48628316u : 48681812u;
++}
++
++double n64FieldRate(const struct N64* n) {
++	// V_SYNC counts half-lines; H_SYNC counts VI clocks per line, both minus one.
++	uint32_t hsync = n->vi.reg[7] & 0xFFF;
++	uint32_t vsync = n->vi.reg[6] & 0x3FF;
++	if (!hsync) hsync = n->tvType == 0 ? 0xC69 : 0xC15;
++	if (!vsync) vsync = n->tvType == 0 ? 0x271 : 0x20D;
++	return (double) n64ViClock(n) * 2 / ((vsync + 1u) * (hsync + 1u));
++}
++
++static uint64_t viFieldCycles(const struct N64* n) {
++	return hwCycles(n, (uint64_t) ((double) CPU_HZ / n64FieldRate(n) + 0.5));
++}
++
+ // From power-on: the PIF's boot from the cartridge, or from the 64DD's IPL without one.
+ static void start(struct N64* n) {
+ 	const char* accuracy = setting(n, "N64_ACCURACY");
+@@ -191,8 +208,8 @@ static void start(struct N64* n) {
+ 	n->ocAt = n->ocHwAt = 0;
+ 	n->countCycles = 2;
+ 	n->tvType = (uint32_t) n->cpu.gpr[20];
+-	n->fieldCycles = hwCycles(n, CPU_HZ / (n->tvType == 0 ? 50 : 60));
+ 	n->vi.reg[6] = n->tvType == 0 ? 0x271 : 0x20D;
++	n->fieldCycles = viFieldCycles(n);
+ 	n->nextVi = n->fieldCycles;
+ 	n->eventAt = 0;
+ 	const char* slice = setting(n, "N64_SLICE");
+@@ -323,7 +340,6 @@ static uint64_t viIntrAt(struct N64* n, uint64_t start) {
+ static void overclock(struct N64* n) {
+ 	uint64_t const now = n->cycles, num = (uint64_t) n->ocWantNum * n->ocDen, den = (uint64_t) n->ocWantDen * n->ocNum;
+ 	uint32_t const count = cpuCount(n);
+-	bool const pal = n->fieldCycles == hwCycles(n, CPU_HZ / 50);
+ 	uint64_t* const later[] = { &n->nextVi, &n->ai.endsAt, &n->dd.mechaAt, &n->dd.bmAt };
+ 	for (size_t i = 0; i < sizeof(later) / sizeof(later[0]); ++i) {
+ 		if (*later[i] > now) {
+@@ -337,7 +353,7 @@ static void overclock(struct N64* n) {
+ 	n->ocNum = n->ocWantNum, n->ocDen = n->ocWantDen;
+ 	n->countCycles = 2 * n->ocNum / n->ocDen;
+ 	n->cpu.countBase = now - n->countCycles * (uint64_t) count;
+-	n->fieldCycles = hwCycles(n, CPU_HZ / (pal ? 50 : 60));
++	n->fieldCycles = viFieldCycles(n);
+ 	blocksFree(n);
+ }
+ 
+@@ -364,6 +380,9 @@ void n64RunField(struct N64* n) {
+ 		cpuTlbChanged(n);
+ 	}
+ 	uint64_t start = n->nextVi - n->fieldCycles, passed = start;
++	// Register changes take effect at the next field boundary.
++	n->fieldCycles = viFieldCycles(n);
++	n->nextVi = start + n->fieldCycles;
+ 	while (n->cycles < n->nextVi) {
+ 		uint64_t intrAt = viIntrAt(n, start);
+ 		if (intrAt >= passed && intrAt <= n->cycles) {
+@@ -612,7 +631,7 @@ static bool viSetup(struct N64* n, struct ViSetup* s) {
+ 	// In mle accuracy, an empty window (osViBlack) shows the picture anyway in the TV type's
+ 	// usual one, as emulators that draw the RDP's image directly do.
+ 	if (n->emulatorLike && (hEnd <= hStart || vEnd <= vStart)) {
+-		bool pal = n->fieldCycles == hwCycles(n, CPU_HZ / 50);
++		bool pal = n->tvType == 0;
+ 		hStart = pal ? 0x80 : 0x6C, hEnd = pal ? 0x300 : 0x2EC;
+ 		vStart = pal ? 0x5F : 0x25, vEnd = pal ? 0x239 : 0x1FF;
+ 	}
+@@ -622,7 +641,7 @@ static bool viSetup(struct N64* n, struct ViSetup* s) {
+ 		return false;
+ 	}
+ 	// The window's shape on a TV, whose 640 dots by 480 half-lines (576 in PAL) show as 4:3.
+-	bool pal = n->fieldCycles == hwCycles(n, CPU_HZ / 50);
++	bool pal = n->tvType == 0;
+ 	s->tvAspect = 4.0f / 3.0f * ((float) (hEnd - hStart) / 640.0f) / ((float) (vEnd - vStart) / (pal ? 576.0f : 480.0f));
+ 	s->w = w > 640 ? 640 : w;
+ 	s->h = h > 480 ? 480 : h;
+diff --git a/src/n64.h b/src/n64.h
+index 383403f..bc084c5 100644
+--- a/src/n64.h
++++ b/src/n64.h
+@@ -480,7 +480,7 @@ struct N64 {
+ 	// Threads that make bands of the VI's picture on the CPU (n64.c), as many as the renderers.
+ 	struct ViPool* viPool;
+ 	int lastWidth, lastHeight;
+-	// CPU cycles per video field: 60 fields a second for NTSC and MPAL, 50 for PAL; the TV type the PIF
++	// CPU cycles per video field, from the VI registers; the TV type the PIF
+ 	// gave the game (0 PAL, 1 NTSC, 2 MPAL).
+ 	uint64_t fieldCycles;
+ 	uint32_t tvType;
+@@ -552,6 +552,8 @@ static inline uint32_t jitTag(const struct N64* n, uint32_t vaddr) {
+ }
+ 
+ struct N64* n64Create(void);
++uint32_t n64ViClock(const struct N64*);
++double n64FieldRate(const struct N64*);
+ void n64Destroy(struct N64*);
+ bool n64LoadRom(struct N64*, const uint8_t* data, size_t size);
+ void n64RunField(struct N64*);

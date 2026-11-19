@@ -154,7 +154,7 @@ fi
 check A4 "no PulseAudio server binary" [ -z "$(ls /usr/bin/pulse[a]udio 2>/dev/null)" ]
 check A4 "allowed-rates 48000 44100 32000" grep -rq "^ *default.clock.allowed-rates *= *\[ *48000 44100 32000 *\]" /usr/share/pipewire/pipewire.conf /etc/pipewire/pipewire.conf
 echo "== Emulation"
-WANT_CORES="ymir dolphin fbneo flycast gambatte genesis_plus_gx mesen2 mgba neocd parallel_n64 picodrive ppsspp scummvm snes9x swanstation"
+WANT_CORES="ymir dolphin fbneo flycast gambatte genesis_plus_gx mesen2 mgba neocd armn64 picodrive ppsspp scummvm snes9x swanstation"
 GOT_CORES=$(ls /usr/lib/libretro/ 2>/dev/null | sed -n 's/_libretro\.so$//p' | sort | tr '\n' ' ')
 check E1 "core set is the README table" [ "${GOT_CORES}" = "$(echo ${WANT_CORES} | tr ' ' '\n' | sort | tr '\n' ' ')" ]
 [ "${GOT_CORES}" = "$(echo ${WANT_CORES} | tr ' ' '\n' | sort | tr '\n' ' ')" ] || echo "     got: ${GOT_CORES}"
