@@ -53,6 +53,7 @@ nav:
       - Roadmap: ROADMAP.md
   - Emulators:
       - Overview: documentation/emulators/README.md
+      - armN64: documentation/emulators/armN64.md
       - Genesis Plus GX: documentation/emulators/Genesis.md
       - NeoCD: documentation/emulators/NeoCD.md
       - SwanStation: documentation/emulators/SwanStation.md
