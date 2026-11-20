@@ -74,7 +74,7 @@ make_target() {
     NSS_TESTS="dummy" \
     NSINSTALL=${TOOLCHAIN}/bin/nsinstall \
     CPU_ARCH_TAG=${TARGET_ARCH} \
-    CC=${CC} \
+    CC=${CC} CCC="${CXX}" \
     LDFLAGS="${LDFLAGS} -L${SYSROOT_PREFIX}/usr/lib" \
     V=1
 }
