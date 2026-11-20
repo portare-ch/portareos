@@ -2,7 +2,7 @@
 # Copyright (C) 2026-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="gamescope"
-PKG_VERSION="2b5cf191d1047d6895516a834de8a72ac1c342f3"
+PKG_VERSION="e6674a98118ca7b098b98a3874b8f195ae1bf750" # 3.17.0
 PKG_GIT_CLONE_BRANCH="master"
 PKG_LICENSE="BSD-2-Clause"
 PKG_SITE="https://github.com/ValveSoftware/gamescope"
