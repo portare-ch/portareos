@@ -94,6 +94,34 @@ rsync -a /usr/config/modules /storage/.config/
 ### are symlinks into /usr/config.
 ### This also seeds RetroArch's config/ tree: existing core, folder and game
 ### overrides (.cfg and .opt) belong to the user and must survive updates.
+
+# Import settings under the renamed Xbox core before seeding its default override.
+migrate_hakux_core_name() {
+  local dir from to file name cfg="/storage/.config/system/configs/system.cfg"
+  for dir in /storage/.config/retroarch/config /storage/remappings; do
+    from="${dir}/hakuX"
+    to="${dir}/hakuX-lr"
+    [ -d "${from}" ] || continue
+    mkdir -p "${to}" || return 1
+    for file in "${from}"/*; do
+      [ -f "${file}" ] || continue
+      name="${file##*/}"
+      case "${name}" in
+        hakuX.cfg|hakuX.opt|hakuX.rmp) name="hakuX-lr.${name##*.}" ;;
+      esac
+      rsync -a --ignore-existing -- "${file}" "${to}/${name}" || return 1
+    done
+  done
+  if [ -f "${cfg}" ]; then
+    sed -i -E 's/^(xbox(\.[^=]+)?\.core=)hakux$/\1hakux-lr/' "${cfg}"
+  fi
+}
+
+HAKUX_MIGRATION=/storage/.config/system/.migrations/hakux-core-name
+if [ ! -e "${HAKUX_MIGRATION}" ] && migrate_hakux_core_name >>"${LOG}" 2>&1; then
+  mkdir -p "${HAKUX_MIGRATION%/*}" && touch "${HAKUX_MIGRATION}"
+fi
+
 rsync -a --ignore-existing --exclude=system \
       --exclude={es_features.cfg,es_systems.cfg} \
       /usr/config/* /storage/.config/ >>${LOG} 2>&1

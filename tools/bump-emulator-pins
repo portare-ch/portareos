@@ -221,8 +221,12 @@ def main():
                 # Keep the recipe's own convention. scummvm's tag is
                 # v2026.3.0 while its PKG_VERSION is 2026.3.0, and the "v"
                 # lives in PKG_URL; armsx2 uses the tag verbatim.
-                new = tag[1:] if ("v${PKG_VERSION}" in url_t
-                                  and tag.startswith("v")) else tag
+                if "linux-v${PKG_VERSION}" in url_t and tag.startswith("linux-v"):
+                    new = tag.removeprefix("linux-v")
+                elif "v${PKG_VERSION}" in url_t and tag.startswith("v"):
+                    new = tag.removeprefix("v")
+                else:
+                    new = tag
             else:
                 info = api(f"https://api.github.com/repos/{repo}")
                 new = api(f"https://api.github.com/repos/{repo}/commits/"

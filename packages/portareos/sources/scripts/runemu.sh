@@ -38,6 +38,12 @@ if [[ "${PLATFORM}" == xbox && "${ROMNAME,,}" != *.chd ]]; then
   exit 1
 fi
 
+# The old override name still works until the user installs a new one.
+if [[ "${PLATFORM}" == xbox && "${CORE}" == hakux-lr &&
+      -f /storage/cores/hakux_libretro.so && ! -f /storage/cores/hakux-lr_libretro.so ]]; then
+  CORE=hakux
+fi
+
 ### A KMS launch hands the panel to the emulator itself, which page flips
 ### straight to the display with no compositor to composite and blit
 ### through. Nothing has to be stopped for that any more: portarelauncher
