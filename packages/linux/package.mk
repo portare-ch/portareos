@@ -35,8 +35,8 @@ case ${DEVICE} in
     # 7.3 is added as a patch dir by PKG_VERSION alone; a stable point
     # release (7.3.x) no longer matches it and has to list it explicitly or
     # those patches are silently skipped.
-    PKG_VERSION="7.3.1"
-    PKG_SHA256="fa595aad93734f829c963c2a90ef7c3673224fd7fdae7b49406e397cde2de231"
+    PKG_VERSION="7.3.5"
+    PKG_SHA256="8f293f83d54f0b7b9be56863ebc5e4ea79d73e530b4ae55c572be97ef39f0990"
     PKG_URL="https://www.kernel.org/pub/linux/kernel/v${PKG_VERSION/.*/}.x/${PKG_NAME}-${PKG_VERSION}.tar.xz"
     PKG_PATCH_DIRS+=" 7.3"
     ;;
