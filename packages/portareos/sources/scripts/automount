@@ -17,6 +17,15 @@ for arg in $(cat /proc/cmdline); do
   esac
 done
 
+# Serialize mounting with formatting. Workers inherit the format lock, so
+# killing the helper does not release it while they are still running.
+exec 9>>/run/sdcard-format.lock
+if ! /usr/bin/busybox flock -n 9
+then
+  log $0 "Storage is busy; skipping automount."
+  exit 0
+fi
+
 function unmount() {
   log $0 "Unmount ${1}."
   umount -f "${1}" 2>/dev/null ||:
@@ -125,11 +134,32 @@ function load_modules() {
   done
 }
 
+# Accept F2FS only on SD cards; internal Android userdata can also be F2FS.
+function sd_card() {
+  local DEV=${1##*/}
+  [ -e /sys/class/block/${DEV}/partition ] && DEV=$(disk_of ${DEV})
+  [ "$(cat /sys/class/block/${DEV}/device/type 2>/dev/null)" = "SD" ]
+}
+
+function games_fstype() {
+  if sd_card ${1}
+  then
+    [ "${2}" = "f2fs" ]
+  else
+    [ ! "${2}" = "f2fs" ]
+  fi
+}
+
 function mount_games() {
       MOUNT_PATH="/storage/games-external"
-      FSTYPE=$(blkid -o export ${1} | awk 'BEGIN {FS="="} /TYPE/ {print $2}')
+      FSTYPE=$(blkid -o export ${1} | awk 'BEGIN {FS="="} /^TYPE=/ {print $2}')
+      if ! games_fstype ${1} ${FSTYPE}
+      then
+        log $0 "Skipping ${1}: unsupported filesystem (${FSTYPE:-unknown})."
+        return 1
+      fi
       case ${FSTYPE} in
-        ext4)
+        ext4|f2fs)
           log $0 "Found supported partition for overlayfs."
           if [ -e "/storage/.ms_unsupported" ]
           then
@@ -213,7 +243,7 @@ function installer_card() {
 function find_games() {
   if /usr/bin/busybox mountpoint -q /storage
   then
-    for DEV in $(for dev in mmcblk[0-9] sd[a-z] nvme[0-9]n[0-9]; do blkid | grep ${dev} | awk 'BEGIN {FS=":"}; /ext4/ || /fat/ {print $1}' | sort -r; done)
+    for DEV in $(for dev in mmcblk[0-9] sd[a-z] nvme[0-9]n[0-9]; do blkid | grep ${dev} | awk 'BEGIN {FS=":"}; /ext4/ || /fat/ || /f2fs/ {print $1}' | sort -r; done)
     do
       ROOTDEV=$(disk_of ${DEV})
       log $0 "Inspecting ${DEV}."
@@ -242,7 +272,7 @@ function find_games() {
       then
         GAMES_DEVICE=${DEV}
         log $0 "Found ${DEV} available to mount."
-        mount_games "${DEV}"
+        mount_games "${DEV}" ||:
       else
         log $0 "${DEV} not available."
       fi
@@ -271,7 +301,7 @@ unmount /storage/roms
 
 if [ -e "${GAMES_DEVICE}" ]
 then
-  mount_games ${GAMES_DEVICE}
+  mount_games ${GAMES_DEVICE} || find_games
 else
   find_games
 fi
