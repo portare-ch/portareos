@@ -3,8 +3,8 @@
 # Copyright (C) 2018-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="mesa"
-PKG_VERSION="26.3.0-rc3"
-PKG_SHA256="3600c01f11439628d0a85de5ed9cb76f297d13e9783cdeecb91aa685055c9942"
+PKG_VERSION="26.3.1"
+PKG_SHA256="4e4e438eac7b840a9383988cbb7c08dad8041da544b9319fc26d319fa7348961"
 PKG_LICENSE="OSS"
 PKG_SITE="http://www.mesa3d.org/"
 # Release candidates come from mesa's own archive. The gitlab tag a
