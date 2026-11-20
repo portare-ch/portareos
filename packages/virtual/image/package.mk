@@ -13,7 +13,7 @@ PKG_DEPENDS_TARGET="toolchain squashfs-tools:host dosfstools:host fakeroot:host 
                     ${BOOTLOADER} busybox lsof umtprd util-linux jq \
                     file initramfs grep util-linux zstd lz4 empty lzo libzip \
                     bash coreutils system-utils autostart quirks powerstate \
-                    gzip six xmlstarlet pyudev dialog network portareos"
+                    gzip six xmlstarlet pyudev network portareos"
 
 # mako-osd is gone with the compositor. It is a wayland notification daemon
 # and depends on sway by name, so leaving it here would pull the compositor
