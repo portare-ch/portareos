@@ -2,8 +2,8 @@
 # Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
 
 PKG_NAME="mesence-lr"
-PKG_VERSION="a449fdc19580b86edcfc2a4c84eeb5e99462225b"
-PKG_SHA256="ed5e81c291d9738ede23b88b0526504fb21e0054e3eb10ca93d4fcac70dd2956"
+PKG_VERSION="10a8ef2b8e55f0f0411085e83a2f0457c145cc78"
+PKG_SHA256="de88381a4556f8fc96c691b972b44edd6bfcb05f331d805cebadf605684d313c"
 PKG_LICENSE="GPL-3.0-or-later"
 PKG_SITE="https://github.com/libretro/MesenCE"
 PKG_URL="${PKG_SITE}/archive/${PKG_VERSION}.tar.gz"

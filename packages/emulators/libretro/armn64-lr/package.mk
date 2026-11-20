@@ -2,8 +2,8 @@
 # Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
 
 PKG_NAME="armn64-lr"
-PKG_VERSION="b071663e581fb59ce1cd8dff67658efd71ed37bf" # v1.4
-PKG_SHA256="30561ce042dad2e95d03aca035bfba9c1ffde5fada9a0898ca71dc81506fe339"
+PKG_VERSION="10141dbe40067bc9f96442a4d5bbfae4d9f1493f" # v1.4.1
+PKG_SHA256="de101594a8a8cf8bb3b11bbda2c0ab601df245d8778819807f43e9f8fa7befc9"
 PKG_LICENSE="GPL-2.0"
 PKG_SITE="https://github.com/MagnominusGit/armN64"
 PKG_URL="${PKG_SITE}/archive/${PKG_VERSION}.tar.gz"
