@@ -115,6 +115,10 @@
 			"TX SWR_INPUT10", "DMIC7_OUTPUT";
 };
 
+&wcd938x {
+	qcom,ground-jack-type-normally-closed;
+};
+
 &remoteproc_adsp {
 	firmware-name = "qcom/sm8550/retroidpocket/rpnova/adsp.mbn",
 			"qcom/sm8550/retroidpocket/rpnova/adsp_dtb.mbn";
