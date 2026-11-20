@@ -53,3 +53,7 @@ pre_configure_target() {
   # mmap_size pragma.
   CFLAGS+=" -DSQLITE_TEMP_STORE=3 -DSQLITE_DEFAULT_MMAP_SIZE=268435456"
 }
+
+post_makeinstall_target() {
+  safe_remove "${INSTALL}/usr/bin/sqlite3"
+}
