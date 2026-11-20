@@ -8,12 +8,12 @@ Subject: [PATCH] Add working directory '/storage' for debug-shell
  1 file changed, 1 insertion(+)
 
 diff --git a/units/debug-shell.service.in b/units/debug-shell.service.in
-index 9f3868e106..d5f93f18a6 100644
+index 2002742e47..aa78daefbb 100644
 --- a/units/debug-shell.service.in
 +++ b/units/debug-shell.service.in
-@@ -16,6 +16,7 @@ IgnoreOnIsolate=yes
- ConditionPathExists=@DEBUGTTY@
-
+@@ -16,6 +16,7 @@
+ After=systemd-vconsole-setup.service
+ 
  [Service]
 +WorkingDirectory=/storage
  Environment=ENV=/etc/profile

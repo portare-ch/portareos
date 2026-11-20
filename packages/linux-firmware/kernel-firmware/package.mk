@@ -2,8 +2,8 @@
 # Copyright (C) 2016-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="kernel-firmware"
-PKG_VERSION="20260910"
-PKG_SHA256="9dc6fa2fd55ca3e0f321fb14a9ad04511c6d53c5dc3b71686ab10ab4be3aec0b"
+PKG_VERSION="20261019"
+PKG_SHA256="f37337e66c1af8ab488972f09ef17efb9b1a2663ed339fc73860936d1af04831"
 PKG_LICENSE="other"
 PKG_SITE="https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/"
 PKG_URL="https://cdn.kernel.org/pub/linux/kernel/firmware/linux-firmware-${PKG_VERSION}.tar.gz"
