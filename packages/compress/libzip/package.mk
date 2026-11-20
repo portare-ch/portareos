@@ -8,5 +8,9 @@ PKG_SHA256="721e0e4e851073b508c243fd75eda04e4c5006158a900441de10ce274cc3b633"
 PKG_LICENSE="GPL"
 PKG_SITE="https://libzip.org/download"
 PKG_URL="${PKG_SITE}/${PKG_NAME}-${PKG_VERSION}.tar.xz"
-PKG_DEPENDS_TARGET="toolchain zlib gnutls openssl"
+PKG_DEPENDS_TARGET="toolchain zlib openssl"
 PKG_LONGDESC="A C library for reading, creating, and modifying zip archives."
+
+PKG_CMAKE_OPTS_TARGET="-DENABLE_GNUTLS=OFF \
+                       -DENABLE_OPENSSL=ON \
+                       -DCMAKE_REQUIRE_FIND_PACKAGE_OpenSSL=ON"
