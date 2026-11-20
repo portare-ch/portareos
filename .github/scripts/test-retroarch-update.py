@@ -165,6 +165,46 @@ class RetroArchUpdateTest(unittest.TestCase):
             subprocess.run(["bash", str(script)], check=True)
             self.assertEqual(cfg.read_text(), expected)
 
+    def test_xbox_core_settings_follow_the_rename(self):
+        override = 'savefile_directory = "/storage/saves/xbox"\nvideo_smooth = "true"\n'
+        self.write(self.user, "config/hakuX/hakuX.cfg", override)
+        self.write(self.user, "config/hakuX/hakuX.opt", 'hakux_render_scale = "1x"\n')
+        self.write(self.user, "config/hakuX/Halo.cfg", 'rewind_enable = "false"\n')
+        self.write(self.user, "config/hakuX-lr/Halo.cfg", "# Already customized\n")
+        remaps = self.root / "storage/remappings"
+        self.write(remaps, "hakuX/hakuX.rmp", "input_libretro_device_p1 = \"1\"\n")
+        cfg = self.write(
+            self.root / "storage/.config/system",
+            "configs/system.cfg",
+            "xbox.core=hakux\nxbox.Halo.chd.core=hakux\npsx.core=swanstation\n",
+        )
+
+        self.update()
+        new_override = self.user / "config/hakuX-lr/hakuX-lr.cfg"
+        self.assertEqual(new_override.read_text(), override)
+        self.assertEqual(
+            (self.user / "config/hakuX-lr/hakuX-lr.opt").read_text(),
+            'hakux_render_scale = "1x"\n',
+        )
+        self.assertEqual(
+            (self.user / "config/hakuX-lr/Halo.cfg").read_text(),
+            "# Already customized\n",
+        )
+        self.assertEqual(
+            (remaps / "hakuX-lr/hakuX-lr.rmp").read_bytes(),
+            (remaps / "hakuX/hakuX.rmp").read_bytes(),
+        )
+        self.assertEqual(
+            cfg.read_text(),
+            "xbox.core=hakux-lr\nxbox.Halo.chd.core=hakux-lr\npsx.core=swanstation\n",
+        )
+        new_override.unlink()
+        self.update()
+        self.assertEqual(
+            new_override.read_bytes(),
+            (self.image / "config/hakuX-lr/hakuX-lr.cfg").read_bytes(),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

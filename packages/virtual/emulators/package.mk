@@ -304,7 +304,7 @@ makeinstall_target() {
   ### Nova (RetroArch's VRR path). Xbox games use CHDs made from XISO images.
   case ${DEVICE} in
     SM8550)
-      add_emu_core xbox retroarch hakux true
+      add_emu_core xbox retroarch hakux-lr true
       add_es_system xbox
       ;;
   esac

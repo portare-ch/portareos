@@ -47,7 +47,7 @@ for setup and examples.
 |&#xf013; System|Screenshots (imageviewer)|System|`screenshots`|.jpg .jpeg .png .bmp .psd .tga .gif .hdr .pic .ppm .pgm .mkv .pdf .mp4 .avi||
 |&#xf013; System|Tools (tools)|System|`/storage/.config/modules`|.sh||
 |Arcade|Arcade (arcade)|0000|`arcade`|.zip|**retroarch:** fbneo (default)<br>|
-|Microsoft|Xbox (xbox)|2001|`xbox`|.chd|**retroarch:** hakux (default)<br>|
+|Microsoft|Xbox (xbox)|2001|`xbox`|.chd|**retroarch:** hakux-lr (default)<br>|
 |Nintendo|Game Boy (gb)|1989|`gb`|.gb .gbc .zip|**retroarch:** gambatte (default)<br>|
 |Nintendo|Game Boy Advance (gba)|2001|`gba`|.gba .zip|**retroarch:** mgba (default)<br>|
 |Nintendo|Game Boy Color (gbc)|1998|`gbc`|.gb .gbc .zip|**retroarch:** gambatte (default)<br>|
