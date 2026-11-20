@@ -20,12 +20,12 @@ where armsx2 uses its tag verbatim - and a tag that is not numerically
 newer than the current pin is refused, so a re-tag upstream cannot walk
 a package backwards.
 
-A commit pin whose comment is nothing but a version,
+A comment containing only a release tag marks a commit pin as a release.
 
     PKG_VERSION="fa50bb19..." # v1.20.4
 
-is a release pinned by its commit, and follows releases too: the newest
-release's tag is resolved to its commit and the comment rewritten to it.
+FEX tags such as FEX-2611.1 work the same way. The updater resolves the
+newest release tag to its commit and rewrites the comment.
 Following the default branch instead moved ppsspp-lr 2231 commits past
 v1.20.4 onto a master its patches do not build against, under a comment
 that still said v1.20.4. A comment with anything else in it, such as
@@ -71,7 +71,8 @@ ROOTS = [
 
 SHA1 = re.compile(r"^[0-9a-f]{40}$")
 RELEASE_COMMIT = re.compile(
-    r'^PKG_VERSION="[0-9a-f]{40}"[^\S\n]*#[^\S\n]*(v?\d+(?:\.\d+)+)[^\S\n]*$',
+    r'^PKG_VERSION="[0-9a-f]{40}"[^\S\n]*#[^\S\n]*'
+    r'(FEX-\d+(?:\.\d+)*|v?\d+(?:\.\d+)+)[^\S\n]*$',
     re.M)
 UA = {"User-Agent": "portareos-bump-emulator-pins"}
 
@@ -300,8 +301,7 @@ def main():
                     f"| `{b['name']}` | {b['repo']} | +{b['ahead']} | "
                     f"[`{b['old'][:8]}` → `{b['new'][:8]}`]({b['compare']}) |")
     else:
-        lines.append("No pin moved. Every commit-pinned package is already at "
-                     "its upstream default branch.")
+        lines.append("No pin moved.")
 
     lines.append("")
     lines.append(f"{current} already current, {len(bumped)} moved, "
