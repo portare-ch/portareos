@@ -5,15 +5,15 @@
 # Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
 
 PKG_NAME="mpv"
-PKG_VERSION="41f6a645068483470267271e1d09966ca3b9f413" # 0.41.0
-PKG_SHA256="068960e89211f2adc80af03f637fa393fb5e407d3dd23592c8fe8c5490bb7ae4"
+PKG_VERSION="b0841e8c4d156b8403dc1876c4cbd9011eb583f3" # 0.42.0
+PKG_SHA256="a4a79fa6ca728762ac407734b0f93dbcbba250c3bb3bf97b77a342042be802e4"
 PKG_LICENSE="GPLv2+"
 PKG_SITE="https://github.com/mpv-player/mpv"
 PKG_URL="${PKG_SITE}/archive/${PKG_VERSION}.tar.gz"
 # pipewire is not optional: ao_pipewire.c is gated on finding libpipewire-0.3
 # by pkg-config, and get_option('pipewire') defaults to auto, so without the
 # dependency mpv silently ends up on pulse instead.
-PKG_DEPENDS_TARGET="toolchain ffmpeg SDL2 luajit libass libplacebo pipewire"
+PKG_DEPENDS_TARGET="toolchain ffmpeg SDL2 luajit libass libplacebo pipewire curl"
 PKG_LONGDESC="Video player based on MPlayer/mplayer2 https://mpv.io"
 
 if [ "${OPENGLES_SUPPORT}" = yes ]; then
@@ -35,7 +35,7 @@ fi
 # sdl2-gamepad is how the pad reaches mpv: config/input.conf maps it. libmpv
 # was only for EmulationStation's preview videos, and the mpv binary carries
 # its own copy of the player - 2.7 MB of shared library nothing else loads.
-PKG_MESON_OPTS_TARGET+=" -Dsdl2-gamepad=enabled -Dpipewire=enabled -Dlibmpv=false"
+PKG_MESON_OPTS_TARGET+=" -Dsdl2-gamepad=enabled -Dpipewire=enabled -Dlibmpv=false -Dlibcurl=enabled"
 
 # Vulkan has issues on S922X so disable
 [ "${DEVICE}" == "S922X" ] && PKG_MESON_OPTS_TARGET+=" -Dvulkan=disabled"
