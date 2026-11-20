@@ -2,8 +2,8 @@
 # Copyright (C) 2026 ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="steam"
-PKG_VERSION="1.0.0.85"
-PKG_SHA256="b44634a6a604ca7c8b23809d0f2a921a0348bb2081c8cb8944116d0799872b70"
+PKG_VERSION="1.0.0.87"
+PKG_SHA256="765aba9a0ed339a50226ceb614fcc9879a991ba184098bc8de920efb12c714a4"
 PKG_LICENSE="proprietary"
 PKG_SITE="https://steampowered.com"
 PKG_URL="https://repo.steampowered.com/steam/archive/stable/steam-launcher_${PKG_VERSION}_amd64.deb"
