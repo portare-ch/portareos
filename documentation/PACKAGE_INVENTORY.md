@@ -32,7 +32,7 @@ The rule this applies is the README's: if it is not needed for a smooth game, it
 | **kernel-overlays** | 59 | Not what it looked like: 16 MB of modules, the rest the Nova's own firmware, already trimmed to this device's DSP, GPU, Wi-Fi and Bluetooth blobs. Nothing worth cutting. |
 | **slang-shaders** — trim, not drop | 70 → ~10 | We use `crt/crt-guest-advanced`, `handheld/lcd-grid-v2` and our own `portare/`. Keep those families and what they include; drop the other 60 MB. |
 | Debugging and GPU tracing tools from the September audit | remeasure | The old ~55 MB estimate is not a current saving: unused recipes were removed, and the debug metapackage is opt-in for official images. Audit binaries and their dependencies on a current image before cutting more. |
-| nano, dialog and bluez's btmon | remeasure | Recheck runtime and script users before removing. |
+| nano and bluez's btmon | remeasure | Recheck runtime and script users before removing. |
 | **iwd_get-networks, ukify, spit** | remeasure | Old audit candidates; check whether each is installed and has a runtime caller on a current image. A source file alone does not establish image cost. |
 
 ## Questionable: replace, or reconsider
