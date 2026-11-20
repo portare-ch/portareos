@@ -20,8 +20,8 @@
 # only SDL3's headers to build; it dlopens libSDL3.so.0 at runtime.
 
 PKG_NAME="SDL2"
-PKG_VERSION="2.32.72"
-PKG_SHA256="a14d2f78dad8e83ef1039b6534ace4d14f11f5b11d023af989affd70ac1bb35e"
+PKG_VERSION="2.32.74"
+PKG_SHA256="ec68abde77e2e459c8abc4f9587b8976b5d2a657b2bfda2fb3a079b0f8924588"
 PKG_LICENSE="Zlib"
 PKG_SITE="https://github.com/libsdl-org/sdl2-compat"
 PKG_URL="${PKG_SITE}/releases/download/release-${PKG_VERSION}/sdl2-compat-${PKG_VERSION}.tar.gz"
