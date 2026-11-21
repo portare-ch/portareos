@@ -2,8 +2,8 @@
 # Copyright (C) 2026-present PortareOS (https://github.com/portare-ch)
 
 PKG_NAME="hakux-lr"
-PKG_VERSION="0.35.2"
-PKG_SHA256="a4319a86403ef99b93a1199363b33f9c83c3843ca9f21bc8d3da5815c5df762c"
+PKG_VERSION="0.36.2"
+PKG_SHA256="340dbeb6651144ff916bf56744b2618551cfb8be3559651de376bf118f03efba"
 PKG_ARCH="aarch64"
 PKG_LICENSE="GPL-3.0-or-later"
 PKG_SITE="https://github.com/portare-ch/hakuX-lr"
