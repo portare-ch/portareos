@@ -2,8 +2,8 @@
 # Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="gambatte-lr"
-PKG_VERSION="138bcbbf311300a271896bf93a76370c72cab339"
-PKG_SHA256="01810705ababe48a22fc190039eff5d9785f74ebf7fbd08b0c10d2312c55e99b"
+PKG_VERSION="b14881d382d251c75dcf465ccc9e0f1e1bb39ca9"
+PKG_SHA256="21abe48057798d39d22b5fc1a3da3472a461cd8d46b42b86d1ca36b3371c4a8a"
 PKG_LICENSE="GPL-2.0-or-later"
 PKG_SITE="https://github.com/libretro/gambatte-libretro"
 PKG_URL="${PKG_SITE}/archive/${PKG_VERSION}.tar.gz"
